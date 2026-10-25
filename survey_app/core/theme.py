@@ -233,6 +233,21 @@ body:has([data-testid="stStatusWidget"])::before {{
 [data-testid="stApp"][data-test-script-state="notRunning"] [data-testid="stLayoutWrapper"]:has([data-stale="true"]):not(:has([data-stale="false"])) {{
   display: none !important;
 }}
+/* ⚠️ v600 · …y DURANTE las pasadas. La regla de arriba solo vale con la pasada parada: en
+   cuanto arranca otra, los fantasmas vuelven a verse atenuados en su sitio viejo (visto
+   verificando v599: el «Record check-in» de una ficha salía a media pantalla en la LISTA de
+   Inventory, ~2 s por pasada). No hay CSS que distinga un fantasma de lo viejo legítimo
+   mientras corre, así que `app.py` los MARCA al acabar cada pasada —con la pasada parada,
+   Streamlit no tiene nada vivo en «stale» (su `Zd` devuelve false), así que lo marcado es
+   fantasma seguro— y aquí se ocultan para siempre. Si un nodo marcado vuelve a la vida,
+   deja de estar «stale» y se ve. Medido en una mini-app (nodos, no claves): 3 fantasmas,
+   0 vistos en la pasada siguiente, y lo viejo legítimo sigue atenuado (13 elementos). */
+[data-copex-fantasma][data-stale="true"] {{
+  display: none !important;
+}}
+[data-testid="stLayoutWrapper"][data-copex-fantasma]:not(:has([data-stale="false"])) {{
+  display: none !important;
+}}
 
 /* ── Piezas del kit (kpi_row / chip / section) ── */
 /* ⚠️ v581 · REJILLA de columnas iguales, no flex. Con `flex: 1 1 150px` la tarjeta que
@@ -457,6 +472,39 @@ def inject():
     tablero (emitido sin guarda) sí se aplicaba. **No volver a poner una guarda aquí.**
     """
     st.markdown(_CSS, unsafe_allow_html=True)
+
+
+# ⚠️ v600 · El MARCADOR de fantasmas (ver la regla `data-copex-fantasma` del CSS). Corre en la
+# página de la app: al pasar a «notRunning», todo lo que siga en `data-stale="true"` es un
+# fantasma (Streamlit 1.64 no marca nada vivo como «stale» con la pasada parada) y se le pone
+# la marca, a él y a los bloques suyos que no tengan nada vivo. Sube desde cada fantasma en vez
+# de recorrer todos los bloques de la página en cada pasada.
+# Se instala UNA vez en el contexto de la página (un <script> en su <head>), para no depender
+# de que el recuadro que lo trae siga montado; si la página no lo admitiera, corre desde aquí.
+_MARCADOR = r"""(function(){
+if(window.__copexFantasmas)return;window.__copexFantasmas=true;
+function marcar(){var a=document.querySelector('[data-testid="stApp"]');
+ if(!a||a.getAttribute('data-test-script-state')!=='notRunning')return;
+ var n=document.querySelectorAll('[data-stale="true"]');
+ for(var i=0;i<n.length;i++){n[i].setAttribute('data-copex-fantasma','1');
+  var w=n[i].parentElement&&n[i].parentElement.closest('[data-testid="stLayoutWrapper"]');
+  while(w&&!w.querySelector('[data-stale="false"]')){w.setAttribute('data-copex-fantasma','1');
+   w=w.parentElement&&w.parentElement.closest('[data-testid="stLayoutWrapper"]');}}}
+var o=new MutationObserver(marcar);
+function eng(){var a=document.querySelector('[data-testid="stApp"]');
+ if(!a){setTimeout(eng,300);return;}
+ o.observe(a,{attributes:true,attributeFilter:['data-test-script-state']});marcar();}
+eng();})();"""
+
+
+def script_fantasmas() -> str:
+    """El `<script>` que instala el marcador en la página (va en el recuadro de la PWA)."""
+    import json
+    return ("<script>(function(){try{var P=window.parent,D=P.document;if(P.__copexFantasmas)return;"
+            "var c=" + json.dumps(_MARCADOR) + ";"
+            "try{var s=D.createElement('script');s.textContent=c;D.head.appendChild(s);}catch(e){}"
+            "if(!P.__copexFantasmas){try{P.eval(c);}catch(e){(new Function('window','document',c))(P,D);}}"
+            "}catch(e){}})();</script>")
 
 
 def _esc(s) -> str:

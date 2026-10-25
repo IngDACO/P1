@@ -121,7 +121,15 @@ IU.render_inventario("G")
 
 
 def _btn(a, k):
-    return next((b for b in a.button if b.key == k), None)
+    # ⚠️ v600 · los campos y botones de las ACCIONES llevan una generación al final de la clave
+    # (`inv_tbtn_ACT-1_0`): tras registrar nacen vacíos, para que un 2º toque no repita el
+    # movimiento. Se busca por la clave exacta o por la de esta generación.
+    return next((b for b in a.button if b.key == k), None) or         next((b for b in a.button if _es_de(b.key, k)), None)
+
+
+def _es_de(clave, k):
+    """¿`clave` es el campo `k` (con o sin la generación/tipo que v600 le añade detrás)?"""
+    return str(clave) == k or str(clave).startswith(k + "_")
 
 
 def _ss(a, k, d=None):
@@ -193,15 +201,15 @@ chk("la etiqueta «Asset_label_ACT-1.pdf» (era «Etiqueta_ACT-1.pdf»)",
     "Asset_label_ACT-1.pdf" in fuente("core/inventory_ui.py").replace('{aid}', 'ACT-1'))
 
 print("\n3. ⚠️ La salida: solo obras ABIERTAS, el responsable por nombre, nada de devoluciones pasadas")
-_sb = next(s for s in at.selectbox if s.key == "inv_sdt_ACT-1")
+_sb = next(s for s in at.selectbox if _es_de(s.key, "inv_sdt_ACT-1"))
 _sb.set_value("project").run()
-_pr = next(s for s in at.selectbox if s.key == "inv_srp_ACT-1")
+_pr = next(s for s in at.selectbox if _es_de(s.key, "inv_srp_ACT-1"))
 chk("⚠️ ni la cancelada ni la entregada ni el almacén cerrado (salían Penrith y Mascot)",
     list(_pr.options) == ["Open job", "Store A"], list(_pr.options))
-_dev = next(d for d in at.date_input if d.key == "inv_sdev_ACT-1")
+_dev = next(d for d in at.date_input if _es_de(d.key, "inv_sdev_ACT-1"))
 chk("…la devolución prevista no deja elegir un día pasado (`min_value` = hoy)",
     str(_dev.proto.min) == HOY.isoformat(), _dev.proto.min)
-_rs = next(s for s in at.selectbox if s.key == "inv_srsp_ACT-1")
+_rs = next(s for s in at.selectbox if _es_de(s.key, "inv_srsp_ACT-1"))
 chk("…el responsable por su nombre («Helper One (helper1)»)", "Helper One (helper1)" in list(_rs.options), list(_rs.options))
 from core import inventory as INV                                  # noqa: E402
 _pasada = (HOY - dt.timedelta(days=3)).isoformat()
@@ -210,21 +218,21 @@ chk("⚠️ el motor tampoco acepta una devolución pasada (nacía «no devuelto
     INV.salida("ACT-1", "G", fecha_devolucion=_pasada)[0] is False)
 
 print("\n4. ⚠️ El traslado: obra/persona ELEGIDAS; «under repair» pone en mantenimiento")
-_tt = next(s for s in at.selectbox if s.key == "inv_ttt_ACT-1")
+_tt = next(s for s in at.selectbox if _es_de(s.key, "inv_ttt_ACT-1"))
 _tt.set_value("under repair").run()
-next(t_ for t_ in at.text_input if t_.key == "inv_ttr_ACT-1").set_value("Taller").run()
+next(t_ for t_ in at.text_input if _es_de(t_.key, "inv_ttr_ACT-1")).set_value("Taller").run()
 _btn(at, "inv_tbtn_ACT-1").click()
 at.run()
 _A = _ss(at, "_A")
 _a1 = next(a for a in _A if a["ID"] == "ACT-1")
 chk("⚠️ a reparar → «maintenance» (seguía «available» en el taller)",
     _a1["Status"] == "maintenance" and _a1["LocationType"] == "under repair", (_a1["Status"], _a1["LocationType"]))
-next(s for s in at.selectbox if s.key == "inv_ttt_ACT-1").set_value("project").run()
+next(s for s in at.selectbox if _es_de(s.key, "inv_ttt_ACT-1")).set_value("project").run()
 chk("…a una obra: se ELIGE la obra (era texto libre)",
-    any(s.key == "inv_ttp_ACT-1" for s in at.selectbox) and not any(t_.key == "inv_ttr_ACT-1" for t_ in at.text_input))
+    any(_es_de(s.key, "inv_ttp_ACT-1") for s in at.selectbox) and not any(_es_de(t_.key, "inv_ttr_ACT-1") for t_ in at.text_input))
 # (se vuelve a buscar en el árbol NUEVO: el elemento de la pasada anterior ya no existe)
-next(s for s in at.selectbox if s.key == "inv_ttt_ACT-1").set_value("warehouse").run()
-next(t_ for t_ in at.text_input if t_.key == "inv_ttr_ACT-1").set_value("Store").run()
+next(s for s in at.selectbox if _es_de(s.key, "inv_ttt_ACT-1")).set_value("warehouse").run()
+next(t_ for t_ in at.text_input if _es_de(t_.key, "inv_ttr_ACT-1")).set_value("Store").run()
 _btn(at, "inv_tbtn_ACT-1").click()
 at.run()
 _a1 = next(a for a in _ss(at, "_A") if a["ID"] == "ACT-1")

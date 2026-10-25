@@ -6,6 +6,7 @@ Movimientos (entradas/salidas) y el escaneo que abre la ficha llegan en la Fase 
 
 v599 · probada pantalla por pantalla en producción: ver HISTORIAL.md («Inventory»).
 """
+import functools
 import logging
 import zlib
 
@@ -67,6 +68,13 @@ def _ubic_txt(a) -> str:
     arreglado una de las dos y la lista seguiría enseñando `PRJ-0007` (el patrón de dos
     mecanismos para lo mismo que v140 mandó no repetir)."""
     return INV.ubic_str(a, _etq)
+
+
+def _indice_de(opciones, actual) -> int:
+    """v600 · Dónde PRESELECCIONAR un desplegable de ACCIÓN (el traslado nace con dónde está el
+    activo). ⚠️ No es un valor guardado que se reescriba (lo que vigila verif_v487): si no está
+    en la lista se preselecciona la primera, y el botón sigue desactivado hasta cambiar algo."""
+    return opciones.index(actual) if actual in opciones else 0
 
 
 def _fecha_input(label, valor, key, desde_hoy=False):
@@ -158,6 +166,21 @@ def _plural(n, uno, varios) -> str:
 
 
 # ── Vista principal ──────────────────────────────────────────────
+def _filtrar(categoria="Todas", estado="Todos", ubicacion="Todas"):
+    """v600 · UNA forma de llevar a la lista ya filtrada (las cifras, los nombres de categoría y
+    las filas de los informes): limpia el resto de filtros y baja a la tabla. Se llama ANTES de
+    pintar los filtros (botón de arriba o callback), que es cuando Streamlit deja asignarlos."""
+    st.session_state["inv_q"] = ""
+    st.session_state["inv_catf"] = categoria
+    st.session_state["inv_estf"] = estado
+    st.session_state["inv_ubicf"] = ubicacion
+    st.session_state["_bajar_cpx_inv_tabla"] = True
+
+
+def _ver_bajas():
+    st.session_state["inv_ver_baja"] = True
+
+
 def _cifras(r, est):
     """v599 · ACTIVAS (eran cinco `st.metric` mudas que a 859 px partían «AVAILABL / E» y
     «$91 / 9»): cada una filtra la lista y baja a ella; el valor abre los informes."""
@@ -176,11 +199,8 @@ def _cifras(r, est):
                     st.session_state["_inv_rep_gen"] = st.session_state.get("_inv_rep_gen", 0) + 1
                     st.session_state["_bajar_cpx_inv_rep"] = True
                 else:
-                    st.session_state["inv_q"] = ""
-                    st.session_state["inv_catf"] = "Todas"
-                    st.session_state["inv_estf"] = {"n": "Todos", "disp": INV.DISPONIBLE,
-                                                    "uso": INV.EN_USO, "mant": _FILTRO_MANT}[_s]
-                    st.session_state["_bajar_cpx_inv_tabla"] = True
+                    _filtrar(estado={"n": "Todos", "disp": INV.DISPONIBLE,
+                                     "uso": INV.EN_USO, "mant": _FILTRO_MANT}[_s])
                 st.rerun()
 
 
@@ -210,37 +230,50 @@ def render_inventario(grupo):
     # `Activo=NO` y la lista usaba el default, que lo oculta, sin casilla para verlo
     # ni forma de reactivarlo. Mismo fallo que tenían los clientes y que v149 ya
     # había resuelto para los proyectos.
+    # ⚠️ v600 · los filtros se RECUERDAN (`persist_state`, como Catalogue y Accounting): al abrir
+    # una ficha y volver se perdían todos (visto verificando v599: «Taladro» → «(2 assets)»)
     _ver_baja = st.checkbox(t(":material/archive: Show written-off ones too"),
-                            key="inv_ver_baja",
+                            key="inv_ver_baja", persist_state="session",
                             help=t("A written-off asset leaves the inventory but keeps its movement history and its QR code."))
     acts = INV.list_activos(grupo, incluir_baja=_ver_baja)
     _n_baja = len([a for a in INV.list_activos(grupo, incluir_baja=True)
                    if str(a.get("Active", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_baja and not _ver_baja:
-        st.caption(":material/inventory_2: " + _plural(_n_baja, "{n} written-off asset hidden.",
-                                                        "{n} written-off assets hidden."))
+        # v600 · ACTIVO: enseña las de baja (era un texto mudo junto a la casilla que lo hace)
+        st.button(":material/inventory_2: " + _plural(_n_baja, "{n} written-off asset hidden — show it",
+                                                       "{n} written-off assets hidden — show them"),
+                  key="inv_ver_bajas_btn", type="tertiary", on_click=_ver_bajas)
     if not acts:
         st.caption(t("No assets yet. Register the first one with «Register asset»."))
         _categorias_expander(grupo)
         return
 
-    f1, f2, f3 = st.columns([2, 1, 1])
-    q = f1.text_input(t(":material/search: Search"), key="inv_q",
-                      placeholder=t("name, serial, brand…")).strip().lower()
+    q = st.text_input(t(":material/search: Search"), key="inv_q", persist_state="session",
+                      placeholder=t("name, serial, brand, location…")).strip().lower()
     # ⚠️ Las opciones son el DATO (categoría y estado guardados) y se comparan abajo;
     # solo se traduce el display: el «todas/todos» con `t()` y el resto con
     # `etiqueta()`, que es quien sabe traducir un valor de negocio (v442).
-    cat_f = f2.selectbox(t("Category"), ["Todas"] + INV.categorias(grupo),
+    # ⚠️ v600 · en TRES columnas bajo la búsqueda: en [2, 1, 1] el estado elegido salía cortado
+    # («Service ov…», a 859 px con el menú).
+    f2, f3, f4 = st.columns(3)
+    _cats_f = ["Todas"] + INV.categorias(grupo)
+    if st.session_state.get("inv_catf") not in _cats_f:     # una categoría ya quitada (o la de un informe)
+        _cats_f.append(st.session_state.get("inv_catf"))
+    cat_f = f2.selectbox(t("Category"), _cats_f,
                          format_func=lambda o: t("All") if o == "Todas" else _etq(o),
-                         key="inv_catf")
+                         key="inv_catf", persist_state="session")
     est_f = f3.selectbox(t("Status"), ["Todos"] + INV.ESTADOS + [_FILTRO_MANT],
                          format_func=lambda o: (t("All") if o == "Todos" else
                                                 t("Service overdue") if o == _FILTRO_MANT else _etq(o)),
-                         key="inv_estf")
+                         key="inv_estf", persist_state="session")
+    # v600 · por UBICACIÓN (lo piden las filas «By location» de los informes)
+    ubic_f = f4.selectbox(t("Location"), ["Todas"] + INV.UBIC_TIPOS,
+                          format_func=lambda o: t("All") if o == "Todas" else _etq(o),
+                          key="inv_ubicf", persist_state="session")
     _rows = acts
     if q:
-        _rows = [a for a in _rows if q in " ".join(
-            str(a.get(k, "")) for k in ("Name", "Serial", "Brand", "Model", "ID")).lower()]
+        _rows = [a for a in _rows if q in (" ".join(
+            str(a.get(k, "")) for k in ("Name", "Serial", "Brand", "Model", "ID")) + " " + _ubic_txt(a)).lower()]
     if cat_f != "Todas":
         _rows = [a for a in _rows if str(a.get("Category", "")) == cat_f]
     if est_f == _FILTRO_MANT:
@@ -248,12 +281,21 @@ def render_inventario(grupo):
         _rows = [a for a in _rows if (INV._parse_date(a.get("NextService")) or _hoy) < _hoy]
     elif est_f != "Todos":
         _rows = [a for a in _rows if str(a.get("Status", "")) == est_f]
+    if ubic_f != "Todas":
+        _rows = [a for a in _rows if str(a.get("LocationType", "")) == ubic_f]
     _rows = sorted(_rows, key=lambda a: str(a.get("Name", "")).lower())
 
     _nom = _nombres(grupo)
     from core import projects_ui as _PU
     with st.container(key="cpx_inv_tabla"):          # v599 · destino de las cifras
         _PU._bajar_a("cpx_inv_tabla", "_bajar_cpx_inv_tabla", bloque="start")
+        if not _rows:
+            # v600 · con los filtros RECORDADOS, «nada coincide» necesita su salida (como v558)
+            st.info(t("Nothing matches these filters."))
+            st.button(t(":material/filter_alt_off: Show all"), key="inv_ver_todo", on_click=_filtrar)
+            _reportes(grupo)
+            _categorias_expander(grupo)
+            return
         st.caption(t("Tap an asset to see its record, its QR code and manage it.") + " "
                    + _plural(len(_rows), "({n} asset)", "({n} assets)"))
         df = pd.DataFrame([{
@@ -324,6 +366,13 @@ def _detalle(grupo, aid):
                 st.rerun()
     else:
         st.markdown(t("#### :material/swap_horiz: Actions"))
+        # ⚠️ v600 · los campos de las acciones van por GENERACIÓN: tras registrar se quedaban con
+        # lo tecleado y un 2º toque repetía el movimiento y su costo (visto verificando v599)
+        _ag = st.session_state.get(f"_inv_acc_gen_{aid}", 0)
+
+        def _nueva_gen():
+            st.session_state[f"_inv_acc_gen_{aid}"] = _ag + 1
+
         if _est == "available":
             # v599 · a ANCHO COMPLETO: en media columna el nombre de la obra salía cortado
             with st.expander(t(":material/logout: Check out / hand over"), key=f"exp_inv_sal_{aid}"):
@@ -331,86 +380,104 @@ def _detalle(grupo, aid):
                                    format_func=lambda o: t({"project": "a project",
                                                             "user": "a person",
                                                             "other": "somewhere else"}.get(o, o)),
-                                   key=f"inv_sdt_{aid}")
+                                   key=f"inv_sdt_{aid}_{_ag}")
                 _ref = ""
                 if _dt == "project":
                     # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
                     _pids, _plbl = _proyectos(grupo)
                     if _pids:
-                        _ref = st.selectbox(t("Project"), _pids, key=f"inv_srp_{aid}",
+                        _ref = st.selectbox(t("Project"), _pids, key=f"inv_srp_{aid}_{_ag}",
                                             format_func=lambda i: _plbl.get(i, i))
                     else:
                         st.info(t("There are no open jobs to send it to."))
                 elif _dt == "user":
                     _us = _usuarios(grupo)
                     if _us:
-                        _ref = st.selectbox(t("Person"), _us, key=f"inv_sru_{aid}",
+                        _ref = st.selectbox(t("Person"), _us, key=f"inv_sru_{aid}_{_ag}",
                                             format_func=lambda u: _nom.get(u, u))
                     else:
                         st.info(t("There are no users to hand it to."))
                 else:
-                    _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
+                    _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}_{_ag}")
                 _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo),
-                                     key=f"inv_srsp_{aid}",
+                                     key=f"inv_srsp_{aid}_{_ag}",
                                      format_func=lambda u: u if u == "—" else _nom.get(u, u))
-                _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}", desde_hoy=True)
-                _n = st.text_input(t("Note"), key=f"inv_snota_{aid}")
-                if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}",
+                _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}_{_ag}", desde_hoy=True)
+                _n = st.text_input(t("Note"), key=f"inv_snota_{aid}_{_ag}")
+                if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}_{_ag}",
                              disabled=(_dt in ("project", "user") and not _ref)):
                     _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "user" else "")
                     ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
                                          fecha_devolucion=_dev, nota=_n, creado_por=_cp)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
+                        _nueva_gen()
                         st.rerun()
         else:
             with st.expander(t(":material/login: Check in / return"), expanded=True, key=f"exp_inv_ent_{aid}"):
-                _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}")
-                _n = st.text_input(t("Note"), key=f"inv_enota_{aid}")
-                if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}"):
+                _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}_{_ag}")
+                _n = st.text_input(t("Note"), key=f"inv_enota_{aid}_{_ag}")
+                if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}_{_ag}"):
                     ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
+                        _nueva_gen()
                         st.rerun()
         # v599 · apilados a ancho completo: el traslado elige ahora una obra, y en media
         # columna su nombre se cortaba como el de la salida
         with st.expander(t(":material/move_up: Transfer"), key=f"exp_inv_tr_{aid}"):
-            _tt = st.selectbox(t("New location (type)"), INV.UBIC_TIPOS, key=f"inv_ttt_{aid}",
+            # ⚠️ v600 · el panel NACE con donde está ahora (desactivado hasta que se cambie algo):
+            # tras registrar volvía a «warehouse» vacío y un 2º toque lo trasladaba otra vez
+            _t0, _r0 = str(a.get("LocationType", "")), str(a.get("LocationRef", "") or "")
+            _tt = st.selectbox(t("New location (type)"), INV.UBIC_TIPOS, key=f"inv_ttt_{aid}_{_ag}",
+                               index=_indice_de(INV.UBIC_TIPOS, _t0),
                                format_func=_etq)
             # ⚠️ v599 · una obra o una persona se ELIGEN (por su ID / usuario): era texto libre
             if _tt == "project":
                 _pids, _plbl = _proyectos(grupo)
-                _tr = (st.selectbox(t("Project"), _pids, key=f"inv_ttp_{aid}",
+                _tr = (st.selectbox(t("Project"), _pids, key=f"inv_ttp_{aid}_{_ag}",
+                                    index=_indice_de(_pids, _r0 if _t0 == _tt else None),
                                     format_func=lambda i: _plbl.get(i, i)) if _pids else "")
                 if not _pids:
                     st.info(t("There are no open jobs to send it to."))
             elif _tt == "user":
                 _us = _usuarios(grupo)
-                _tr = (st.selectbox(t("Person"), _us, key=f"inv_ttu_{aid}",
+                _tr = (st.selectbox(t("Person"), _us, key=f"inv_ttu_{aid}_{_ag}",
+                                    index=_indice_de(_us, _r0 if _t0 == _tt else None),
                                     format_func=lambda u: _nom.get(u, u)) if _us else "")
             else:
-                _tr = st.text_input(t("Detail"), key=f"inv_ttr_{aid}")
+                # la clave lleva el TIPO: al cambiarlo, el detalle no arrastra el del otro sitio
+                _tr = st.text_input(t("Detail"), value=_r0 if _t0 == _tt else "",
+                                    key=f"inv_ttr_{aid}_{_tt}_{_ag}")
             if _tt == INV.REPARACION:
                 st.caption(t("Sending it for repair marks it as under maintenance until it comes back."))
-            _n = st.text_input(t("Note"), key=f"inv_tnota_{aid}")
-            if st.button(t(":material/check: Transfer"), key=f"inv_tbtn_{aid}",
-                         disabled=(_tt in ("project", "user") and not _tr)):
+            _n = st.text_input(t("Note"), key=f"inv_tnota_{aid}_{_ag}")
+            # v600 · a donde ya está no es un traslado (el motor también lo rechaza)
+            _ya = (_tt == str(a.get("LocationType", ""))
+                   and str(_tr or "").strip() == str(a.get("LocationRef", "") or "").strip())
+            if _ya:
+                st.caption(t("The asset is already there."))
+            if st.button(t(":material/check: Transfer"), key=f"inv_tbtn_{aid}_{_ag}",
+                         disabled=(_tt in ("project", "user") and not _tr) or _ya):
                 ok, msg = INV.traslado(aid, grupo, _tt, _tr, nota=_n, creado_por=_cp)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
+                    _nueva_gen()
                     st.rerun()
         with st.expander(t(":material/build: Service"), key=f"exp_inv_mt_{aid}"):
-            _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
+            _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}_{_ag}")
             _prox = _fecha_input(t("Next maintenance"), a.get("NextService"),
-                                 f"inv_mprox_{aid}_{a.get('NextService', '')}")
+                                 f"inv_mprox_{aid}_{a.get('NextService', '')}_{_ag}")
             # v599 · decía «Leave the asset IN service», que se lee justo al revés (en uso)
-            _enm = st.checkbox(t("Mark it as under maintenance (out of use)"), key=f"inv_menm_{aid}")
-            _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}")
-            if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}"):
+            _enm = st.checkbox(t("Mark it as under maintenance (out of use)"), key=f"inv_menm_{aid}_{_ag}")
+            _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}_{_ag}")
+            if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}_{_ag}",
+                         disabled=not INV.servicio_con_datos(a, _costo, _prox, _n, _enm)):
                 ok, msg = INV.mantenimiento(aid, grupo, costo=_costo, proximo=_prox, nota=_n,
                                             en_mant=_enm, creado_por=_cp)
                 (flash.exito if ok else st.error)(msg)
                 if ok:
+                    _nueva_gen()
                     st.rerun()
 
     izq, der = st.columns([3, 2])
@@ -525,9 +592,17 @@ def _detalle(grupo, aid):
         serie = e1.text_input(t("Serial no."), value=a.get("Serial", ""))
         # v599 · sin «in use» ni «written off»: los ponen la salida y la baja (desde aquí el
         # activo quedaba de baja en la ficha y en la lista a la vez, sin movimiento)
-        _ests, _ei = ui.opciones_con_actual(INV.ESTADOS_EDITABLES, a.get("Status"))
-        estado = e2.selectbox(t("Status"), _ests, index=_ei, format_func=_etq,
-                              help=t("«In use» comes from the check-out and «written off» from Write off."))
+        _st0 = str(a.get("Status", ""))
+        if _st0 in (INV.EN_USO, INV.BAJA):
+            # ⚠️ v600 · FIJO: en un activo de baja se podía elegir «available» y quedaba oculto pero
+            # disponible, sin movimiento (visto verificando v599); y uno prestado pasaba a
+            # disponible con su responsable puesto. Se sale con la devolución o con «Reactivate».
+            estado = e2.selectbox(t("Status"), [_st0], format_func=_etq, disabled=True,
+                                  help=t("«In use» ends with the check-in and «written off» with «Reactivate»."))
+        else:
+            _ests, _ei = ui.opciones_con_actual(INV.ESTADOS_EDITABLES, a.get("Status"))
+            estado = e2.selectbox(t("Status"), _ests, index=_ei, format_func=_etq,
+                                  help=t("«In use» comes from the check-out and «written off» from Write off."))
         _conds, _cdi = ui.opciones_con_actual(INV.CONDICIONES, a.get("Condition"))
         condicion = e1.selectbox(t("Condition"), _conds, index=_cdi, format_func=_etq)
         _ubics, _ubi = ui.opciones_con_actual(INV.UBIC_TIPOS, a.get("LocationType"))
@@ -677,26 +752,64 @@ def _reportes(grupo):
         # traducida (salía «project»/«warehouse» en bruto).
         with st.expander(t(":material/insights: Value reports"), key=f"exp_inv_rep_{_abre}_{_g}",
                          expanded=_abre):
+            # ⚠️ v600 · ACTIVAS: un toque en una fila lleva a la lista con ese filtro (eran cifras
+            # mudas). Por callback, que corre ANTES de pintar los filtros de arriba.
+            _sg = st.session_state.get("_inv_rep_sel_gen", 0)
+            _cats = [k for k, _v in sorted(rep["por_categoria"].items())]
+            _ubis = [k for k, _v in sorted(rep["por_ubicacion"].items())]
+            st.caption(t("Tap a row to see those assets in the list."))
             st.markdown(t("**By category**"))
             st.dataframe(pd.DataFrame([{
                 "Category": _etq(k), "Active": v["n"],
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
-                width="stretch", hide_index=True,
+                width="stretch", hide_index=True, key=f"inv_rep_cat_{_sg}",
+                on_select=functools.partial(_tocar_informe, f"inv_rep_cat_{_sg}", _cats, "categoria"),
+                selection_mode="single-cell",
                 column_config=tabla.cfg(None, {"Compra": st.column_config.NumberColumn(t("Purchase"), format="$%,d"),
                                "Actual": st.column_config.NumberColumn(t("Current"), format="$%,d")}))
             st.markdown(t("**By location**"))
             st.dataframe(pd.DataFrame([{
                 "Location": _etq(k), "Active": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
-                width="stretch", hide_index=True,
+                width="stretch", hide_index=True, key=f"inv_rep_ubi_{_sg}",
+                on_select=functools.partial(_tocar_informe, f"inv_rep_ubi_{_sg}", _ubis, "ubicacion"),
+                selection_mode="single-cell",
                 column_config=tabla.cfg(None, {"Valor actual": st.column_config.NumberColumn(t("Current value"), format="$%,d")}))
+
+
+def _tocar_informe(clave, filas, campo):
+    """v600 · Callback de una fila de los informes: a la lista con ese filtro (y la tabla nace
+    sin selección: otra generación, así el MISMO toque vuelve a funcionar)."""
+    _sel = (st.session_state.get(clave) or {}).get("selection") or {}
+    _cel = list(_sel.get("cells") or []) or [[r] for r in (_sel.get("rows") or [])]
+    st.session_state["_inv_rep_sel_gen"] = st.session_state.get("_inv_rep_sel_gen", 0) + 1
+    if not _cel or not (0 <= int(_cel[0][0]) < len(filas)):
+        return
+    _v = filas[int(_cel[0][0])]
+    if campo == "categoria":
+        _filtrar(categoria=_v if _v != "—" else "Todas")
+    else:
+        _filtrar(ubicacion=_v if _v in INV.UBIC_TIPOS else "Todas")
+
+
+def _tocar_categoria(clave):
+    """v600 · Callback de un nombre de categoría: a la lista filtrada por ella."""
+    _v = st.session_state.get(clave)
+    st.session_state["_inv_cat_pill_gen"] = st.session_state.get("_inv_cat_pill_gen", 0) + 1
+    if _v:
+        _filtrar(categoria=_v)
 
 
 def _categorias_expander(grupo):
     with st.expander(t(":material/category: Categories"), key="exp_inv_cats"):
-        st.caption(t("The default ones are always there; here you add/remove your own."))
-        st.write(" · ".join(_etq(c) for c in INV.categorias(grupo)))
+        st.caption(t("The default ones are always there; here you add/remove your own. "
+                     "Tap one to see its assets in the list."))
+        # ⚠️ v600 · ACTIVAS: cada categoría lleva a la lista filtrada por ella (era una línea de texto)
+        _pg = st.session_state.get("_inv_cat_pill_gen", 0)
+        st.pills(t("Categories"), INV.categorias(grupo), format_func=_etq, key=f"inv_cat_pills_{_pg}",
+                 on_change=_tocar_categoria, args=(f"inv_cat_pills_{_pg}",),
+                 label_visibility="collapsed")
         # v599 · el campo se VACÍA tras añadir (se quedaba con lo escrito); se asigna antes de
         # pintarlo, que es cuando Streamlit lo admite (trampa 31: vaciar es ASIGNAR)
         if st.session_state.pop("_inv_cat_limpiar", False):

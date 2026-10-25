@@ -63,7 +63,10 @@ def barrer(src, nombre="?"):
                 continue
             modo = ast.literal_eval(kw["selection_mode"]) if "selection_mode" in kw else "(sin modo)"
             _llama = {ast.unparse(n.func).split(".")[-1] for n in ast.walk(fn) if isinstance(n, ast.Call)}
-            lee = _lee_celdas(fn) or bool(_llama & AYUDANTES)
+            # ⚠️ v600 · …o el CALLBACK del propio `on_select` (`functools.partial(_tocar_informe, …)`,
+            # los informes de Inventory): ese ayudante no se LLAMA aquí, se pasa — y lee la celda.
+            _pasa = {n.id for n in ast.walk(kw["on_select"]) if isinstance(n, ast.Name)}
+            lee = _lee_celdas(fn) or bool(_llama & AYUDANTES) or bool(_pasa & AYUDANTES)
             out.append((nombre, c.lineno, fn.name, modo, lee))
     # una tabla dentro de una función anidada sale dos veces (la de fuera y la de dentro)
     return sorted({(a, b, m, l) for a, b, _f, m, l in out})

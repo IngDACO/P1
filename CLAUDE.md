@@ -60,6 +60,8 @@ MEMORIA). `run_suite.py verif_v57` filtra por nombre; para desplegar, siempre en
 — en especial las fotos de la hoja, que son **datos reales**.
 ⚠️ Las baterías viejas no llevan `if __name__`: **importarlas las EJECUTA**, y cortar su
 salida (`Select-Object -First`) puede dejar un fichero roto a medias (v569: se libró).
+⚠️ Y una batería que no entiende `--anclas` se EJECUTA entera con él: nunca con `timeout`
+(v600: cortada, dejó dos roturas en catalogo_ui y projects_ui — vistas en el diff y restauradas).
 ⚠️ `check_anclas_roturas` (con `anclas_lectura.py`, v575) sitúa el ANCLA de cada rotura por la
 posición que le da su batería y exige CERO muertas, ilegibles o sin forma: una batería
 nueva se escribe en una forma legible (o se le enseña la forma). Y una batería solo
@@ -499,6 +501,13 @@ Estas cinco mordieron en una sola tanda:
     AppTest NO lo ve (lee el servidor). → ACCIÓN DIFERIDA: el botón solo apunta y relanza;
     la acción se ejecuta arriba, antes de pintar la lista. Quitar la clave también lo
     cura, pero la trampa 35 la exige. Revisarlo en cada lista de tarjetas con acciones.
+    ⚠️ v600 · la regla de v582 los oculta solo con la pasada PARADA: durante otra se veían
+    (en la lista de Inventory, el botón de una ficha). Medido en una mini-app: los deja un
+    bloque con clave que desaparece tras un `st.rerun()` lanzado DESDE DENTRO; la acción
+    diferida NO basta. Lo cura `theme.script_fantasmas` (marca al acabar cada pasada lo que
+    sigue «stale», que con la pasada parada solo puede ser fantasma) + su CSS, para toda la
+    app. Para medirlo: nodos (no claves: un fantasma comparte clave con el vivo) y
+    `setInterval`, no `requestAnimationFrame` (con el panel sin pintar no corre).
 
 38. ⚠️ **Un dict literal con una clave REPETIDA no avisa: la segunda pisa a la primera.**
     La migración al inglés (v444) tradujo «Situación» y «Estado» las dos a `"Status"`, y la

@@ -101,7 +101,9 @@ div[data-testid="stTextInput"] input { min-height: 40px; }
 """, unsafe_allow_html=True)
 
 # ── PWA: manifest + íconos + meta-tags (instalable con ícono COPEX) ──
-incrustar.script("""
+# ⚠️ v600 · en el MISMO recuadro, el marcador de fantasmas (`theme.script_fantasmas`): un
+# recuadro nuevo sería un elemento más arriba de todo, y cambiaría la posición de lo de debajo.
+incrustar.script(_cpx_theme.script_fantasmas() + """
 <script>
 try {
   var d = window.parent.document, h = d.head;

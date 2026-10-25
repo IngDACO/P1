@@ -18,7 +18,7 @@ from core import columnas
 from core import valores
 from core.num import col_letter as _col_letter, num as _num, parse_date as _parse_date
 
-from core.i18n import t
+from core.i18n import t, etiqueta
 logger = logging.getLogger(__name__)
 
 ACTIVOS_SHEET = "Assets"
@@ -283,13 +283,22 @@ def update_activo(aid: str, fields: dict) -> tuple:
     w, err = _ws(ACTIVOS_SHEET)
     if err:
         return False, err
-    row = None
+    row, actual = None, {}
     for i, r in enumerate(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), ACTIVOS_SHEET)):
         if str(r.get("ID", "")) == str(aid):
-            row = i + 2
+            row, actual = i + 2, r
             break
     if row is None:
         return False, t("Asset not found.")
+    # ⚠️ v600 · «written off» ⇔ Active=NO, SIEMPRE. El formulario de edición de un activo de
+    # baja ofrecía «available» y lo dejaba oculto pero «available», sin movimiento de vuelta
+    # (visto verificando v599). Solo la baja y la reactivación cambian las dos cosas a la vez.
+    if "Status" in fields or "Active" in fields:
+        _act = str(fields.get("Active", actual.get("Active", "SI")) or "SI").upper()
+        _est = str(fields.get("Status", actual.get("Status", "")) or "")
+        if (_est == BAJA) != (_act in ("NO", "FALSE", "0")):
+            return False, t("A written-off asset only comes back with «Reactivate», and an asset is "
+                            "only written off with «Write off».")
     batch = [{"range": f"{_col_letter(_ACOL[k])}{row}", "values": [[str(v)]]}
              for k, v in fields.items() if k in _ACOL]
     if batch:
@@ -303,11 +312,16 @@ def update_activo(aid: str, fields: dict) -> tuple:
 
 def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "") -> tuple:
     a = get_activo(aid)
+    if not a:
+        return False, t("Asset not found.")
+    if str(a.get("Status", "")) == BAJA:
+        return False, t("This asset is already written off.")       # v600 · un 2º toque
     # ⚠️ v599 · SIN tocar la nota: el motivo la pisaba («Prueba de inventario…» pasó a ser el
     # motivo, visto en producción) y ya queda en el historial, de donde lo lee la ficha.
-    ok, msg = update_activo(aid, {"Active": "NO", "Status": "written off"})
+    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA})
     if ok:
-        _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), "baja",
+        # ⚠️ v600 · el destino en INGLÉS, el dato canónico (escribía «baja»)
+        _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), BAJA,
                  "", "", motivo, creado_por=creado_por)
         return True, t("Asset written off.")
     return ok, msg
@@ -317,9 +331,13 @@ def reactivar(aid: str, grupo: str = "", creado_por: str = "") -> tuple:
     """v599 · La vuelta de la baja, con su movimiento (decía «Asset updated.» y el historial
     no contaba que el activo volvió)."""
     a = get_activo(aid)
+    if not a:
+        return False, t("Asset not found.")
+    if str(a.get("Status", "")) != BAJA:
+        return False, t("This asset is not written off.")             # v600 · un 2º toque
     ok, msg = update_activo(aid, {"Active": "SI", "Status": DISPONIBLE})
     if ok:
-        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", "baja", ubic_str(a),
+        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", BAJA, ubic_str(a),
                  "", "", "", creado_por=creado_por)
         return True, t("Asset reactivated.")
     return ok, msg
@@ -420,13 +438,13 @@ def ubic_ref_label(ref: str) -> str:
 
 
 def ubic_texto(txt, etq=None) -> str:
-    """Traduce un texto de ubicacion YA COMPUESTO (`"bodega: Bodega central"`).
+    """Traduce un texto de ubicacion YA COMPUESTO (`"warehouse: Store"`).
 
     ⚠️ Es SOLO para pantalla. El historial de movimientos guarda ese texto ya
-    formado —y en español, que es el DATO (v464)—, asi que la unica forma de que la
-    tabla no diga `bodega:` al lado de una ficha que dice `warehouse:` es traducir
-    el PREFIJO al pintarlo. No toca la hoja, asi que arregla tambien el historico
-    sin ninguna migracion.
+    formado, asi que la unica forma de que la tabla diga lo mismo que la ficha es
+    traducir el PREFIJO al pintarlo. ⚠️ v600 · el dato es INGLÉS (el canónico desde
+    v453); la devolución y la baja seguían escribiendo «bodega»/«baja» y se migraron.
+    Una fila vieja en español se sigue leyendo bien: `etiqueta` conoce las dos.
     ⚠️ Se parte por el PRIMER ": " y solo se traduce el prefijo: la referencia puede
     ser un nombre de obra con dos puntos dentro.
     """
@@ -505,6 +523,10 @@ def salida(aid, grupo, usuario="", hacia_tipo="user", hacia_ref="",
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
+    # ⚠️ v600 · solo sale lo que está disponible (un 2º toque repetía la salida)
+    if str(a.get("Status", "")) != DISPONIBLE:
+        return False, t("Only an available asset can be checked out (this one is {e}).",
+                        e=etiqueta(str(a.get("Status", ""))))
     # ⚠️ v599 · una devolución prevista que ya pasó no es una fecha: se aceptaba y el activo
     # nacía «no devuelto» (visto en producción, «not returned for 5 d» recién sacado)
     _fd = _parse_date(fecha_devolucion)
@@ -530,12 +552,17 @@ def entrada(aid, grupo, bodega="", nota="", creado_por="") -> tuple:
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
+    # ⚠️ v600 · nada que devolver si ya está disponible (un 2º toque repetía la entrada)
+    if str(a.get("Status", "")) in (DISPONIBLE, BAJA):
+        return False, t("There is nothing to return: the asset is {e}.",
+                        e=etiqueta(str(a.get("Status", ""))))
     desde = ubic_str(a)
-    ok, msg = update_activo(aid, {"Status": "available", "LocationType": "warehouse",
+    ok, msg = update_activo(aid, {"Status": DISPONIBLE, "LocationType": "warehouse",
                                   "LocationRef": bodega, "AssignedTo": "", "ReturnDate": ""})
     if not ok:
         return ok, msg
-    _log_mov(grupo, aid, "check-in", desde, (f"bodega: {bodega}" if bodega else "bodega"),
+    # ⚠️ v600 · el destino en INGLÉS, el dato canónico (escribía «bodega: Store»)
+    _log_mov(grupo, aid, "check-in", desde, (f"warehouse: {bodega}" if bodega else "warehouse"),
              a.get("AssignedTo", ""), "", nota, creado_por=creado_por)
     return True, t("Return recorded.")
 
@@ -545,6 +572,10 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
+    # ⚠️ v600 · a donde ya está no es un traslado (un 2º toque lo repetía)
+    if (str(hacia_tipo) == str(a.get("LocationType", ""))
+            and str(hacia_ref or "").strip() == str(a.get("LocationRef", "") or "").strip()):
+        return False, t("The asset is already there.")
     desde = ubic_str(a)
     # ⚠️ v350: el historial guarda el nombre YA RESUELTO (regla v306: un histórico
     # cuenta lo que pasó, no lo que hay ahora). `salida` sí lo hacía y aquí se quedó el
@@ -566,11 +597,28 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     return True, t("Transfer recorded.")
 
 
+def servicio_con_datos(a: dict, costo="", proximo="", nota="", en_mant=False) -> bool:
+    """v600 · ¿Hay algo que anotar? Un costo, una próxima fecha DISTINTA de la guardada, una
+    nota o pasarlo a mantenimiento. La ficha desactiva el botón con esta misma regla."""
+    try:
+        _c = float(costo or 0)
+    except (TypeError, ValueError):
+        _c = 0.0
+    _p = str(proximo or "").strip()[:10]
+    _nueva_fecha = bool(_p) and _p != str(a.get("NextService", "") or "").strip()[:10]
+    _a_mant = bool(en_mant) and str(a.get("Status", "")) != MANTENIMIENTO
+    return _c > 0 or _nueva_fecha or bool(str(nota or "").strip()) or _a_mant
+
+
 def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, creado_por="") -> tuple:
     """Registra un mantenimiento (costo + próxima fecha); opcional deja el activo en mantenimiento."""
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
+    # ⚠️ v600 · sin nada que anotar no es un servicio: un 2º toque lo repetía con el mismo costo
+    if not servicio_con_datos(a, costo, proximo, nota, en_mant):
+        return False, t("Nothing to record: enter the cost, a new next date or a note, or mark it as "
+                        "under maintenance.")
     campos = {}
     if proximo:
         campos["NextService"] = proximo

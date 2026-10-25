@@ -56,6 +56,10 @@ EXENTOS = {
     ("roster_ui.py", "_cumplimiento"): "elige el DIA que se mira (radio): navegacion",
     ("library.py", "set_modelo_activo"): "POSICION de una cabecera, con el orden de HEADERS por defecto",
     ("library.py", "delete_item"): "POSICION de la cabecera ID, con el orden de HEADERS por defecto",
+    # v600 · el traslado de Inventory nace con DÓNDE ESTÁ el activo (un 2º toque lo repetía): es
+    # una ACCIÓN, no un valor guardado; el botón sale desactivado mientras no se cambie algo.
+    # En un ayudante propio, para no eximir `_detalle` entero (su formulario de edición sí cuenta).
+    ("inventory_ui.py", "_indice_de"): "PRESELECCIÓN de una acción (dónde está), no un valor que se guarde",
 }
 
 

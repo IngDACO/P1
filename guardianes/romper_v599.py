@@ -20,9 +20,11 @@ TOPE_S = 900
 
 ROTURAS = [
     # ── el motor ──
+    # (v600 · re-ancladas tres: la baja y la reactivación escriben la CONSTANTE `BAJA` —el dato
+    # en inglés; escribían «baja»— y las cifras filtran por `_filtrar`, que es quien baja a la tabla)
     ("⚠️ la baja vuelve a PISAR la nota con el motivo", IN,
-     [('    ok, msg = update_activo(aid, {"Active": "NO", "Status": "written off"})\n',
-       '    ok, msg = update_activo(aid, {"Active": "NO", "Status": "written off",\n'
+     [('    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA})\n',
+       '    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA,\n'
        '                                  "Note": (motivo or "Decommissioned")})\n')]),
     ("⚠️ la edición vuelve a guardar SIN nombre", IN,
      [('    if "Name" in fields and not str(fields.get("Name") or "").strip():\n',
@@ -47,7 +49,7 @@ ROTURAS = [
     ("el alta vuelve a ofrecer obra/persona en texto libre", IN,
      [('UBIC_TIPOS_ALTA = ["warehouse", REPARACION]\n', "UBIC_TIPOS_ALTA = UBIC_TIPOS\n")]),
     ("reactivar vuelve a no dejar movimiento", IN,
-     [('        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", "baja", ubic_str(a),\n'
+     [('        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", BAJA, ubic_str(a),\n'
        '                 "", "", "", creado_por=creado_por)\n', "        pass\n")]),
     ("…o a decir «Asset updated.»", IN,
      [('        return True, t("Asset reactivated.")\n', '        return True, t("Asset updated.")\n')]),
@@ -55,7 +57,7 @@ ROTURAS = [
     ("«Service overdue» deja de filtrar", IU,
      [('"uso": INV.EN_USO, "mant": _FILTRO_MANT}[_s]', '"uso": INV.EN_USO, "mant": "Todos"}[_s]')]),
     ("las cifras dejan de bajar a la tabla", IU,
-     [('                    st.session_state["_bajar_cpx_inv_tabla"] = True\n', "                    pass\n")]),
+     [('    st.session_state["_bajar_cpx_inv_tabla"] = True\n', "    pass\n")]),
     ("⚠️ la tabla vuelve SIN el ID", IU, [('            "ID":          a.get("ID", ""),\n', "")]),
     ("…o el responsable por su usuario", IU,
      [('            "Assigned to":  _nom.get(str(a.get("AssignedTo", "")), a.get("AssignedTo", "")) or "—",\n',
