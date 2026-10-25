@@ -107,7 +107,8 @@ chk("la traducción REALMENTE se aplicó (llamadas a t())", _llam >= 900, f"{_ll
 sec("2. Las CLAVES de widget NO se tradujeron")
 # `st.form(key)` y `ui.confirmar_borrado(key, texto)` — verbatim, medidas en el código
 KEYS = {
-    "core/clientes_ui.py": ['st.form("cli_nuevo")'],
+    # v602 · el alta va por GENERACIÓN (se vaciaba a mano): la clave sigue sin traducir
+    "core/clientes_ui.py": ['st.form(f"cli_nuevo_{_g}"'],
     # v582 · la clave lleva una GENERACIÓN: tras crear, otra (el formulario se quedaba lleno y
     # un segundo toque creaba un artículo idéntico). Lo que esto protege —que la clave NO se
     # traduzca— sigue igual: «cat_new_» es el literal.

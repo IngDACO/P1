@@ -100,9 +100,15 @@ at.run()
 chk("«No record» sin ninguno: lo dice", any("No client matches the search or the filter." in i.value
                                             for i in at.info) and not at.dataframe)
 _rd = [r for r in at.radio if r.key == "cpxseg_clis_filt"]
+# ⚠️ v602 · «persist_state» EN EL FICHERO ya no prueba nada: la búsqueda y la casilla también
+# lo llevan, y quitarlo del filtro escapaba (trampa 2, grep ≠ uso) → el `key=` de ESA llamada
+_radio_pers = [n for n in ast.walk(ast.parse(io.open(os.path.join(RAIZ, "core", "clientes_ui.py"),
+                                                       encoding="utf-8").read()))
+               if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.radio"
+               and any(k.arg == "key" and ast.unparse(k.value) == "'cpxseg_clis_filt'" for k in n.keywords)]
 chk("…con el selector All · With record · No record · With jobs, RECORDADO",
     _rd and list(_rd[0].options) == ["All", "With record", "No record", "With jobs"]
-    and "persist_state" in io.open(os.path.join(RAIZ, "core", "clientes_ui.py"), encoding="utf-8").read(),
+    and len(_radio_pers) == 1 and any(k.arg == "persist_state" for k in _radio_pers[0].keywords),
     _rd[0].options if _rd else None)
 at = AppTest.from_string(CAB, default_timeout=90)
 at.session_state["_LISTA"] = True
@@ -120,7 +126,8 @@ at.run()
 at.session_state["cli_tbl_0"] = {"selection": {"rows": [], "columns": [], "cells": [(0, "Phone")]}}
 at.run()
 chk("⚠️ tocar la 1ª fila abre ESA ficha, con otra generación de clave",
-    at.session_state["_cli_open"] == "cliente uno" and at.session_state["_cli_tbl_gen"] == 1
+    # (v602 · se abre por su ID: el nombre solo es el respaldo de lo que no tiene ficha)
+    at.session_state["_cli_open"] == "CLI-1" and at.session_state["_cli_tbl_gen"] == 1
     if "_cli_open" in at.session_state else False)
 
 print("")

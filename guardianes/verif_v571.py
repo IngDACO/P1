@@ -211,8 +211,9 @@ chk("⚠️ «Cost» con céntimos: $350.60 y formato `$%,.2f` (era `round(…, 
     list(_d.value["Costo"]) == [350.6, 0.0] and _cj.get("Costo", {}).get("type_config", {}).get("format") == "$%,.2f",
     (list(_d.value["Costo"]), _cj.get("Costo")))
 # (dos fichas en el guion: «Otro» no tiene obras — la 1ª sonda esperaba una fila)
-chk("los pies, traducibles: «… (2 client(s))»",
-    any("Tap a client to see its record, summary and projects. (2 client(s))" in c.value for c in at.caption),
+# (v602 · con su plural de verdad: «(2 clients)», no «(2 client(s))»)
+chk("los pies, traducibles: «… (2 clients)»",
+    any("Tap a client to see its record, summary and projects. (2 clients)" in c.value for c in at.caption),
     [c.value for c in at.caption])
 
 print("")

@@ -160,6 +160,21 @@ def _next_id() -> str:
         return f"CLI-{mx + 1:04d}"
 
 
+def email_valido(email) -> bool:
+    """v602 · Vacío vale (es opcional); si hay algo, que tenga forma de email (`a@b.c`).
+
+    Se guardaba cualquier cosa («abc») y el contacto quedaba inservible sin que nadie lo viera.
+    """
+    import re
+    e = str(email or "").strip()
+    return not e or bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", e))
+
+
+def solo_digitos(s) -> str:
+    """v602 · Los dígitos de un teléfono, para buscarlo con o sin espacios («02 9000 1003»)."""
+    return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+
 def create_cliente(grupo, nombre, contacto="", telefono="", email="",
                    direccion="", notas="", creado_por="") -> tuple:
     """Crea una ficha de cliente. Devuelve (ok, id|error)."""
@@ -169,6 +184,8 @@ def create_cliente(grupo, nombre, contacto="", telefono="", email="",
     nombre = str(nombre or "").strip()
     if not nombre:
         return False, t("The client name is required.")
+    if not email_valido(email):
+        return False, t("That email does not look right (it should be like name@company.com).")
     for r in _records():
         if str(r.get("Group", "")) == str(grupo) and _norm(r.get("Name")) == _norm(nombre):
             return False, t("A client with that name already exists in this group.")
@@ -183,6 +200,8 @@ def create_cliente(grupo, nombre, contacto="", telefono="", email="",
 
 def update_cliente(cid: str, fields: dict) -> tuple:
     """Actualiza columnas sueltas de la ficha (fields = {Header: valor}), 1 batch."""
+    if "Email" in fields and not email_valido(fields.get("Email")):
+        return False, t("That email does not look right (it should be like name@company.com).")
     w, err = _ws()
     if err:
         return False, err
@@ -209,7 +228,31 @@ def update_cliente(cid: str, fields: dict) -> tuple:
 
 
 def set_activo(cid: str, activo: bool) -> tuple:
-    return update_cliente(cid, {"Active": "SI" if activo else "NO"})
+    """Archivar / restaurar, con SU mensaje (v602: archivar volvía a la lista sin decir nada)."""
+    ok, msg = update_cliente(cid, {"Active": "SI" if activo else "NO"})
+    if not ok:
+        return ok, msg
+    return True, t("Client restored.") if activo else t("Client archived.")
+
+
+def ficha_de(grupo, clave) -> dict:
+    """v602 · La ficha que abre la lista: por su ID (CLI-…) o, para lo que llega por NOMBRE
+    (Invoices, una obra), por el nombre normalizado — en las dos, ARCHIVADAS incluidas.
+
+    ⚠️ La ficha buscaba solo entre las ACTIVAS y por nombre: una archivada salía «no record
+    yet», sin «Restore», y «Save record» respondía «already exists» (visto en producción: un
+    cliente archivado no se podía recuperar). El ID es la identidad; el nombre, el respaldo
+    (dentro de un grupo no se repite: `create_cliente` lo impide, archivadas incluidas).
+    """
+    clave = str(clave or "").strip()
+    fichas = list_clientes(grupo, incluir_inactivos=True)
+    for f in fichas:
+        if str(f.get("ID", "")) == clave:
+            return f
+    for f in fichas:
+        if _norm(f.get("Name")) == _norm(clave):
+            return f
+    return {}
 
 
 # ── Enlace cliente↔proyecto (ID-primero, nombre-de-respaldo) ─────

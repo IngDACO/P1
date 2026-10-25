@@ -32,7 +32,10 @@ def _agregados(proys, horas, alarmas, costos):
     """(activos, avance_prom, horas, costo, alarmas) de una lista de proyectos."""
     activos = [x for x in proys
                if str(x.get("Status", "")) not in ("Completed", "Cancelled", "Archived")]
-    av = (sum(_num(x.get("Progress")) for x in proys) / len(proys)) if proys else 0.0
+    # ⚠️ v602 · el avance medio SIN las canceladas: una obra cancelada no avanza, y contaba como
+    # un 0 % que hundía la media (Penrith, cancelada, a 0 % en producción)
+    _cuentan = [x for x in proys if str(x.get("Status", "")) not in ("Cancelled", "Archived")]
+    av = (sum(_num(x.get("Progress")) for x in _cuentan) / len(_cuentan)) if _cuentan else 0.0
     hrs = sum(horas.get(str(x.get("ID", "")), 0.0) for x in proys)
     cost = sum(costos.get(str(x.get("ID", "")), 0.0) for x in proys)
     al = sum(int(_num(alarmas.get(str(x.get("ID", "")), 0))) for x in proys)
@@ -43,6 +46,21 @@ def _agregados(proys, horas, alarmas, costos):
 # construye al IMPORTAR (quedaría congelado, v445); se traduce al pintar.
 _FILTROS_CLI = {"Todos": "All", "ConFicha": "With record", "SinFicha": "No record",
                 "ConObras": "With jobs"}
+
+
+def _plural(n, uno, varios) -> str:
+    return t(uno, n=n) if n == 1 else t(varios, n=n)
+
+
+def _ver_archivados():
+    st.session_state["cli_ver_arch"] = True
+
+
+def _ver_todos():
+    """v602 · «Show all»: sin búsqueda ni filtro (con los dos recordados, «nada coincide»
+    necesita su salida, como v558)."""
+    st.session_state["cli_q"] = ""
+    st.session_state["cpxseg_clis_filt"] = "Todos"
 
 
 def _horas(h) -> str:
@@ -162,14 +180,19 @@ def render_contactos(grupo):
     # los oculta — sin casilla para verlos ni botón para restaurar. Desaparecía y no
     # había forma de recuperarlo desde la app. Es exactamente lo que v149 arregló
     # para los proyectos y a los clientes nunca se les aplicó.
+    # ⚠️ v602 · los filtros se RECUERDAN (`persist_state`): al abrir una ficha y volver se
+    # perdían la búsqueda y esta casilla (visto en producción: «meridian» → la lista entera)
     _ver_arch = st.checkbox(t(":material/archive: Show archived ones too"),
-                            key="cli_ver_arch",
+                            key="cli_ver_arch", persist_state="session",
                             help=t("Archived ones stop being listed, but are not deleted: their projects, hours and invoices stay intact."))
     fichas  = C.list_clientes(grupo, incluir_inactivos=_ver_arch)
     _n_arch = len([f for f in C.list_clientes(grupo, incluir_inactivos=True)
                    if str(f.get("Active", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_arch and not _ver_arch:
-        st.caption(t(":material/inventory_2: {n} archived client(s) hidden.", n=_n_arch))
+        # v602 · ACTIVO: enseña los archivados (era un texto mudo junto a la casilla que lo hace)
+        st.button(":material/inventory_2: " + _plural(_n_arch, "{n} archived client hidden — show it",
+                                                       "{n} archived clients hidden — show them"),
+                  key="cli_ver_arch_btn", type="tertiary", on_click=_ver_archivados)
     proys   = P.list_projects(grupo=grupo)
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
@@ -199,7 +222,8 @@ def render_contactos(grupo):
         pr = by_client.get(k, {}).get("proys", [])
         disp = f.get("Name") or by_client.get(k, {}).get("nombre") or "—"
         activos, av, hrs, cost, al = _agregados(pr, horas, alarmas, costos)
-        rows.append({"key": k, "disp": disp, "ficha": bool(f),
+        rows.append({"key": k, "disp": disp, "ficha": bool(f), "cid": str(f.get("ID", "")),
+                     "archivado": str(f.get("Active", "SI")).upper() in ("NO", "FALSE", "0"),
                      "ContactName": f.get("ContactName", ""), "Phone": f.get("Phone", ""),
                      "Email": f.get("Email", ""), "total": len(pr), "activos": activos,
                      "av": av, "hrs": hrs, "cost": cost, "al": al})
@@ -218,6 +242,8 @@ def render_contactos(grupo):
         for _col, (_s, _l, _v, _pie, _fl) in zip(st.columns(4), _K):
             if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_clis_{_s}", width="stretch"):
                 st.session_state["_clis_filt_pending"] = _fl
+                st.session_state["cli_q"] = ""       # v602 · la cifra cuenta la lista ENTERA
+                st.session_state["_bajar_cpx_clis_tabla"] = True   # v602 · y baja a ella
                 st.rerun()
     _pp = st.session_state.pop("_clis_filt_pending", None)
     if _pp in _FILTROS_CLI:
@@ -234,38 +260,65 @@ def render_contactos(grupo):
 
     # Buscador
     _q = st.text_input(t(":material/search: Search client, contact, phone or email"),
-                       key="cli_q", placeholder=t("type to filter…")).strip().lower()
+                       key="cli_q", persist_state="session",
+                       placeholder=t("type to filter…")).strip().lower()
     if _q:
+        # ⚠️ v602 · el teléfono, con o sin espacios: «0290001003» no encontraba «02 9000 1003»
+        _qd = C.solo_digitos(_q)
         rows = [r for r in rows if _q in " ".join([
-            r["disp"], r["ContactName"], r["Phone"], r["Email"]]).lower()]
-    st.caption(t("Tap a client to see its record, summary and projects. ({n} client(s))",
-                 n=len(rows)))
+            r["disp"], r["ContactName"], r["Phone"], r["Email"]]).lower()
+            or (len(_qd) >= 3 and _qd in C.solo_digitos(r["Phone"]))]
 
-    if not rows:
-        st.info(t(":material/search_off: No client matches the search or the filter."))
-        _nuevo_cliente_form(grupo)
-        return
+    from core import projects_ui as _PU
+    with st.container(key="cpx_clis_tabla"):           # v602 · destino de las cifras
+        _PU._bajar_a("cpx_clis_tabla", "_bajar_cpx_clis_tabla", bloque="start")
+        _sel = None
+        if not rows:
+            st.info(t(":material/search_off: No client matches the search or the filter."))
+            st.button(t(":material/filter_alt_off: Show all"), key="cli_ver_todos", on_click=_ver_todos)
+        else:
+            st.caption(t("Tap a client to see its record, summary and projects.") + " "
+                       + _plural(len(rows), "({n} client)", "({n} clients)"))
+            _sel = _tabla_clientes(rows)
+    if _sel is not None:
+        st.session_state["_cli_open"] = rows[_sel]["cid"] or rows[_sel]["key"]
+        st.rerun()
 
+    _nuevo_cliente_form(grupo)
+
+
+def _tabla_clientes(rows):
+    """La tabla de la lista; devuelve el índice de la fila tocada (o None).
+
+    ⚠️ v602 · lo que importa de un cliente PRIMERO (activas, obras, avance): a 1024 px y en el
+    móvil solo se veían Client · Record · Contact · Phone y sus obras quedaban fuera, a la
+    derecha (trampa 22: no achicar, PRIORIZAR). «Record» al final, con «Archived» si lo está.
+    """
     _hay_costo = expenses.is_configured()
     df = pd.DataFrame([{
         "Cliente":   r["disp"],
-        "Ficha":     t("yes") if r["ficha"] else "—",
+        "Active":   r["activos"],
+        "Projects": r["total"],
+        "Avance":    int(round(r["av"])),
         "Contacto":  r["ContactName"] or "—",
         "Phone":  r["Phone"] or "—",
         "Email":     r["Email"] or "—",
-        "Projects": r["total"],
-        "Active":   r["activos"],
-        "Avance":    int(round(r["av"])),
         "Horas":     round(r["hrs"], 1),
         **({"Costo": round(r["cost"], 2)} if _hay_costo else {}),
         "Alarms":   str(r["al"]) if r["al"] else "",
+        "Ficha":     (t("Archived") if r.get("archivado") else t("Yes")) if r["ficha"] else "—",
     } for r in rows])
     # ⚠️ Las claves tienen que ser las de la FILA ("Avance"/"Costo"), no la etiqueta.
     # v468 las renombro aqui y no arriba, asi que las dos quedaban HUERFANAS: la barra
     # de progreso no se aplicaba y —peor— la columna de dinero perdia su `$%,d`, o sea
     # que v468 reintrodujo ahi el fallo de v399 (el importe sin separador de miles).
     _colcfg = {"Avance": st.column_config.ProgressColumn(
-        t("Progress"), min_value=0, max_value=100, format="%d%%")}
+        t("Progress"), min_value=0, max_value=100, format="%d%%"),
+        # v602 · con su unidad, como en la ficha (salía «0» y «20.9»); y «Open alerts», el
+        # nombre que esa columna tiene en la ficha y en el resto de la app (decía «Alarms»)
+        "Horas": st.column_config.NumberColumn(t("Hours"), format="%.1f h"),
+        "Alarms": st.column_config.TextColumn(t("Open alerts")),
+        "Ficha": st.column_config.TextColumn(t("Record"))}
     if _hay_costo:
         # v571 · con céntimos, como el resto de tablas de dinero (Expenses, Invoices): salía
         # en dólares enteros (`round(…, 0)` + `$%,d`).
@@ -283,10 +336,8 @@ def render_contactos(grupo):
     _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     if _sr and 0 <= _sr[0] < len(rows):
         st.session_state["_cli_tbl_gen"] = _gen + 1
-        st.session_state["_cli_open"] = rows[_sr[0]]["key"]
-        st.rerun()
-
-    _nuevo_cliente_form(grupo)
+        return _sr[0]
+    return None
 
 
 # ── Detalle de un cliente ────────────────────────────────────────
@@ -295,11 +346,12 @@ def _detalle_cliente(grupo, key):
         st.session_state.pop("_cli_open", None)
         st.rerun()
 
-    fichas = C.list_clientes(grupo)
-    fichas_by_norm = {_norm(f.get("Name")): f for f in fichas}
-    f = fichas_by_norm.get(key, {})
+    # ⚠️ v602 · por su ID (o por el nombre, lo que llega de Invoices), ARCHIVADAS incluidas: una
+    # archivada salía «no record yet», sin «Restore», y no había forma de recuperarla
+    f = C.ficha_de(grupo, key)
     cid = str(f.get("ID", ""))
-    proys = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, key)]
+    nkey = _norm(f.get("Name")) if f else key
+    proys = [p for p in P.list_projects(grupo=grupo) if C.es_del_cliente(p, cid, nkey)]
     disp = f.get("Name") or (proys[0].get("Client") if proys else key)
 
     st.markdown(f"## :material/apartment: {disp}")
@@ -311,7 +363,8 @@ def _detalle_cliente(grupo, key):
     # Ficha de contacto (crea si no existe, edita si existe)
     with izq:
         st.markdown(t("#### :material/contact_page: Contact record"))
-        with st.form(f"cli_form_{key}"):
+        # v602 · Enter NO envía (mandaba la ficha a medias, como el alta)
+        with st.form(f"cli_form_{key}", enter_to_submit=False):
             _con = st.text_input(t("Contact person"), value=f.get("ContactName", ""))
             cc = st.columns(2)
             _tel  = cc[0].text_input(t("Phone"), value=f.get("Phone", ""))
@@ -334,6 +387,7 @@ def _detalle_cliente(grupo, key):
                 st.error(msg)
         if f.get("Address"):
             st.markdown(":material/place: " + maps.maps_link_md(f.get("Address"), t("See the address on the map")))
+        _contactar(f)
 
     # Resumen
     with der:
@@ -363,9 +417,12 @@ def _detalle_cliente(grupo, key):
                 with st.expander(t(":material/archive: Archive client"), key=f"exp_cli_arch_{cid}"):
                     st.caption(t("It stops being listed; its projects are untouched. To see it again, tick «Show archived ones too» in the list."))
                     if st.button(t("Archive this record"), key=f"cli_arch_{cid}"):
-                        C.set_activo(cid, False)
-                        st.session_state.pop("_cli_open", None)
-                        st.rerun()
+                        ok, msg = C.set_activo(cid, False)
+                        if ok:
+                            flash.exito(msg)          # v602 · avisa (volvía a la lista sin decir nada)
+                            st.session_state.pop("_cli_open", None)
+                            st.rerun()
+                        st.error(msg)
 
     # v571 · lo que abre una cifra del resumen, a TODO el ancho (la columna es estrecha)
     _desglose_obras(key, proys, horas, costos, alarmas, _con_gx, _con_al)
@@ -387,7 +444,7 @@ def _detalle_cliente(grupo, key):
 
     # Vincular más proyectos (necesita ficha con ID)
     if cid:
-        otros = [p for p in P.list_projects(grupo=grupo) if not C.es_del_cliente(p, cid, key)]
+        otros = [p for p in P.list_projects(grupo=grupo) if not C.es_del_cliente(p, cid, nkey)]
         if otros:
             with st.expander(t(":material/link: Link other projects to this client"), key=f"exp_cli_link_{cid}"):
                 st.caption(t("Useful if the project has different text in «Client» or was left unlinked."))
@@ -399,7 +456,7 @@ def _detalle_cliente(grupo, key):
                     if _sel:
                         for _lbl in _sel:
                             P.update_project(_opts[_lbl], {"ClientID": cid, "Client": disp})
-                        flash.exito(t("{n} project(s) linked.", n=len(_sel)))
+                        flash.exito(_plural(len(_sel), "{n} project linked.", "{n} projects linked."))
                         st.rerun()
                     else:
                         st.warning(t("Choose at least one project."))
@@ -433,25 +490,45 @@ def _detalle_cliente(grupo, key):
             st.rerun()
 
 
+def _contactar(f):
+    """v602 · Llamar y escribir con un toque (elementos activos): el teléfono y el email de la
+    ficha eran texto. ⚠️ En HTML: el markdown de Streamlit 1.64 solo deja pasar http(s), irc,
+    mailto y xmpp, y un enlace `tel:` se perdería."""
+    import html as _h
+    _tel, _mail = str(f.get("Phone", "") or "").strip(), str(f.get("Email", "") or "").strip()
+    if C.solo_digitos(_tel):
+        _num_tel = ("+" if _tel.startswith("+") else "") + C.solo_digitos(_tel)
+        st.markdown(f':material/call: <a href="tel:{_num_tel}">{_h.escape(_tel)}</a>',
+                    unsafe_allow_html=True)
+    if _mail and C.email_valido(_mail):
+        st.markdown(f':material/mail: <a href="mailto:{_h.escape(_mail, quote=True)}">{_h.escape(_mail)}</a>',
+                    unsafe_allow_html=True)
+
+
 # ── Alta de cliente ──────────────────────────────────────────────
 def _nuevo_cliente_form(grupo):
+    # ⚠️ v602 · por GENERACIÓN y SIN enviar con Enter: un Enter en el nombre creaba el cliente
+    # a medias (visto en producción: «Client created.» solo con el nombre), y el formulario se
+    # quedaba con lo tecleado — un 2º envío respondía «already exists». Como Inventory (v599).
+    _g = st.session_state.get("_cli_new_gen", 0)
     with st.expander(t(":material/add_circle: New client"), key="exp_cli_new"):
-        with st.form("cli_nuevo"):
-            _nom = st.text_input(t("Client name *"))
+        with st.form(f"cli_nuevo_{_g}", enter_to_submit=False):
+            _nom = st.text_input(t("Client name *"), key=f"cli_new_nom_{_g}")
             cc = st.columns(2)
-            _con = cc[0].text_input(t("Contact person"))
-            _tel = cc[1].text_input(t("Phone"))
+            _con = cc[0].text_input(t("Contact person"), key=f"cli_new_con_{_g}")
+            _tel = cc[1].text_input(t("Phone"), key=f"cli_new_tel_{_g}")
             cc2 = st.columns(2)
-            _mail = cc2[0].text_input(t("Email"))
-            _dir  = cc2[1].text_input(t("Address"))
-            _notas = st.text_area(t("Notes"), height=80)
+            _mail = cc2[0].text_input(t("Email"), key=f"cli_new_mail_{_g}")
+            _dir  = cc2[1].text_input(t("Address"), key=f"cli_new_dir_{_g}")
+            _notas = st.text_area(t("Notes"), height=80, key=f"cli_new_notas_{_g}")
             _crear = st.form_submit_button(t(":material/add: Create client"), type="primary")
         if _crear:
             ok, msg = C.create_cliente(grupo, _nom, _con, _tel, _mail, _dir, _notas,
                                        creado_por=_creado_por())
             if ok:
+                st.session_state["_cli_new_gen"] = _g + 1
                 flash.exito(t("Client created."))
-                st.session_state["_cli_open"] = _norm(_nom)
+                st.session_state["_cli_open"] = msg          # v602 · por su ID
                 st.rerun()
             else:
                 st.error(msg)

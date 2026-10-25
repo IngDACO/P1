@@ -56,12 +56,14 @@ ROTURAS = [
       ('                st.session_state[f"_cls_vista::{key}"] = "" if _cur == _s else _s\n',
        '                st.session_state["_cls_vista"] = "" if _cur == _s else _s\n')]),
     # ── los textos ──
-    ("⚠️ «… project(s) linked.» vuelve a un f-string sin `t()`", CU,
-     [('flash.exito(t("{n} project(s) linked.", n=len(_sel)))',
-       'flash.exito(f"{len(_sel)} project(s) linked.")')]),
-    ("el pie de archivados vuelve sin `t()`", CU,
-     [('st.caption(t(":material/inventory_2: {n} archived client(s) hidden.", n=_n_arch))',
-       'st.caption(f":material/inventory_2: {_n_arch} archived client(s) hidden.")')]),
+    # (v602 · re-ancladas las dos: el plural va por `_plural` y el aviso de archivados es un BOTÓN)
+    ("⚠️ «… projects linked.» vuelve a un f-string sin `t()`", CU,
+     [('flash.exito(_plural(len(_sel), "{n} project linked.", "{n} projects linked."))',
+       'flash.exito(f"{len(_sel)} projects linked.")')]),
+    ("el aviso de archivados vuelve sin `t()`", CU,
+     [('st.button(":material/inventory_2: " + _plural(_n_arch, "{n} archived client hidden — show it",',
+       'st.button(f":material/inventory_2: {_n_arch} archived clients hidden") if False else '
+       'st.button(":material/inventory_2: " + _plural(_n_arch, "{n} archived client hidden — show it",')]),
     ("el enlace al mapa vuelve sin `t()`", CU,
      [('t("See the address on the map")', '"See the address on the map"')]),
     ("el estado de cada obra vuelve a salir CRUDO", CU,

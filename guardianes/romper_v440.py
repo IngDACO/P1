@@ -15,7 +15,8 @@ GUARD = Path(__file__).parent / "verif_v440.py"
 ROTURAS = [
     # ⚠️ la clave del formulario pasaría a depender del idioma → se pierde el estado
     ("una CLAVE de widget se traduce", "core/clientes_ui.py",
-     'st.form("cli_nuevo")', 'st.form(t("new_client"))'),
+     # (v602 · re-anclada: el alta va por generación)
+     'st.form(f"cli_nuevo_{_g}"', 'st.form(t("new_client")'),
 
     # ⚠️ `st.data_editor` devolvería una columna que nadie sabe leer
     ("una CLAVE de column_config se traduce", "core/invoices_ui.py",
