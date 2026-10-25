@@ -36,8 +36,9 @@ ROTURAS = [
        '                       key=f"gu_tbl_{_filtro or \'todos\'}"')]),
     ("…o lee solo `.rows`", AU, [(_LEE8, "        _sr = list(_ev.selection.rows)\n")]),
     ("Inventory vuelve a `single-row`", IU,
-     [('        on_select="rerun", selection_mode="single-cell", key="inv_tbl",\n',
-       '        on_select="rerun", selection_mode="single-row", key="inv_tbl",\n')]),
+     # v599 · re-anclada: la tabla va ahora dentro del bloque al que bajan las cifras
+     [('            on_select="rerun", selection_mode="single-cell", key="inv_tbl",\n',
+       '            on_select="rerun", selection_mode="single-row", key="inv_tbl",\n')]),
     ("…o lee solo `.rows`", IU, [(_LEE4, "    _sr = list(_ev.selection.rows)\n")]),
     ("Library vuelve a `single-row`", LU,
      [('on_select="rerun", selection_mode="single-cell", key="lib_tbl",',

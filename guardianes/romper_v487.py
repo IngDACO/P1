@@ -18,8 +18,9 @@ NL = chr(10)
 
 ROTURAS = [
     ("inventory_ui.py", "KPI vuelve a buscar «disponible»",
-     "c[1].metric(t(\"Available\"), est.get(INV.DISPONIBLE, 0))",
-     "c[1].metric(t(\"Available\"), est.get(\"disponible\", 0))"),
+     # v599 · re-anclada: la cifra es ahora un BOTÓN activo (`_cifras`), mismo valor por la constante
+     "(\"disp\", t(\"Available\"), str(est.get(INV.DISPONIBLE, 0))),",
+     "(\"disp\", t(\"Available\"), str(est.get(\"disponible\", 0))),"),
     ("inventory.py", "el alta vuelve a escribir «disponible»",
      "           DISPONIBLE, str(condicion or CONDICIONES[0]), str(ubicacion_tipo or UBIC_TIPOS[0]),",
      "           \"disponible\", str(condicion or CONDICIONES[0]), str(ubicacion_tipo or UBIC_TIPOS[0]),"),

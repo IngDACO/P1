@@ -278,6 +278,15 @@ _malas_sec = {sec: sorted(set(sec) - _comparados)
               for sec in _ultimos if len(set(sec) - _comparados) > 1}
 chk("ninguna sección tiene 2+ IDs sin comparar (0 ramas muertas)", not _malas_sec,
     str({k[:2]: v for k, v in _malas_sec.items()}))
+# ⚠️ v599 · «uno sin comparar por sección» dejó de bastar en v577: Hours ganó su rama y
+# Finanzas se quedó con CERO en el `else`, así que traducir UN ID de Finanzas (romper_v449,
+# «💰 Gastos» → «💰 Expenses») dejaba un solo sin comparar y la sonda lo daba por el `else`
+# — la rotura se escapaba. Los que caen en un `else` se NOMBRAN: cualquier otro sin comparar
+# es una rama muerta.
+_POR_ELSE = {"👷 Usuarios", "📚 Manuales"}
+_sin_cmp = set().union(*[set(sec) - _comparados for sec in _ultimos]) if _ultimos else set()
+chk("los IDs sin `sub ==` son SOLO los del `else` (%s)" % ", ".join(sorted(_POR_ELSE)),
+    _sin_cmp <= _POR_ELSE, sorted(_sin_cmp - _POR_ELSE))
 chk("...y el chequeo miró las secciones de verdad", len(_ultimos) >= 4,
     str(len(_ultimos)))
 chk("...y su DISPLAY sí está en inglés",

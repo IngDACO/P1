@@ -3,8 +3,11 @@
 KPIs + lista filtrable → ficha (foto, QR + etiqueta PDF, datos, valor depreciado,
 edición, baja) + registro + catálogo de categorías. Solo admin/propietario.
 Movimientos (entradas/salidas) y el escaneo que abre la ficha llegan en la Fase 2.
+
+v599 · probada pantalla por pantalla en producción: ver HISTORIAL.md («Inventory»).
 """
 import logging
+import zlib
 
 from core.i18n import t, etiqueta as _etq
 import pandas as pd
@@ -15,11 +18,17 @@ from core import flash
 from core import tenant
 from core import clock
 from core import inventory as INV
-from core.num import num as _num
+from core.num import num as _num, dmy as _dmy
 from core import tabla
 from core import ui_common as ui
+from core import theme as T
 
 logger = logging.getLogger(__name__)
+
+# v599 · el filtro de la cifra «Service overdue» (no es un estado guardado: es la fecha)
+_FILTRO_MANT = "__mant__"
+# Obras a las que ya no se manda nada (v599, como el Survey en v589 y guardar en v592)
+_CERRADAS = ("Completed", "Cancelled", "Archived", "Closed")
 
 
 def _creado_por() -> str:
@@ -60,15 +69,18 @@ def _ubic_txt(a) -> str:
     return INV.ubic_str(a, _etq)
 
 
-def _fecha_input(label, valor, key):
-    """date_input opcional (None permitido) → devuelve ISO o ''. """
+def _fecha_input(label, valor, key, desde_hoy=False):
+    """date_input opcional (None permitido) → devuelve ISO o ''.
+
+    v599 · `desde_hoy`: no deja elegir un día pasado (la devolución prevista)."""
     d0 = None
     try:
         from datetime import date
         d0 = date.fromisoformat(str(valor)[:10]) if str(valor).strip() else None
     except Exception:
         d0 = None
-    v = st.date_input(label, value=d0, key=key, format="DD/MM/YYYY")
+    _kw = {"min_value": clock.today()} if desde_hoy else {}
+    v = st.date_input(label, value=d0, key=key, format="DD/MM/YYYY", **_kw)
     return v.isoformat() if v else ""
 
 
@@ -81,6 +93,22 @@ def _usuarios(grupo):
         return []
 
 
+def _nombres(grupo) -> dict:
+    """v599 · usuario → «Nombre (usuario)»: el responsable se elegía por el USUARIO
+    («dmoreno»), que no es como se conoce a la gente."""
+    try:
+        from core import auth
+        out = {}
+        for u in auth.list_users(grupo):
+            _u = str(u.get("User", "")).strip()
+            _n = str(u.get("Name", "")).strip()
+            if _u:
+                out[_u] = f"{_n} ({_u})" if _n and _n != _u else _u
+        return out
+    except Exception:
+        return {}
+
+
 def _proyectos(grupo):
     """`(ids, etiqueta)` de los proyectos del grupo, para elegir destino.
 
@@ -89,20 +117,73 @@ def _proyectos(grupo):
     (y renombrar un proyecto dejaba huérfano el histórico, como pasaba con las horas
     antes de v145). Las filas antiguas siguen leyéndose: `ubic_proyecto` resuelve el
     ID si lo es y, si no, muestra el texto tal cual.
+    ⚠️ v599 · solo las ABIERTAS: ofrecía obras canceladas y entregadas (visto en producción,
+    Penrith y Mascot), como el Survey hasta v589.
     """
     try:
         from core import projects as P
         # v422: **con las localizaciones internas**. Un activo vive en el ALMACÉN más
         # que en ninguna obra: excluirlas dejaría el inventario sin su ubicación natural.
         _ps = [p for p in P.list_projects(grupo=grupo, incluir_internos=True)
-               if str(p.get("ID", "")).strip()]
+               if str(p.get("ID", "")).strip() and str(p.get("Status", "")) not in _CERRADAS]
         _lbl = P.etiqueta_proyectos(_ps)
         return [str(p.get("ID", "")) for p in _ps], _lbl
     except Exception:
         return [], {}
 
 
+def _subir_foto(archivo) -> str:
+    """La foto a Drive (carpeta del inventario). Devuelve su ID o '' (v599: una sola vía,
+    para el alta y para «Change photo»)."""
+    from core import drive_store
+    if not drive_store.is_available():
+        return ""
+    return drive_store.upload_to(drive_store.folder("COPEX Assets"),
+                                 archivo.name, archivo.getvalue(),
+                                 archivo.type or "image/jpeg")
+
+
+def _norm(s) -> str:
+    return " ".join(str(s or "").casefold().split())
+
+
+def _k_dup(nombre, serie) -> str:
+    """La casilla «registrar aunque se repita» va POR nombre y serie (como Catalogue, v582):
+    marcarla para uno no vale para otro."""
+    return f"inv_dup_{zlib.crc32((_norm(nombre) + '|' + _norm(serie)).encode('utf-8'))}"
+
+
+def _plural(n, uno, varios) -> str:
+    return t(uno, n=n) if n == 1 else t(varios, n=n)
+
+
 # ── Vista principal ──────────────────────────────────────────────
+def _cifras(r, est):
+    """v599 · ACTIVAS (eran cinco `st.metric` mudas que a 859 px partían «AVAILABL / E» y
+    «$91 / 9»): cada una filtra la lista y baja a ella; el valor abre los informes."""
+    _K = [("n", t("Assets"), str(r["n"])),
+          ("disp", t("Available"), str(est.get(INV.DISPONIBLE, 0))),
+          ("uso", t("In use"), str(est.get(INV.EN_USO, 0))),
+          ("valor", t("Current value"), f"${r['valor_actual']:,.0f}"),
+          ("mant", t("Service overdue"), str(r["mant_vencido"]))]
+    st.markdown(T.por_fila("cpx_inv_kpis", 3), unsafe_allow_html=True)
+    with st.container(key="cpx_inv_kpis"):
+        for _col, (_s, _l, _v) in zip(st.columns(len(_K)), _K):
+            _h = (t("Purchase value: {x} (straight-line depreciated). Opens the value reports.",
+                    x=f"${r['valor_compra']:,.0f}") if _s == "valor" else t("Show them in the list"))
+            if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_inv_{_s}", width="stretch", help=_h):
+                if _s == "valor":
+                    st.session_state["_inv_rep_gen"] = st.session_state.get("_inv_rep_gen", 0) + 1
+                    st.session_state["_bajar_cpx_inv_rep"] = True
+                else:
+                    st.session_state["inv_q"] = ""
+                    st.session_state["inv_catf"] = "Todas"
+                    st.session_state["inv_estf"] = {"n": "Todos", "disp": INV.DISPONIBLE,
+                                                    "uso": INV.EN_USO, "mant": _FILTRO_MANT}[_s]
+                    st.session_state["_bajar_cpx_inv_tabla"] = True
+                st.rerun()
+
+
 def render_inventario(grupo):
     st.markdown(t("## :material/inventory_2: Asset inventory"))
     if not INV.is_configured():
@@ -117,15 +198,9 @@ def render_inventario(grupo):
 
     r = INV.resumen(grupo)
     est = r["por_estado"]
-    c = st.columns(5)
-    c[0].metric(t("Assets"), r["n"])
     # ⚠️ v487: por la CONSTANTE. Con "disponible"/"en_uso" marcaban 0 SIEMPRE desde
     # v469, que canoniza el estado al leer: `por_estado` trae "available"/"in use".
-    c[1].metric(t("Available"), est.get(INV.DISPONIBLE, 0))
-    c[2].metric(t("In use"), est.get(INV.EN_USO, 0))
-    c[3].metric(t("Current value"), f"${r['valor_actual']:,.0f}",
-                help=f"Purchase value: ${r['valor_compra']:,.0f} (straight-line depreciated)")
-    c[4].metric(t("Service overdue"), r["mant_vencido"])
+    _cifras(r, est)
 
     if st.button(t(":material/add_circle: Register asset"), type="primary", key="inv_new"):
         st.session_state["_inv_nuevo"] = True
@@ -142,7 +217,8 @@ def render_inventario(grupo):
     _n_baja = len([a for a in INV.list_activos(grupo, incluir_baja=True)
                    if str(a.get("Active", "SI")).upper() in ("NO", "FALSE", "0")])
     if _n_baja and not _ver_baja:
-        st.caption(f":material/inventory_2: {_n_baja} written-off asset(s) hidden.")
+        st.caption(":material/inventory_2: " + _plural(_n_baja, "{n} written-off asset hidden.",
+                                                        "{n} written-off assets hidden."))
     if not acts:
         st.caption(t("No assets yet. Register the first one with «Register asset»."))
         _categorias_expander(grupo)
@@ -157,8 +233,9 @@ def render_inventario(grupo):
     cat_f = f2.selectbox(t("Category"), ["Todas"] + INV.categorias(grupo),
                          format_func=lambda o: t("All") if o == "Todas" else _etq(o),
                          key="inv_catf")
-    est_f = f3.selectbox(t("Status"), ["Todos"] + INV.ESTADOS,
-                         format_func=lambda o: t("All") if o == "Todos" else _etq(o),
+    est_f = f3.selectbox(t("Status"), ["Todos"] + INV.ESTADOS + [_FILTRO_MANT],
+                         format_func=lambda o: (t("All") if o == "Todos" else
+                                                t("Service overdue") if o == _FILTRO_MANT else _etq(o)),
                          key="inv_estf")
     _rows = acts
     if q:
@@ -166,25 +243,38 @@ def render_inventario(grupo):
             str(a.get(k, "")) for k in ("Name", "Serial", "Brand", "Model", "ID")).lower()]
     if cat_f != "Todas":
         _rows = [a for a in _rows if str(a.get("Category", "")) == cat_f]
-    if est_f != "Todos":
+    if est_f == _FILTRO_MANT:
+        _hoy = clock.today()
+        _rows = [a for a in _rows if (INV._parse_date(a.get("NextService")) or _hoy) < _hoy]
+    elif est_f != "Todos":
         _rows = [a for a in _rows if str(a.get("Status", "")) == est_f]
     _rows = sorted(_rows, key=lambda a: str(a.get("Name", "")).lower())
 
-    st.caption(f"Tap an asset to see its record, its QR code and manage it. ({len(_rows)})")
-    df = pd.DataFrame([{
-        "Nombre":      a.get("Name", ""),
-        "Category":   _etq(str(a.get("Category", ""))) or "—",
-        "Estado":      _etq(str(a.get("Status", ""))),
-        "Location":   _ubic_txt(a),
-        "Assigned to":  a.get("AssignedTo", "") or "—",
-        "Valor":       round(INV.valor_actual(a), 0),
-    } for a in _rows])
-    _ev = st.dataframe(
-        df, width="stretch", hide_index=True,
-        # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque en la celda solo
-        # la enmarcaba (la ficha se abría únicamente marcando la casilla).
-        on_select="rerun", selection_mode="single-cell", key="inv_tbl",
-        column_config=tabla.cfg(None, {"Valor": st.column_config.NumberColumn(t("Value"), format="$%,d")}))
+    _nom = _nombres(grupo)
+    from core import projects_ui as _PU
+    with st.container(key="cpx_inv_tabla"):          # v599 · destino de las cifras
+        _PU._bajar_a("cpx_inv_tabla", "_bajar_cpx_inv_tabla", bloque="start")
+        st.caption(t("Tap an asset to see its record, its QR code and manage it.") + " "
+                   + _plural(len(_rows), "({n} asset)", "({n} assets)"))
+        df = pd.DataFrame([{
+            # v599 · el ID primero: dos activos con el MISMO nombre no se distinguían
+            "ID":          a.get("ID", ""),
+            "Nombre":      a.get("Name", ""),
+            "Category":   _etq(str(a.get("Category", ""))) or "—",
+            "Estado":      _etq(str(a.get("Status", ""))),
+            "Location":   _ubic_txt(a),
+            "Assigned to":  _nom.get(str(a.get("AssignedTo", "")), a.get("AssignedTo", "")) or "—",
+            "Valor":       round(INV.valor_actual(a), 0),
+        } for a in _rows])
+        _ev = st.dataframe(
+            df, width="stretch", hide_index=True,
+            # ⚠️ v598 · `single-cell`, como Files en v592: con `single-row` un toque en la celda solo
+            # la enmarcaba (la ficha se abría únicamente marcando la casilla).
+            on_select="rerun", selection_mode="single-cell", key="inv_tbl",
+            column_config=tabla.cfg(None, {
+                "ID": st.column_config.TextColumn("ID", width=80, pinned=True),
+                "Nombre": st.column_config.TextColumn(t("Name"), pinned=True),
+                "Valor": st.column_config.NumberColumn(t("Value"), format="$%,d")}))
     _s = _ev.selection            # v598 · la fila de la CELDA tocada (o la de la casilla)
     _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
     if _sr:
@@ -211,39 +301,171 @@ def _detalle(grupo, aid):
         st.session_state.pop("_inv_open", None)
         return
 
+    _nom = _nombres(grupo)
     st.markdown(f"## :material/inventory_2: {a.get('Name', '')}")
     st.markdown(f"**{a.get('ID', '')}**  ·  {_etq(str(a.get('Category', ''))) or '—'}  ·  "
                 f"{_est_lbl(a.get('Status', ''))}")
 
+    # ── Acciones (salida/entrada/traslado/mantenimiento) ──
+    # ⚠️ v599 · JUSTO debajo del título: se llega escaneando el QR con el móvil, y las acciones
+    # quedaban debajo de los valores y del propio QR que acababas de escanear.
+    _est = str(a.get("Status", "")).lower()
+    _cp = _creado_por()
+    if _est == "written off":
+        # v340: la vuelta. Antes un activo de baja no se podía reactivar desde la app.
+        _mot = INV.motivo_baja(grupo, aid)
+        st.warning(t(":material/block: This asset is **written off**: it does not appear in the inventory unless you tick «Show written-off ones too».")
+                   + (" " + t("Reason: {x}", x=_mot) if _mot else ""))
+        if st.button(t(":material/restore: Reactivate this asset"),
+                     key=f"inv_react_{aid}", type="primary"):
+            ok, msg = INV.reactivar(aid, grupo, _cp)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                st.rerun()
+    else:
+        st.markdown(t("#### :material/swap_horiz: Actions"))
+        if _est == "available":
+            # v599 · a ANCHO COMPLETO: en media columna el nombre de la obra salía cortado
+            with st.expander(t(":material/logout: Check out / hand over"), key=f"exp_inv_sal_{aid}"):
+                _dt = st.selectbox(t("Destination"), ["project", "user", "other"],
+                                   format_func=lambda o: t({"project": "a project",
+                                                            "user": "a person",
+                                                            "other": "somewhere else"}.get(o, o)),
+                                   key=f"inv_sdt_{aid}")
+                _ref = ""
+                if _dt == "project":
+                    # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
+                    _pids, _plbl = _proyectos(grupo)
+                    if _pids:
+                        _ref = st.selectbox(t("Project"), _pids, key=f"inv_srp_{aid}",
+                                            format_func=lambda i: _plbl.get(i, i))
+                    else:
+                        st.info(t("There are no open jobs to send it to."))
+                elif _dt == "user":
+                    _us = _usuarios(grupo)
+                    if _us:
+                        _ref = st.selectbox(t("Person"), _us, key=f"inv_sru_{aid}",
+                                            format_func=lambda u: _nom.get(u, u))
+                    else:
+                        st.info(t("There are no users to hand it to."))
+                else:
+                    _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
+                _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo),
+                                     key=f"inv_srsp_{aid}",
+                                     format_func=lambda u: u if u == "—" else _nom.get(u, u))
+                _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}", desde_hoy=True)
+                _n = st.text_input(t("Note"), key=f"inv_snota_{aid}")
+                if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}",
+                             disabled=(_dt in ("project", "user") and not _ref)):
+                    _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "user" else "")
+                    ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
+                                         fecha_devolucion=_dev, nota=_n, creado_por=_cp)
+                    (flash.exito if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+        else:
+            with st.expander(t(":material/login: Check in / return"), expanded=True, key=f"exp_inv_ent_{aid}"):
+                _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}")
+                _n = st.text_input(t("Note"), key=f"inv_enota_{aid}")
+                if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}"):
+                    ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
+                    (flash.exito if ok else st.error)(msg)
+                    if ok:
+                        st.rerun()
+        # v599 · apilados a ancho completo: el traslado elige ahora una obra, y en media
+        # columna su nombre se cortaba como el de la salida
+        with st.expander(t(":material/move_up: Transfer"), key=f"exp_inv_tr_{aid}"):
+            _tt = st.selectbox(t("New location (type)"), INV.UBIC_TIPOS, key=f"inv_ttt_{aid}",
+                               format_func=_etq)
+            # ⚠️ v599 · una obra o una persona se ELIGEN (por su ID / usuario): era texto libre
+            if _tt == "project":
+                _pids, _plbl = _proyectos(grupo)
+                _tr = (st.selectbox(t("Project"), _pids, key=f"inv_ttp_{aid}",
+                                    format_func=lambda i: _plbl.get(i, i)) if _pids else "")
+                if not _pids:
+                    st.info(t("There are no open jobs to send it to."))
+            elif _tt == "user":
+                _us = _usuarios(grupo)
+                _tr = (st.selectbox(t("Person"), _us, key=f"inv_ttu_{aid}",
+                                    format_func=lambda u: _nom.get(u, u)) if _us else "")
+            else:
+                _tr = st.text_input(t("Detail"), key=f"inv_ttr_{aid}")
+            if _tt == INV.REPARACION:
+                st.caption(t("Sending it for repair marks it as under maintenance until it comes back."))
+            _n = st.text_input(t("Note"), key=f"inv_tnota_{aid}")
+            if st.button(t(":material/check: Transfer"), key=f"inv_tbtn_{aid}",
+                         disabled=(_tt in ("project", "user") and not _tr)):
+                ok, msg = INV.traslado(aid, grupo, _tt, _tr, nota=_n, creado_por=_cp)
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+        with st.expander(t(":material/build: Service"), key=f"exp_inv_mt_{aid}"):
+            _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
+            _prox = _fecha_input(t("Next maintenance"), a.get("NextService"),
+                                 f"inv_mprox_{aid}_{a.get('NextService', '')}")
+            # v599 · decía «Leave the asset IN service», que se lee justo al revés (en uso)
+            _enm = st.checkbox(t("Mark it as under maintenance (out of use)"), key=f"inv_menm_{aid}")
+            _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}")
+            if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}"):
+                ok, msg = INV.mantenimiento(aid, grupo, costo=_costo, proximo=_prox, nota=_n,
+                                            en_mant=_enm, creado_por=_cp)
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
     izq, der = st.columns([3, 2])
     with izq:
+        vc, va = _num(a.get("PurchaseValue")), INV.valor_actual(a)
+        m1, m2 = st.columns(2)
+        m1.metric(t("Purchase value"), f"${vc:,.0f}")
+        m2.metric(t("Current value"), f"${va:,.0f}",
+                  help=t("Straight-line depreciation over the useful life."))
+        st.markdown(t("**Location:** {u}  ·  **Condition:** {c}", u=_ubic_txt(a),
+                      c=_etq(str(a.get("Condition", ""))) or "—"))
+        if str(a.get("AssignedTo", "")).strip():
+            _asg = str(a.get("AssignedTo"))
+            st.markdown(f"**{t('Assigned to')}:** {_nom.get(_asg, _asg)}"
+                        + (f" · {t('due back')} {_dmy(a.get('ReturnDate'))}" if a.get("ReturnDate") else ""))
+        _pm = str(a.get("NextService", "")).strip()
+        if _pm:
+            _pd = INV._parse_date(_pm)
+            if _pd and _pd < clock.today():
+                st.markdown(f":red[:material/build: {t('Maintenance OVERDUE')}: {_dmy(_pm)}]")
+            else:
+                st.markdown(":material/build: " + t("Next service: {f}", f=_dmy(_pm)))
+        if str(a.get("Note", "")).strip():
+            st.caption(a.get("Note"))
+    with der:
         if a.get("PhotoDriveID"):
             try:
                 from core import drive_store
                 st.image(drive_store.download(a.get("PhotoDriveID")), width=220)
             except Exception:
                 pass
-        vc, va = _num(a.get("PurchaseValue")), INV.valor_actual(a)
-        m1, m2 = st.columns(2)
-        m1.metric(t("Purchase value"), f"${vc:,.0f}")
-        m2.metric(t("Current value"), f"${va:,.0f}",
-                  help=t("Straight-line depreciation over the useful life."))
-        st.markdown(f"**Location:** {_ubic_txt(a)}  ·  **Condition:** {_etq(str(a.get('Condition', ''))) or '—'}")
-        if str(a.get("AssignedTo", "")).strip():
-            st.markdown(f"**{t('Assigned to')}:** {a.get('AssignedTo')}"
-                        + (f" · {t('due back')} {a.get('ReturnDate')}" if a.get("ReturnDate") else ""))
-        _pm = str(a.get("NextService", "")).strip()
-        if _pm:
-            _pd = INV._parse_date(_pm)
-            if _pd and _pd < clock.today():
-                st.markdown(f":red[:material/build: {t('Maintenance OVERDUE')}: {_pm}]")
-            else:
-                st.markdown(f":material/build: Next service: {_pm}")
-        if str(a.get("Note", "")).strip():
-            st.caption(a.get("Note"))
+        # v599 · la foto se cambia AQUÍ: el aviso del alta decía «Add it later from its record»
+        # y la ficha no tenía cómo
+        _fg = st.session_state.get(f"_inv_foto_gen_{aid}", 0)
+        with st.expander(t(":material/photo_camera: Change photo") if a.get("PhotoDriveID")
+                         else t(":material/photo_camera: Add a photo"), key=f"exp_inv_foto_{aid}"):
+            _f = st.file_uploader(t("Photo"), type=["png", "jpg", "jpeg"], key=f"inv_foto_{aid}_{_fg}")
+            if st.button(t(":material/save: Save photo"), key=f"inv_foto_btn_{aid}", disabled=_f is None):
+                try:
+                    _fid = _subir_foto(_f)
+                except Exception as e:
+                    logger.warning("inventory_ui: la foto del activo no subió a Drive: %s", e)
+                    _fid = ""
+                if _fid:
+                    ok, msg = INV.update_activo(aid, {"PhotoDriveID": _fid})
+                    if ok:
+                        st.session_state[f"_inv_foto_gen_{aid}"] = _fg + 1
+                        flash.exito(t("Photo saved."))
+                        st.rerun()
+                    st.error(msg)
+                else:
+                    st.error(t("The photo could not be uploaded to Drive."))
 
-    with der:
-        st.markdown(t("#### :material/qr_code_2: QR code"))
+    # v599 · el QR y su etiqueta, PLEGADOS: se llega escaneándolo
+    with st.expander(t(":material/qr_code_2: QR code and label"), key=f"exp_inv_qr_{aid}"):
         try:
             _png = INV.qr_png(aid)
             st.image(_png, width=170)
@@ -253,75 +475,12 @@ def _detalle(grupo, aid):
                 from core import asset_label_pdf
                 _pdf = asset_label_pdf.generate_label_pdf(a, _png, grupo)
                 st.download_button(t(":material/download: Label (PDF)"), data=_pdf,
-                                   file_name=f"Etiqueta_{aid}.pdf", mime="application/pdf",
+                                   file_name=f"Asset_label_{aid}.pdf", mime="application/pdf",
                                    key=f"inv_lbl_{aid}")
             except Exception as e:
-                st.caption(f"The label could not be generated: {e}")
+                st.caption(t("The label could not be generated: {e}", e=e))
         except Exception as e:
-            st.caption(f"The QR code could not be generated: {e}")
-
-    # ── Acciones (salida/entrada/traslado/mantenimiento) ──
-    _est = str(a.get("Status", "")).lower()
-    _cp = _creado_por()
-    if _est != "written off":
-        st.markdown(t("#### :material/swap_horiz: Actions"))
-        ac = st.columns(2)
-        if _est == "available":
-            with ac[0].expander(t(":material/logout: Check out / hand over"), key=f"exp_inv_sal_{aid}"):
-                _dt = st.selectbox(t("Destination"), ["project", "user", "other"],
-                                   format_func=lambda o: t({"project": "a project",
-                                                            "user": "a person",
-                                                            "other": "somewhere else"}.get(o, o)),
-                                   key=f"inv_sdt_{aid}")
-                if _dt == "project":
-                    # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
-                    _pids, _plbl = _proyectos(grupo)
-                    _ref = st.selectbox(t("Project"), _pids or ["(no projects)"],
-                                        key=f"inv_srp_{aid}",
-                                        format_func=lambda i: _plbl.get(i, i))
-                elif _dt == "user":
-                    _ref = st.selectbox(t("User"), _usuarios(grupo) or ["(no users)"], key=f"inv_sru_{aid}")
-                else:
-                    _ref = st.text_input(t("Destination"), key=f"inv_srt_{aid}")
-                _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo), key=f"inv_srsp_{aid}")
-                _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}")
-                _n = st.text_input(t("Note"), key=f"inv_snota_{aid}")
-                if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}"):
-                    _u = ("" if _resp == "—" else _resp) or (_ref if _dt == "user" else "")
-                    ok, msg = INV.salida(aid, grupo, usuario=_u, hacia_tipo=_dt, hacia_ref=_ref,
-                                         fecha_devolucion=_dev, nota=_n, creado_por=_cp)
-                    (flash.exito if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-        else:
-            with ac[0].expander(t(":material/login: Check in / return"), expanded=True, key=f"exp_inv_ent_{aid}"):
-                _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}")
-                _n = st.text_input(t("Note"), key=f"inv_enota_{aid}")
-                if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}"):
-                    ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
-                    (flash.exito if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
-        with ac[1].expander(t(":material/move_up: Transfer"), key=f"exp_inv_tr_{aid}"):
-            _tt = st.selectbox(t("New location (type)"), INV.UBIC_TIPOS, key=f"inv_ttt_{aid}")
-            _tr = st.text_input(t("Detail"), key=f"inv_ttr_{aid}")
-            _n = st.text_input(t("Note"), key=f"inv_tnota_{aid}")
-            if st.button(t(":material/check: Transfer"), key=f"inv_tbtn_{aid}"):
-                ok, msg = INV.traslado(aid, grupo, _tt, _tr, nota=_n, creado_por=_cp)
-                (flash.exito if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
-        with ac[1].expander(t(":material/build: Service"), key=f"exp_inv_mt_{aid}"):
-            _costo = st.number_input(t("Cost"), min_value=0.0, step=10.0, key=f"inv_mcosto_{aid}")
-            _prox = _fecha_input(t("Next maintenance"), a.get("NextService"), f"inv_mprox_{aid}")
-            _enm = st.checkbox(t("Leave the asset IN service"), key=f"inv_menm_{aid}")
-            _n = st.text_input(t("Note"), key=f"inv_mnota_{aid}")
-            if st.button(t(":material/check: Record service"), key=f"inv_mbtn_{aid}"):
-                ok, msg = INV.mantenimiento(aid, grupo, costo=_costo, proximo=_prox, nota=_n,
-                                            en_mant=_enm, creado_por=_cp)
-                (flash.exito if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
+            st.caption(t("The QR code could not be generated: {e}", e=e))
 
     # ── Historial ──
     st.markdown(t("#### :material/history: History"))
@@ -331,11 +490,11 @@ def _detalle(grupo, aid):
     else:
         _mr = sorted(movs, key=lambda m: str(m.get("Created", "")), reverse=True)
         st.dataframe(pd.DataFrame([{
-            "Fecha":   m.get("Date", ""),
+            "Fecha":   _dmy(m.get("Date", "")),      # v599 · DD/MM/YYYY (iba en ISO)
             "Tipo":    _etq(str(m.get("Type", ""))),
             "Desde":   INV.ubic_texto(m.get("FromLocation", ""), _etq) or "—",
             "Hacia":   INV.ubic_texto(m.get("ToLocation", ""), _etq) or "—",
-            "Usuario": m.get("User", "") or "—",
+            "Usuario": _nom.get(str(m.get("User", "")), m.get("User", "")) or "—",
             # ⚠️ Cadena vacía, NO NaN: `st.dataframe` pinta cualquier nulo como el
             # literal «None» en gris y ninguna `column_config` lo evita — el cuadro
             # de lo medido está en `tabla.celda`. Lo que decía aquí («con NaN sale
@@ -348,7 +507,11 @@ def _detalle(grupo, aid):
 
     # Editar
     st.markdown(t("#### :material/edit: Edit asset"))
-    with st.form(f"inv_edit_{aid}"):
+    # ⚠️ v599 · Enter NO envía (con él se mandaba la edición a medias) y las fechas llevan en
+    # la CLAVE lo guardado: con clave fija conservaban el valor de antes y «Save changes»
+    # DESHACÍA el último mantenimiento (la próxima revisión volvió de 2027 a la vencida, visto
+    # en producción).
+    with st.form(f"inv_edit_{aid}", enter_to_submit=False):
         e1, e2 = st.columns(2)
         nombre = e1.text_input(t("Name"), value=a.get("Name", ""))
         cats = INV.categorias(grupo)
@@ -356,16 +519,19 @@ def _detalle(grupo, aid):
         # este en la lista (una categoria borrada). Antes mostraban la primera opcion
         # y «Save changes» la escribia encima, sin que nadie la eligiera.
         _cats, _ci = ui.opciones_con_actual(cats, a.get("Category"))
-        categoria = e2.selectbox(t("Category"), _cats, index=_ci)
+        categoria = e2.selectbox(t("Category"), _cats, index=_ci, format_func=_etq)
         marca = e1.text_input(t("Brand"), value=a.get("Brand", ""))
         modelo = e2.text_input(t("Model"), value=a.get("Model", ""))
         serie = e1.text_input(t("Serial no."), value=a.get("Serial", ""))
-        _ests, _ei = ui.opciones_con_actual(INV.ESTADOS, a.get("Status"))
-        estado = e2.selectbox(t("Status"), _ests, index=_ei)
+        # v599 · sin «in use» ni «written off»: los ponen la salida y la baja (desde aquí el
+        # activo quedaba de baja en la ficha y en la lista a la vez, sin movimiento)
+        _ests, _ei = ui.opciones_con_actual(INV.ESTADOS_EDITABLES, a.get("Status"))
+        estado = e2.selectbox(t("Status"), _ests, index=_ei, format_func=_etq,
+                              help=t("«In use» comes from the check-out and «written off» from Write off."))
         _conds, _cdi = ui.opciones_con_actual(INV.CONDICIONES, a.get("Condition"))
-        condicion = e1.selectbox(t("Condition"), _conds, index=_cdi)
+        condicion = e1.selectbox(t("Condition"), _conds, index=_cdi, format_func=_etq)
         _ubics, _ubi = ui.opciones_con_actual(INV.UBIC_TIPOS, a.get("LocationType"))
-        ubic_t = e2.selectbox(t("Location (type)"), _ubics, index=_ubi)
+        ubic_t = e2.selectbox(t("Location (type)"), _ubics, index=_ubi, format_func=_etq)
         ubic_r = e1.text_input(t("Location (detail)"), value=a.get("LocationRef", ""),
                                help=t("Store or person holding it. If the asset is on a site, this holds the project ID (PRJ-####) — it is set automatically when the check-out is recorded; the list shows the name."))
         if str(a.get("LocationRef", "")).startswith("PRJ-"):
@@ -373,10 +539,14 @@ def _detalle(grupo, aid):
         vc = e2.number_input(t("Purchase value"), min_value=0.0, step=10.0,
                              value=_num(a.get("PurchaseValue")))
         c3, c4 = st.columns(2)
-        f_compra = _fecha_input("Purchase date", a.get("PurchaseDate"), f"inv_fc_{aid}")
+        with c3:                                   # v599 · era una columna vacía
+            f_compra = _fecha_input(t("Purchase date"), a.get("PurchaseDate"),
+                                    f"inv_fc_{aid}_{a.get('PurchaseDate', '')}")
         vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
                                value=_num(a.get("UsefulLifeYears")))
-        prox = _fecha_input(t("Next maintenance"), a.get("NextService"), f"inv_pm_{aid}")
+        with c3:
+            prox = _fecha_input(t("Next maintenance"), a.get("NextService"),
+                                f"inv_pm_{aid}_{a.get('NextService', '')}")
         nota = st.text_area(t("Note"), value=a.get("Note", ""), height=80)
         if st.form_submit_button(t(":material/save: Save changes"), type="primary"):
             ok, msg = INV.update_activo(aid, {
@@ -388,104 +558,136 @@ def _detalle(grupo, aid):
             if ok:
                 st.rerun()
 
-    if str(a.get("Status", "")).lower() != "written off":
+    if _est != "written off":
         with st.expander(t(":material/block: Write off"), key=f"exp_inv_baja_{aid}"):
             st.caption(t("Takes the asset out of the inventory (it stays in the history). To see it again, tick «Show written-off ones too»."))
             _mot = st.text_input(t("Reason"), key=f"inv_baja_mot_{aid}")
-            if st.button(t("Write off this asset"), key=f"inv_baja_{aid}"):
-                INV.dar_de_baja(aid, grupo, _mot, _creado_por())
-                st.session_state.pop("_inv_open", None)
-                st.rerun()
-    else:
-        # v340: la vuelta. Antes un activo de baja no se podía reactivar desde la app.
-        st.warning(t(":material/block: This asset is **written off**: it does not appear in the inventory unless you tick «Show written-off ones too»."))
-        if st.button(t(":material/restore: Reactivate this asset"),
-                     key=f"inv_react_{aid}", type="primary"):
-            ok, msg = INV.update_activo(aid, {"Active": "SI", "Status": "available"})
-            (flash.exito if ok else st.error)(msg)
-            if ok:
-                st.rerun()
+            # v599 · con confirmación y con aviso (salía sin preguntar y sin decir nada)
+            _conf = ui.confirmar_borrado(f"inv_baja_conf_{aid}", t("I confirm I want to write off this asset"))
+            if st.button(t("Write off this asset"), key=f"inv_baja_{aid}", disabled=not _conf):
+                ok, msg = INV.dar_de_baja(aid, grupo, _mot, _creado_por())
+                if ok:
+                    flash.exito(msg)
+                    st.session_state.pop("_inv_open", None)
+                    st.rerun()
+                st.error(msg)
 
 
 # ── Registro de un activo ────────────────────────────────────────
 def _registro(grupo):
     if st.button(t(":material/arrow_back: Cancel"), key="inv_new_back"):
         st.session_state.pop("_inv_nuevo", None)
+        st.session_state.pop("_inv_dupde", None)
         st.rerun()
     st.markdown(t("## :material/add_circle: Register asset"))
 
     # Foto fuera del form (uploader se procesa al enviar)
     _foto = st.file_uploader(t("Photo (optional)"), type=["png", "jpg", "jpeg"], key="inv_foto")
 
-    with st.form("inv_reg"):
+    # ⚠️ v599 · formulario por GENERACIÓN y SIN enviar con Enter: un Enter lo mandaba a medias y
+    # dos envíos crearon ACT-0001 y ACT-0002 en un segundo, iguales (visto en producción).
+    _g = st.session_state.get("_inv_reg_gen", 0)
+    _dup = st.session_state.get("_inv_dupde") or {}
+    with st.form(f"inv_reg_{_g}", enter_to_submit=False):
         c1, c2 = st.columns(2)
-        nombre = c1.text_input(t("Asset name *"))
-        categoria = c2.selectbox(t("Category"), INV.categorias(grupo))
-        marca = c1.text_input(t("Brand"))
-        modelo = c2.text_input(t("Model"))
-        serie = c1.text_input(t("Serial no."))
-        condicion = c2.selectbox(t("Condition"), INV.CONDICIONES)
-        ubic_t = c1.selectbox(t("Location (type)"), INV.UBIC_TIPOS)
-        ubic_r = c2.text_input(t("Location (detail)"), help=t("Store, project or user."))
-        vc = c1.number_input(t("Purchase value"), min_value=0.0, step=10.0)
+        nombre = c1.text_input(t("Asset name *"), key=f"inv_reg_nom_{_g}")
+        categoria = c2.selectbox(t("Category"), INV.categorias(grupo), format_func=_etq,
+                                 key=f"inv_reg_cat_{_g}")
+        marca = c1.text_input(t("Brand"), key=f"inv_reg_mar_{_g}")
+        modelo = c2.text_input(t("Model"), key=f"inv_reg_mod_{_g}")
+        serie = c1.text_input(t("Serial no."), key=f"inv_reg_ser_{_g}")
+        condicion = c2.selectbox(t("Condition"), INV.CONDICIONES, format_func=_etq,
+                                 key=f"inv_reg_con_{_g}")
+        # v599 · nace en el almacén o en reparación (a una obra se va con la salida)
+        ubic_t = c1.selectbox(t("Location (type)"), INV.UBIC_TIPOS_ALTA, format_func=_etq,
+                              key=f"inv_reg_ut_{_g}",
+                              help=t("To send it to a job or hand it to someone, register it and use «Check out»."))
+        ubic_r = c2.text_input(t("Location (detail)"), help=t("Store or workshop."),
+                               key=f"inv_reg_ur_{_g}")
+        vc = c1.number_input(t("Purchase value"), min_value=0.0, step=10.0, key=f"inv_reg_vc_{_g}")
         vida = c2.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
-                               help=t("Used for depreciation. 0 = do not depreciate."))
-        f_compra = _fecha_input("Purchase date", "", "inv_reg_fc")
-        prox = _fecha_input(t("Next maintenance"), "", "inv_reg_pm")
-        nota = st.text_area(t("Note"), height=70)
+                               help=t("Used for depreciation. 0 = do not depreciate."),
+                               key=f"inv_reg_vida_{_g}")
+        c3, c4 = st.columns(2)
+        with c3:
+            f_compra = _fecha_input(t("Purchase date"), "", f"inv_reg_fc_{_g}")
+        with c4:
+            prox = _fecha_input(t("Next maintenance"), "", f"inv_reg_pm_{_g}")
+        nota = st.text_area(t("Note"), height=70, key=f"inv_reg_nota_{_g}")
+        if _dup:
+            st.warning(t(":material/warning: There is already an asset with that name or serial: {x}. "
+                         "If it is a different one, tick the box and register again.",
+                         x=_dup.get("dups", "")))
+            st.checkbox(t("Register it even though it is repeated"),
+                        key=_k_dup(_dup.get("nombre", ""), _dup.get("serie", "")))
         crear = st.form_submit_button(t(":material/add: Register"), type="primary")
 
     if crear:
         if not str(nombre).strip():
             st.error(t("The name is required."))
             return
-        foto_id = ""
+        _dups = INV.homonimos(grupo, nombre, serie)
+        if _dups and not st.session_state.get(_k_dup(nombre, serie)):
+            st.session_state["_inv_dupde"] = {
+                "nombre": nombre, "serie": serie,
+                "dups": ", ".join(f"{d.get('ID', '')} «{d.get('Name', '')}»" for d in _dups[:3])}
+            st.rerun()
+        foto_id, _sin_foto = "", False
         if _foto is not None:
             try:
-                from core import drive_store
-                if drive_store.is_available():
-                    foto_id = drive_store.upload_to(drive_store.folder("COPEX Assets"),
-                                                    _foto.name, _foto.getvalue(),
-                                                    _foto.type or "image/jpeg")
+                foto_id = _subir_foto(_foto)
             except Exception as e:
                 # ⚠️ v323: era un `pass` mudo. El activo se creaba igual (correcto,
                 # la foto es accesoria) pero el usuario ADJUNTÓ una foto y se le
                 # decía que todo fue bien: creía tenerla guardada y no estaba.
                 logger.warning("inventory_ui: la foto del activo no subió a Drive: %s", e)
-                st.warning(t(":material/warning: The asset is registered, but **the photo could not be uploaded** to Drive. Add it later from its record."))
+                _sin_foto = True
         ok, res = INV.create_activo(
             grupo=grupo, nombre=nombre, categoria=categoria, marca=marca, modelo=modelo,
             serie=serie, foto_id=foto_id, fecha_compra=f_compra, valor_compra=vc,
             vida_util=vida, condicion=condicion, ubicacion_tipo=ubic_t, ubicacion_ref=ubic_r,
             proximo_mant=prox, nota=nota, creado_por=_creado_por())
         if ok:
+            st.session_state["_inv_reg_gen"] = _g + 1
+            st.session_state.pop("_inv_dupde", None)
             st.session_state.pop("_inv_nuevo", None)
             st.session_state["_inv_open"] = res
+            # v599 · con mensaje (no decía nada)
+            flash.exito(t("Asset {id} «{n}» registered.", id=res, n=str(nombre).strip()))
+            if _sin_foto:
+                # (encolado aquí, delante de SU `st.rerun()`: si el alta falla no queda colgado — v570)
+                flash.aviso(t(":material/warning: The asset is registered, but **the photo could not be uploaded** to Drive. Add it later from its record."))
             st.rerun()
         else:
             st.error(res)
 
 
-# ── Categorías (catálogo editable) ───────────────────────────────
+# ── Informes y categorías ────────────────────────────────────────
 def _reportes(grupo):
     rep = INV.reporte_valor(grupo)
     if not rep["por_categoria"]:
         return
-    with st.expander(t(":material/insights: Value reports")):
-        ca, cb = st.columns(2)
-        with ca:
+    from core import projects_ui as _PU
+    _g = st.session_state.get("_inv_rep_gen", 0)
+    _abre = _g > 0                  # la cifra del valor los ABRE (la condición va en la clave, v547)
+    with st.container(key="cpx_inv_rep"):           # v599 · destino de la cifra del valor
+        _PU._bajar_a("cpx_inv_rep", "_bajar_cpx_inv_rep", bloque="start")
+        # ⚠️ v599 · A ANCHO COMPLETO, una debajo de otra: en dos columnas las cifras salían
+        # cortadas sin aviso («$4» por $419) y la columna «Current» ni se veía. Y la ubicación
+        # traducida (salía «project»/«warehouse» en bruto).
+        with st.expander(t(":material/insights: Value reports"), key=f"exp_inv_rep_{_abre}_{_g}",
+                         expanded=_abre):
             st.markdown(t("**By category**"))
             st.dataframe(pd.DataFrame([{
-                "Category": k, "Active": v["n"],
+                "Category": _etq(k), "Active": v["n"],
                 "Compra": round(v["compra"], 0), "Actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_categoria"].items())]),
                 width="stretch", hide_index=True,
                 column_config=tabla.cfg(None, {"Compra": st.column_config.NumberColumn(t("Purchase"), format="$%,d"),
                                "Actual": st.column_config.NumberColumn(t("Current"), format="$%,d")}))
-        with cb:
             st.markdown(t("**By location**"))
             st.dataframe(pd.DataFrame([{
-                "Location": k, "Active": v["n"], "Valor actual": round(v["actual"], 0),
+                "Location": _etq(k), "Active": v["n"], "Valor actual": round(v["actual"], 0),
             } for k, v in sorted(rep["por_ubicacion"].items())]),
                 width="stretch", hide_index=True,
                 column_config=tabla.cfg(None, {"Valor actual": st.column_config.NumberColumn(t("Current value"), format="$%,d")}))
@@ -494,7 +696,11 @@ def _reportes(grupo):
 def _categorias_expander(grupo):
     with st.expander(t(":material/category: Categories"), key="exp_inv_cats"):
         st.caption(t("The default ones are always there; here you add/remove your own."))
-        st.write(" · ".join(INV.categorias(grupo)))
+        st.write(" · ".join(_etq(c) for c in INV.categorias(grupo)))
+        # v599 · el campo se VACÍA tras añadir (se quedaba con lo escrito); se asigna antes de
+        # pintarlo, que es cuando Streamlit lo admite (trampa 31: vaciar es ASIGNAR)
+        if st.session_state.pop("_inv_cat_limpiar", False):
+            st.session_state["inv_cat_new"] = ""
         cc = st.columns([3, 1])
         _nueva = cc[0].text_input(t("New category"), key="inv_cat_new",
                                   label_visibility="collapsed", placeholder=t("New category…"))
@@ -502,8 +708,14 @@ def _categorias_expander(grupo):
             ok, msg = INV.add_categoria(grupo, _nueva)
             (flash.exito if ok else st.error)(msg)
             if ok:
+                st.session_state["_inv_cat_limpiar"] = True
                 st.rerun()
-        _quitar = st.selectbox(t("Remove one of your categories"), ["—"] + INV.categorias(grupo),
+        # v599 · solo las PROPIAS: ofrecía las de fábrica y al quitarlas respondía «Not found…»
+        _propias = INV.categorias_propias(grupo)
+        if not _propias:
+            st.caption(t("You have not added any category of your own yet."))
+            return
+        _quitar = st.selectbox(t("Remove one of your categories"), ["—"] + _propias,
                                key="inv_cat_del")
         if _quitar != "—" and st.button(t(":material/delete: Remove"), key="inv_cat_delbtn"):
             ok, msg = INV.del_categoria(grupo, _quitar)

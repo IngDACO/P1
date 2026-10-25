@@ -36,7 +36,7 @@ CAT_HEADERS = ["Group", "Name"]
 MOV_SHEET = "AssetMovements"
 MOV_HEADERS = ["ID", "Group", "AssetID", "Type", "Date", "FromLocation", "ToLocation",
                "User", "Cost", "Note", "CreatedBy", "Created"]
-MOV_TIPOS = ["check-out", "check-in", "transfer", "maintenance", "written off"]
+MOV_TIPOS = ["check-out", "check-in", "transfer", "maintenance", "written off", "reactivated"]
 
 # ⚠️ v487: con NOMBRE, para que nadie vuelva a escribir el estado a mano. Las KPIs
 # de la lista buscaban "disponible"/"en_uso" y, como v469 canoniza el estado al
@@ -47,6 +47,14 @@ DISPONIBLE, EN_USO, MANTENIMIENTO, DANADO, BAJA = (
 ESTADOS = [DISPONIBLE, EN_USO, MANTENIMIENTO, DANADO, BAJA]
 CONDICIONES = ["good", "fair", "poor"]
 UBIC_TIPOS = ["warehouse", "project", "user", "under repair"]
+REPARACION = "under repair"
+# ⚠️ v599 · Lo que se EDITA a mano. «in use» lo pone la salida y «written off» la baja: desde
+# la edición, «written off» dejaba el activo en la lista (Active seguía en SI, la ficha decía
+# que estaba oculto) y sin movimiento en el historial (visto en producción).
+ESTADOS_EDITABLES = [DISPONIBLE, MANTENIMIENTO, DANADO]
+# v599 · un activo NACE en el almacén o en reparación: a una obra o a una persona se va con
+# la SALIDA, que elige la obra por su ID y deja el movimiento (en el alta era texto libre).
+UBIC_TIPOS_ALTA = ["warehouse", REPARACION]
 CAT_DEFAULT = ["Tool", "Equipment", "Vehicle", "PPE", "Consumable", "Other"]
 
 _HEADERS = {ACTIVOS_SHEET: ACTIVOS_HEADERS, CAT_SHEET: CAT_HEADERS, MOV_SHEET: MOV_HEADERS}
@@ -126,11 +134,19 @@ def categorias(grupo: str) -> list:
     return sorted(set(CAT_DEFAULT) | set(extra), key=str.lower)
 
 
+def categorias_propias(grupo: str) -> list:
+    """v599 · Solo las AÑADIDAS por el grupo: las de fábrica no se pueden quitar, y el
+    desplegable de «Remove» las ofrecía para responder luego «Not found…»."""
+    _fab = {c.casefold() for c in CAT_DEFAULT}
+    return [c for c in categorias(grupo) if c.casefold() not in _fab]
+
+
 def add_categoria(grupo: str, nombre: str) -> tuple:
-    nombre = str(nombre or "").strip()
+    nombre = " ".join(str(nombre or "").split())
     if not nombre:
         return False, t("Empty name.")
-    if nombre in categorias(grupo):
+    # ⚠️ v599 · sin distinguir mayúsculas: «tool» entraba junto a «Tool» (visto en producción)
+    if nombre.casefold() in {c.casefold() for c in categorias(grupo)}:
         return False, t("That category already exists.")
     w, err = _ws(CAT_SHEET)
     if err:
@@ -144,7 +160,7 @@ def del_categoria(grupo: str, nombre: str) -> tuple:
     w, err = _ws(CAT_SHEET)
     if err:
         return False, err
-    for i, r in enumerate(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), ACTIVOS_SHEET)):
+    for i, r in enumerate(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), CAT_SHEET)):
         if str(r.get("Group", "")) == str(grupo) and str(r.get("Name", "")).strip() == str(nombre).strip():
             w.delete_rows(i + 2)
             _invalidate()
@@ -169,6 +185,23 @@ def get_activo(aid: str) -> dict:
         if str(r.get("ID", "")) == str(aid):
             return r
     return {}
+
+
+def homonimos(grupo: str, nombre: str = "", serie: str = "", excluir: str = "") -> list:
+    """Los activos del grupo (también los de baja) con el MISMO nombre o el mismo nº de serie
+    (v599). Se AVISA, no se prohíbe —el nombre puede repetirse a propósito, la identidad es el
+    ID—, pero no sin enterarse: dos envíos del alta crearon ACT-0001 y ACT-0002 en un segundo,
+    con el mismo nombre y la misma serie (visto en producción), como Catalogue antes de v582."""
+    _n = " ".join(str(nombre or "").casefold().split())
+    _s = " ".join(str(serie or "").casefold().split())
+    out = []
+    for a in list_activos(grupo, incluir_baja=True):
+        if str(a.get("ID", "")) == str(excluir or ""):
+            continue
+        if (_n and " ".join(str(a.get("Name", "")).casefold().split()) == _n) or \
+                (_s and " ".join(str(a.get("Serial", "")).casefold().split()) == _s):
+            out.append(a)
+    return out
 
 
 def _ids_frescos(title: str, col: str = "ID") -> list:
@@ -243,6 +276,10 @@ def create_activo(grupo, nombre, categoria="", marca="", modelo="", serie="",
 
 
 def update_activo(aid: str, fields: dict) -> tuple:
+    # ⚠️ v599 · el nombre es obligatorio también al EDITAR: se guardaba un activo sin nombre
+    # («Asset updated.» y la ficha sin título, visto en producción)
+    if "Name" in fields and not str(fields.get("Name") or "").strip():
+        return False, t("The asset name is required.")
     w, err = _ws(ACTIVOS_SHEET)
     if err:
         return False, err
@@ -266,12 +303,33 @@ def update_activo(aid: str, fields: dict) -> tuple:
 
 def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "") -> tuple:
     a = get_activo(aid)
-    ok, msg = update_activo(aid, {"Active": "NO", "Status": "written off",
-                                  "Note": (motivo or "Decommissioned")})
+    # ⚠️ v599 · SIN tocar la nota: el motivo la pisaba («Prueba de inventario…» pasó a ser el
+    # motivo, visto en producción) y ya queda en el historial, de donde lo lee la ficha.
+    ok, msg = update_activo(aid, {"Active": "NO", "Status": "written off"})
     if ok:
         _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), "baja",
                  "", "", motivo, creado_por=creado_por)
+        return True, t("Asset written off.")
     return ok, msg
+
+
+def reactivar(aid: str, grupo: str = "", creado_por: str = "") -> tuple:
+    """v599 · La vuelta de la baja, con su movimiento (decía «Asset updated.» y el historial
+    no contaba que el activo volvió)."""
+    a = get_activo(aid)
+    ok, msg = update_activo(aid, {"Active": "SI", "Status": DISPONIBLE})
+    if ok:
+        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", "baja", ubic_str(a),
+                 "", "", "", creado_por=creado_por)
+        return True, t("Asset reactivated.")
+    return ok, msg
+
+
+def motivo_baja(grupo: str, aid: str) -> str:
+    """v599 · El motivo de la ÚLTIMA baja (la nota de su movimiento), para la ficha."""
+    _b = [m for m in list_movimientos(grupo, aid) if str(m.get("Type", "")) == "written off"]
+    _b.sort(key=lambda m: str(m.get("Created", "")))
+    return str(_b[-1].get("Note", "") or "").strip() if _b else ""
 
 
 # ── Valor / depreciación (línea recta) ───────────────────────────
@@ -447,6 +505,11 @@ def salida(aid, grupo, usuario="", hacia_tipo="user", hacia_ref="",
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
+    # ⚠️ v599 · una devolución prevista que ya pasó no es una fecha: se aceptaba y el activo
+    # nacía «no devuelto» (visto en producción, «not returned for 5 d» recién sacado)
+    _fd = _parse_date(fecha_devolucion)
+    if str(fecha_devolucion or "").strip() and _fd and _fd < clock.today():
+        return False, t("The expected return date has already passed: pick today or a later day.")
     desde = ubic_str(a)
     # ⚠️ El ACTIVO guarda el ID (`UbicacionRef`), que es la relación viva y sobrevive a
     # renombrar el proyecto. El MOVIMIENTO es un registro histórico, así que guarda el
@@ -488,7 +551,15 @@ def traslado(aid, grupo, hacia_tipo, hacia_ref, nota="", creado_por="") -> tuple
     # ID crudo, así que el mismo sitio aparecía como «proyecto: PRJ-0005» al llegar y
     # como «proyecto: prueba2» al salir — dos grafías para el mismo evento.
     hacia = f"{hacia_tipo}: {ubic_ref_label(hacia_ref)}" if hacia_ref else hacia_tipo
-    ok, msg = update_activo(aid, {"LocationType": hacia_tipo, "LocationRef": hacia_ref})
+    cambios = {"LocationType": hacia_tipo, "LocationRef": hacia_ref}
+    # ⚠️ v599 · llevarlo a reparar lo pone EN MANTENIMIENTO (seguía «available» en el taller y
+    # el filtro de disponibles lo contaba, visto en producción); y sacarlo de reparación con el
+    # mantenimiento puesto lo devuelve a disponible.
+    if hacia_tipo == REPARACION:
+        cambios["Status"] = MANTENIMIENTO
+    elif str(a.get("LocationType", "")) == REPARACION and str(a.get("Status", "")) == MANTENIMIENTO:
+        cambios["Status"] = DISPONIBLE
+    ok, msg = update_activo(aid, cambios)
     if not ok:
         return ok, msg
     _log_mov(grupo, aid, "transfer", desde, hacia, "", "", nota, creado_por=creado_por)

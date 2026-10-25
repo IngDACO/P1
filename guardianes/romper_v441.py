@@ -18,8 +18,9 @@ GUARD = AQUI / "verif_v441.py"
 ROTURAS = [
     # ── chequeo 1: el invariante de posición ──
     ("core/inventory_ui.py",
-     'st.markdown(t("#### :material/qr_code_2: QR code"))',
-     'st.markdown("#### :material/qr_code_2: QR code")',
+     # v599 · re-anclada: el QR va ahora plegado en un desplegable con su etiqueta
+     'with st.expander(t(":material/qr_code_2: QR code and label"), key=f"exp_inv_qr_{aid}"):',
+     'with st.expander(":material/qr_code_2: QR code and label", key=f"exp_inv_qr_{aid}"):',
      "1 · se desenvuelve una etiqueta y queda suelta"),
     # ── chequeo 2: las siglas del plano ──
     ("core/rail_cut_ui.py", "LFKK", "LARGO_KK",

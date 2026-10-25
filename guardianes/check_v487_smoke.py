@@ -55,6 +55,24 @@ for _n in ("warning", "info", "success", "error", "markdown", "caption", "write"
     setattr(DeltaGenerator, _n, lambda self, *a, **k: None)
 st.metric = lambda *a, **k: _metric(*a, **k)
 DeltaGenerator.metric = _metric
+
+
+def _boton(self_or_label, *a, **k):
+    """⚠️ v599 · Al día con su razón (v385): las cifras del inventario son ahora BOTONES activos
+    («Available\\n\\n2», cada una filtra la lista), no `st.metric`. Se leen del rótulo del botón;
+    lo que se afirma —que cuentan el estado CANÓNICO— no cambia."""
+    _s = str(a[0] if isinstance(self_or_label, DeltaGenerator) else self_or_label)
+    if "\n\n" in _s:
+        _l, _v = _s.split("\n\n", 1)
+        try:
+            metricas[_l] = int(_v)
+        except ValueError:
+            metricas[_l] = _v
+    return False
+
+
+st.button = lambda *a, **k: _boton(*a, **k)
+DeltaGenerator.button = _boton
 st.selectbox = lambda *a, **k: _select(*a, **k)
 DeltaGenerator.selectbox = _select
 

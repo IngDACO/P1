@@ -178,6 +178,8 @@ VALORES = {
     # el mapa se devuelve tal cual, sin dar ningun error.
     "otro": "other",
     "salida": "check-out", "entrada": "check-in", "traslado": "transfer",
+    # v599 · la vuelta de una baja, con su movimiento (antes no quedaba en el historial)
+    "reactivado": "reactivated",
     # v464 · unidades del catalogo. ⚠️ m/m²/kg NO se mapean: son simbolos, iguales
     # en los dos idiomas, y un mapa espejo es lo que v450 mando borrar.
     "unidad": "unit", "juego": "set", "global": "lump sum",

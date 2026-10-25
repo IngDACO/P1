@@ -188,8 +188,23 @@ if not os.path.isfile(FOTO):
 _LIBRO = libro_foto.instalar(FOTO) if os.path.isfile(FOTO) else None
 GUION_REAL = r'''
 import streamlit as st
-from core import projects_ui as PU
+from core import projects_ui as PU, auth
 st.session_state.setdefault("auth", {"usuario": "Admin2", "rol": "administrator", "grupo": "cliente1"})
+# ⚠️ v599 · Las TARIFAS también congeladas como el día de la foto: viven en Login, el libro
+# MAESTRO, que la foto no cubre. El usuario le puso tarifa a campo000 (55) después del 21/10
+# y «hay horas sin tarifa» dejó de ser verdad en la hoja viva — este guardián se puso rojo por
+# los DATOS, no por el código (la lección de v586, otra vez). Solo campo000: la de Admin2 ya
+# estaba (a 0 también, la mano de obra de la obra se quedaba en cero y movía otras cifras).
+_rm_real = auth.rate_map
+def _rm_foto(grupo=None):
+    m = dict(_rm_real(grupo))
+    for u in auth.list_users(grupo):
+        if str(u.get("User", "")) == "campo000":
+            for _k in (u.get("User"), u.get("Name")):
+                if _k:
+                    m[_k] = 0.0
+    return m
+auth.rate_map = _rm_foto
 PU._detalle_proyecto("PRJ-0015", "cliente1")
 '''
 at = AppTest.from_string(GUION_REAL, default_timeout=240)

@@ -999,7 +999,8 @@ def _alertas_items(grupo) -> list:
                     _txt = (f":material/inventory_2: {e['activo']} — "
                             f":red[{t('not returned for')} {e['dias']} d]"
                             + (f" ({e['usuario']})" if e.get("usuario") else ""))
-                out.append({"texto": _txt, "destino": ("ir", "inventario", None)})
+                # v599 · al ACTIVO (llevaba a la lista general, con el ID en la mano)
+                out.append({"texto": _txt, "destino": ("activo", e.get("id", ""))})
     except Exception:
         pass
     return out
@@ -1023,6 +1024,11 @@ def _ir_alerta(destino, grupo):
             _nom = _u
         st.session_state["gp_fichasel"] = f"{_nom} ({_u})"     # pre-selecciona la persona
         navegar("planificacion", "👷 Usuarios")
+    elif destino[0] == "activo":
+        # v599 · abre la ficha de ESE activo (la alerta llevaba a la lista general)
+        st.session_state.pop("_inv_nuevo", None)
+        st.session_state["_inv_open"] = str(destino[1])
+        navegar("inventario", None)
     else:
         navegar(destino[1], destino[2])
 
