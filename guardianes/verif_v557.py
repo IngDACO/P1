@@ -98,7 +98,9 @@ finally:
 print("\n2. Estático")
 # ⚠️ Sobre ESTAS piezas, no el fichero entero: otros formularios del propietario (grupos,
 # rieles) y otras fechas no son de esta pantalla — un chequeo global daba rojos que no son.
-chk("la fecha de alta en DD/MM/YYYY", 'key=f"{k}_fing", format="DD/MM/YYYY"' in SRC)
+# (v600 · la fecha de alta va por `ui.fecha_opcional` —creada con la fecha no se podía vaciar— y
+# su clave lleva lo guardado; el formato es el mismo)
+chk("la fecha de alta en DD/MM/YYYY", '_fi, f"{k}_fing_{_fi or \'\'}", format="DD/MM/YYYY"' in SRC)
 chk("…y las de las credenciales también", 'd = col.date_input(label, value=ini, key=key, format="DD/MM/YYYY"' in SRC)
 chk("el selector de la ficha es segmentado (`cpxseg_`)", 'key=f"cpxseg_{k}_sec"' in SRC)
 for _form in ('st.form(f"form_campo_{_g}", clear_on_submit=False)',

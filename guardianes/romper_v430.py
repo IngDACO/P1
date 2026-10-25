@@ -162,15 +162,19 @@ malos = []
 for i, (titulo, rel, viejo, nuevo) in enumerate(CASOS, 1):
     p = RAIZ / rel
     orig = p.read_text(encoding="utf-8")
+    # ⚠️ v600 · se restaura con los finales de línea que TENÍA: `write_text` en Windows escribe
+    # CRLF, y cada vuelta dejaba en CRLF siete ficheros que estaban en LF (sin cambiar una letra,
+    # pero matando las anclas en LF de otras baterías: romper_v599 en home_ui).
+    _nl = "\r\n" if b"\r\n" in p.read_bytes() else "\n"
     if viejo not in orig:
         print(f"{i}. {titulo}\n     !! NO SE PUDO ROMPER (el ancla no existe en {rel})")
         malos.append(titulo)
         continue
     try:
-        p.write_text(orig.replace(viejo, nuevo, 1), encoding="utf-8")
+        p.write_text(orig.replace(viejo, nuevo, 1), encoding="utf-8", newline=_nl)
         rc, fallos = correr()
     finally:
-        p.write_text(orig, encoding="utf-8")
+        p.write_text(orig, encoding="utf-8", newline=_nl)
     if rc == 0:
         print(f"{i}. {titulo}\n     !! NO SE CAZA — agujero en el guardián")
         malos.append(titulo)

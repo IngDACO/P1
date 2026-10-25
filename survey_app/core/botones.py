@@ -35,6 +35,15 @@ todo caso, a los `VIGENCIA_S` segundos: un clic nunca dispara un botón más tar
 pantalla. En la mini-app: 10 de 10 clics, ninguno doble.
 ⚠️ No se toca un botón con `on_click` propio (ya corre antes del cuerpo), ni uno sin clave
 (no hay con qué reconocerlo), ni uno con la clave pasada por posición.
+
+## v600 · La última fila de una tabla pequeña, tapada por la barra horizontal
+
+Streamlit 1.64 calcula la altura de una tabla («auto», y también «content») SIN la barra de
+scroll horizontal: cuando las columnas no caben —en el móvil, casi siempre— la barra se come
+10 px, la última fila queda tapada y sale una barra vertical para 10 px (medido en producción
+en la lista de Inventory: contenido 175, vista 165). → Una tabla de 1 a 10 filas sin altura
+propia recibe la de su contenido MÁS la barra: medido en una mini-app, con 35×(filas+1)+13 la
+vista cabe entera (176 de 175); sin scroll horizontal, la rejilla rellena esos px sin más.
 """
 import functools
 import inspect
@@ -146,6 +155,45 @@ def _envolver_chat(orig):
     return _chat
 
 
+_MARCA_TABLA = "_copex_tabla_alto"
+_FILA_PX = 35            # fila y cabecera por defecto de Streamlit 1.64 (medido: 4 filas → 175)
+_BARRA_PX = 13           # la barra horizontal (10) y el borde
+_MAX_FILAS = 10          # con más, Streamlit ya pone su altura y la barra vertical es de verdad
+
+
+def alto_tabla(n: int) -> int:
+    """La altura que deja ver `n` filas y la cabecera aunque salga la barra horizontal."""
+    return _FILA_PX * (int(n) + 1) + _BARRA_PX
+
+
+def _filas(data):
+    try:
+        import pandas as pd
+        if isinstance(data, pd.DataFrame):
+            return len(data)
+        if hasattr(data, "data") and isinstance(getattr(data, "data"), pd.DataFrame):
+            return len(data.data)                  # un Styler
+        if isinstance(data, list):
+            return len(data)
+    except Exception:
+        pass
+    return None
+
+
+def _envolver_tabla(orig, nom):
+    @functools.wraps(orig)
+    def _tabla(self, data=None, *args, **kwargs):
+        _num = kwargs.get("num_rows", "fixed")
+        if (not args and kwargs.get("height", "auto") == "auto" and not kwargs.get("row_height")
+                and _num in ("fixed", None)):
+            n = _filas(data)
+            if n and 0 < n <= _MAX_FILAS:
+                kwargs["height"] = alto_tabla(n)
+        return orig(self, data, *args, **kwargs)
+    setattr(_tabla, _MARCA_TABLA, True)
+    return _tabla
+
+
 def fin_de_pasada() -> None:
     """Al final de una pasada COMPLETA (app.py): las notas que quedan son de botones que esta
     pasada no pintó → no deben dispararse en otra pantalla más tarde."""
@@ -183,4 +231,14 @@ def instalar() -> list:
         if isinstance(_p, DeltaGenerator):
             st.chat_input = getattr(_p, "chat_input")
         hechos.append("chat_input")
+    for nom in ("dataframe", "data_editor"):          # v600 · la última fila, a la vista
+        orig = getattr(DeltaGenerator, nom, None)
+        if orig is None:
+            continue
+        if not getattr(orig, _MARCA_TABLA, False):
+            setattr(DeltaGenerator, nom, _envolver_tabla(orig, nom))
+        _p = getattr(getattr(st, nom, None), "__self__", None)
+        if isinstance(_p, DeltaGenerator):
+            setattr(st, nom, getattr(_p, nom))
+        hechos.append(nom)
     return hechos

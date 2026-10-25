@@ -1231,10 +1231,12 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
         _f1, _f2 = st.columns(2)
         with _f1:
             _fi = auth.fecha_ingreso(sel)
-            _nf = st.date_input(t(":material/event_available: Start date at the company"),
-                                value=_fi, key=f"{k}_fing", format="DD/MM/YYYY",   # v557
-                                min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
-                                help=t("Their leave year is counted from here."))
+            # ⚠️ v600 · `fecha_opcional`: creada con la fecha, vaciarla no la quitaba (se enviaba la
+            # de antes); y la clave lleva LO GUARDADO, para que la precarga siga al dato
+            _nf = ui.fecha_opcional(t(":material/event_available: Start date at the company"),
+                                    _fi, f"{k}_fing_{_fi or ''}", format="DD/MM/YYYY",   # v557
+                                    min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
+                                    help=t("Their leave year is counted from here."))
         with _f2:
             st.caption("")
             if st.button(t("Save start date"), key=f"{k}_savefing", width="stretch"):

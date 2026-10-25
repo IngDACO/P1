@@ -5536,13 +5536,19 @@ def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
     if not st.session_state.pop(marca, False):
         return
     bloque = bloque if bloque in ("nearest", "start", "center") else "nearest"
+    # ⚠️ v600 · cada petición lleva su NÚMERO en el script: con el mismo texto, dos peticiones en
+    # pasadas SEGUIDAS (una fila de los informes de Inventory y después una categoría) dejaban
+    # el mismo recuadro con el mismo contenido, Streamlit no lo recargaba y la segunda no bajaba
+    # (medido en producción: la tabla se quedó 164 px por encima de la vista).
+    _n = st.session_state.get("_bajar_n", 0) + 1
+    st.session_state["_bajar_n"] = _n
     with st.container(key=f"ir_{clave}"):
         st.markdown("<style>.st-key-ir_" + clave + ",[data-testid=\"stLayoutWrapper\"]:has(> "
                     ".st-key-ir_" + clave + "){position:absolute!important;width:1px;"
                     "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
                     "</style>", unsafe_allow_html=True)
         incrustar.script(
-            "<script>(function(){try{var D=window.parent.document,n=0;"
+            "<script>/*" + str(_n) + "*/(function(){try{var D=window.parent.document,n=0;"
             "function ir(){var c=D.querySelector('.st-key-" + clave + "'),"
             "a=D.querySelector('[data-testid=\"stApp\"]'),"
             "s=a?a.getAttribute('data-test-script-state'):'notRunning';"

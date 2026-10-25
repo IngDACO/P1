@@ -88,7 +88,9 @@ def _fecha_input(label, valor, key, desde_hoy=False):
     except Exception:
         d0 = None
     _kw = {"min_value": clock.today()} if desde_hoy else {}
-    v = st.date_input(label, value=d0, key=key, format="DD/MM/YYYY", **_kw)
+    # ⚠️ v600 · que se pueda VACIAR: creado con la fecha, se borraba en pantalla y se enviaba la
+    # de antes (la revisión de un activo no se podía quitar, visto en producción)
+    v = ui.fecha_opcional(label, d0, key, format="DD/MM/YYYY", **_kw)
     return v.isoformat() if v else ""
 
 

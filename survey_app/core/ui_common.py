@@ -66,3 +66,20 @@ def opciones_con_actual(opciones, actual):
     if act.strip():
         return [act] + ops, 0
     return ops, 0
+
+
+def fecha_opcional(label: str, valor, key: str, **kw):
+    """Un `date_input` OPCIONAL que trae una fecha ya guardada y se puede VACIAR (v600).
+
+    ⚠️ Streamlit 1.64 solo deja borrar un `date_input` creado con `value=None` (sale el ⊗):
+    creado con la fecha guardada, el usuario vacía el campo con el teclado, lo VE vacío, y lo
+    que se envía es la fecha de antes (medido en una mini-app: «dd/mm/yyyy» en pantalla y
+    `2026-10-01` enviado; en producción, la revisión de un activo no se podía quitar).
+    → Se crea con `value=None` y la fecha se PRECARGA por la clave antes de pintarlo (trampa
+    31: vaciar es asignar). ⚠️ La clave debe llevar LO GUARDADO (`f"…_{valor}"`): con una
+    clave fija, la precarga no se repetiría al cambiar el dato (la trampa de v599).
+    """
+    if key not in st.session_state:
+        st.session_state[key] = valor or None
+    kw.pop("format", None)                      # v584: en la app, TODA fecha va en DD/MM/YYYY
+    return st.date_input(label, value=None, key=key, format="DD/MM/YYYY", **kw)

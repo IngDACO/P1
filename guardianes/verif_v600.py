@@ -290,6 +290,15 @@ chk("⚠️ …y el panel renace con el sitio NUEVO y desactivado (un 2º toque 
 _st = next((s for s in at.selectbox if s.label == "Status"), None)
 chk("en un activo disponible, el estado se edita (available · maintenance · damaged)",
     _st is not None and _st.disabled is False)
+_pm = next((d for d in at.date_input if str(d.key).startswith("inv_pm_ACT-1")), None)
+chk("⚠️ la próxima revisión se puede VACIAR: el campo nace SIN valor por defecto (con él, Streamlit no "
+    "deja borrarla: se veía vacía y se enviaba la de antes) y aun así enseña la guardada",
+    _pm is not None and not list(_pm.proto.default) and str(_pm.value) == "2027-01-01",
+    (getattr(_pm, "value", None), list(getattr(getattr(_pm, "proto", None), "default", []) or [])))
+_ui_src = fuente("core/ui_common.py")
+chk("…por UN ayudante (`ui.fecha_opcional`), también en la fecha de alta de Users",
+    "ui.fecha_opcional(" in fuente("core/inventory_ui.py") and "ui.fecha_opcional(" in fuente("core/auth_ui.py")
+    and "return st.date_input(label, value=None, key=key, format=\"DD/MM/YYYY\", **kw)" in _ui_src)
 at.session_state["_inv_open"] = "ACT-2"
 at.run()
 _st = next((s for s in at.selectbox if s.label == "Status"), None)
@@ -357,6 +366,15 @@ at.session_state["_probar"] = "pill"
 at.run()
 chk("⚠️ un NOMBRE de categoría lleva a la lista filtrada (Equipment → ACT-2)",
     _ss(at, "inv_catf") == "Equipment" and _ids(at) == ["ACT-2"], (_ss(at, "inv_catf"), _ids(at)))
+_n0 = len(_ss(at, "_LL", []))
+at.session_state["_probar"] = "pill"
+at.run()
+at.session_state["_probar"] = "informe_cat"
+at.run()
+_baj = [s for s in _ss(at, "_LL", [])[_n0:] if ".st-key-cpx_inv_tabla" in s and "scrollIntoView" in s]
+chk("⚠️ dos peticiones SEGUIDAS de bajar a la tabla llevan scripts DISTINTOS (con el mismo texto, "
+    "Streamlit no recargaba el recuadro y la 2ª no bajaba: medido en producción, 164 px por encima)",
+    len(_baj) == 2 and _baj[0] != _baj[1], [s[:40] for s in _baj])
 _rep = funcion("core/inventory_ui.py", "_reportes")
 _dfs = [n for n in ast.walk(_rep) if isinstance(n, ast.Call) and ast.unparse(n.func) == "st.dataframe"]
 chk("las DOS tablas de los informes responden al toque (`on_select` → `_tocar_informe`)",
@@ -368,7 +386,38 @@ chk("…y los nombres de categoría (`st.pills` → `_tocar_categoria`)",
         and any(k.arg == "on_change" and ast.unparse(k.value) == "_tocar_categoria" for k in n.keywords)
         for n in ast.walk(_cx)))
 
-print("\n5. ⚠️ La migración de «bodega»/«baja» (guardianes/sueltos)")
+print("\n5. ⚠️ La última fila de una tabla pequeña ya no queda TAPADA por la barra horizontal")
+import pandas as pd                                              # noqa: E402
+from core import botones as B                                    # noqa: E402
+_llam = []
+
+
+def _falso(self, data=None, *a, **k):
+    _llam.append(dict(k))
+
+
+_w = B._envolver_tabla(_falso, "dataframe")
+_d4 = pd.DataFrame({"a": range(4), "b": range(4)})
+_w(None, _d4)
+_w(None, pd.DataFrame({"a": range(12)}))
+_w(None, _d4, height=300)
+_w(None, _d4, num_rows="dynamic")
+_w(None, _d4.style)
+_w(None, _d4, row_height=50)
+_w(None, pd.DataFrame({"a": []}))
+chk("⚠️ 4 filas sin altura propia → la de su contenido MÁS la barra (35×5+13 = 188; medido: vista 176 de 175)",
+    _llam[0].get("height") == 188, _llam[0])
+chk("…con más de 10, la de Streamlit (ahí la barra vertical es de verdad)", "height" not in _llam[1], _llam[1])
+chk("…y NO toca una altura propia, una tabla editable con filas nuevas, ni una fila a medida",
+    _llam[2].get("height") == 300 and "height" not in _llam[3] and "height" not in _llam[5], (_llam[2], _llam[3], _llam[5]))
+chk("…un Styler cuenta sus filas; una tabla vacía no se toca", _llam[4].get("height") == 188 and "height" not in _llam[6])
+B.instalar()
+from streamlit.delta_generator import DeltaGenerator             # noqa: E402
+chk("`instalar()` lo deja puesto en `st.dataframe` y `st.data_editor` (y en las columnas)",
+    all(getattr(getattr(DeltaGenerator, n), B._MARCA_TABLA, False) for n in ("dataframe", "data_editor"))
+    and getattr(st.dataframe, B._MARCA_TABLA, False))
+
+print("\n6. ⚠️ La migración de «bodega»/«baja» (guardianes/sueltos)")
 _mig = io.open(os.path.join(RAIZ, "..", "guardianes", "sueltos", "migrar_v600_movimientos.py"),
                encoding="utf-8").read()
 _fn = next(n for n in ast.parse(_mig).body if isinstance(n, ast.FunctionDef) and n.name == "nuevo")

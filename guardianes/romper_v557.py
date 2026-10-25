@@ -65,8 +65,9 @@ ROTURAS = [
        '        return str(v)\n')]),
     ("el selector de la ficha vuelve a las bolitas", AUI,
      [('key=f"cpxseg_{k}_sec"', 'key=f"{k}_sec"')]),
+    # (v600 · re-anclada: la fecha de alta va por `ui.fecha_opcional`, con lo guardado en la clave)
     ("la fecha de alta vuelve al ISO", AUI,
-     [('key=f"{k}_fing", format="DD/MM/YYYY"', 'key=f"{k}_fing", format="YYYY-MM-DD"')]),
+     [('_fi, f"{k}_fing_{_fi or \'\'}", format="DD/MM/YYYY"', '_fi, f"{k}_fing_{_fi or \'\'}", format="YYYY-MM-DD"')]),
     ("la ficha deja de avisar del correo inválido", AUI,
      [('t("Invalid email") if _ce == "invalido" else', '"" if _ce == "invalido" else')]),
 ]
