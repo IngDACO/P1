@@ -492,8 +492,11 @@ def _detalle_cliente(grupo, key):
 
 def _contactar(f):
     """v602 · Llamar y escribir con un toque (elementos activos): el teléfono y el email de la
-    ficha eran texto. ⚠️ En HTML: el markdown de Streamlit 1.64 solo deja pasar http(s), irc,
-    mailto y xmpp, y un enlace `tel:` se perdería."""
+    ficha eran texto. ⚠️ El teléfono en HTML: el markdown de Streamlit 1.64 solo deja pasar
+    http(s), irc, mailto y xmpp, y un enlace `tel:` se perdería.
+
+    ⚠️ v603 · el email, en MARKDOWN (`maps.enlace_md`): dentro de un `<a>` el markdown lo volvía
+    a enlazar y el navegador dejaba un enlace VACÍO delante (medido en producción)."""
     import html as _h
     _tel, _mail = str(f.get("Phone", "") or "").strip(), str(f.get("Email", "") or "").strip()
     if C.solo_digitos(_tel):
@@ -501,8 +504,7 @@ def _contactar(f):
         st.markdown(f':material/call: <a href="tel:{_num_tel}">{_h.escape(_tel)}</a>',
                     unsafe_allow_html=True)
     if _mail and C.email_valido(_mail):
-        st.markdown(f':material/mail: <a href="mailto:{_h.escape(_mail, quote=True)}">{_h.escape(_mail)}</a>',
-                    unsafe_allow_html=True)
+        st.markdown(":material/mail: " + maps.enlace_md(_mail, "mailto:" + _mail))
 
 
 # ── Alta de cliente ──────────────────────────────────────────────

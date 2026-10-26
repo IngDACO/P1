@@ -64,9 +64,10 @@ ROTURAS = [
     ("⚠️ el teléfono vuelve a ser texto (sin `tel:`)", CU,
      [("""        st.markdown(f':material/call: <a href="tel:{_num_tel}">{_h.escape(_tel)}</a>',""",
        """        st.markdown(f':material/call: {_h.escape(_tel)}',""")]),
+    # (v603 · re-anclada: el email va en markdown, `maps.enlace_md`; el <a> dejaba uno VACÍO)
     ("el email vuelve a ser texto (sin `mailto:`)", CU,
-     [("""        st.markdown(f':material/mail: <a href="mailto:{_h.escape(_mail, quote=True)}">{_h.escape(_mail)}</a>',""",
-       """        st.markdown(f':material/mail: {_h.escape(_mail)}',""")]),
+     [('        st.markdown(":material/mail: " + maps.enlace_md(_mail, "mailto:" + _mail))\n',
+       '        st.markdown(":material/mail: " + maps.literal_md(_mail))\n')]),
     ("⚠️ la ficha vuelve a enviarse con Enter", CU,
      [('with st.form(f"cli_form_{key}", enter_to_submit=False):', 'with st.form(f"cli_form_{key}"):')]),
     # ── la lista ──

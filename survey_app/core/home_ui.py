@@ -13,6 +13,7 @@ El mapa geocodifica la `Ubicacion` de texto con OpenStreetMap/Nominatim (sin API
 cacheado). Cuando se valide el look, se decide Google Maps y/o un campo de coordenadas.
 """
 import logging
+import re
 import zlib
 
 from core.i18n import t, etiqueta as _etq
@@ -428,6 +429,44 @@ _ABIERTO_EN_SUB = {("proyectos", "📊 Proyectos"): "_admin_open_proj",
                    ("finanzas", "📄 Cotizaciones"): ("_cot_open", "_cot_nueva"),
                    # v582 · con un artículo abierto, «Catalogue» se quedaba en él
                    ("finanzas", "📚 Catálogo"): "_cat_open"}
+
+
+# v603 · lo ABIERTO encima de una sección (una ficha o un alta), por convención de nombre:
+# `_cli_open`, `_admin_open_proj`, `_fac_nueva`, `_inv_nuevo`… — 14 claves hoy, todas de
+# VISTA (ninguna cambia dentro de la misma pantalla). verif_v603 vigila que toda clave
+# `_…_open…` de la app siga esta forma.
+_RE_ABIERTO = re.compile(r"^_[a-z]+_(open(_[a-z]+)?|nuev[oa])$")
+
+
+def _vista():
+    """Dónde estás DE VERDAD: (sección, sub-pestaña), la búsqueda y lo abierto encima."""
+    _ab = tuple(sorted((k, str(v)) for k, v in st.session_state.items()
+                       if isinstance(k, str) and _RE_ABIERTO.match(k) and v))
+    return (_donde(st.session_state.get("_admin_sec", "")),
+            bool(str(st.session_state.get("topbar_search", "") or "").strip()), _ab)
+
+
+def subir_si_cambia_la_vista():
+    """v603 · Al final de la pasada: si CAMBIÓ la vista, la página empieza ARRIBA; si no, y
+    hay un aviso nuevo de `flash` por encima de la pantalla, sube a él.
+
+    ⚠️ Streamlit conserva el desplazamiento de la vista anterior (medido en producción: la
+    ficha nueva de Contacts ~190 px abajo, en el móvil una ficha abierta 917 px abajo, una
+    sección del menú donde estaba la anterior, «1 project linked.» a -488 px). Lo que se pidió
+    BAJAR (`_bajar_a`) manda: esa pasada no se sube. La primera pasada de la sesión, tampoco.
+    """
+    from core import flash as _fl
+    _nuevo = st.session_state.pop(_fl.NUEVO, False)
+    v = _vista()
+    ant = st.session_state.get("_vista_ant")
+    st.session_state["_vista_ant"] = v
+    if st.session_state.pop("_bajada_pedida", False):
+        return
+    from core import projects_ui as _PU
+    if ant is not None and ant != v:
+        _PU._subir_arriba()
+    elif _nuevo:
+        _PU._subir_arriba(solo_si_aviso_oculto=True)
 
 
 def puede_atras() -> bool:
@@ -1076,6 +1115,8 @@ def render_admin_content(key, grupo):
     # Se pinta aquí, una sola vez, y sirve a cualquier pantalla sin que cada una
     # tenga que acordarse.
     from core import flash
+    # v603 · lo que pida bajar lo apunta ESTA pasada (una cortada por `st.rerun()` no bajó)
+    st.session_state.pop("_bajada_pedida", None)
     flash.mostrar()
 
     # ── Búsqueda (v330): manda sobre la sección ───────────────────

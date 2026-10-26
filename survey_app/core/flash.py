@@ -36,6 +36,9 @@ _TIPOS = ("success", "warning", "error", "info")
 # v560 · lo ya pintado se REPITE en las pasadas que lleguen enseguida (ver `mostrar`).
 _VISTOS = "_flash_vistos"
 _GRACIA_S = 2.5
+# v603 · el bloque donde se pintan (lo busca la subida de la shell) y la marca de «nuevo»
+BLOQUE = "cpx_flash"
+NUEVO = "_flash_recien"   # ⚠️ sin «_nuevo»: casaría con «lo abierto» de la shell (v603)
 
 
 def poner(tipo: str, texto: str) -> None:
@@ -81,6 +84,10 @@ def mostrar() -> int:
     """
     cola = st.session_state.pop(_CLAVE, None) or []
     ahora = time.monotonic()
+    # ⚠️ v603 · ¿hay aviso NUEVO? (no la repetición de v560): la shell, al acabar la pasada,
+    # sube a él si quedó por encima de la pantalla — al actuar al final de una página larga,
+    # «1 project linked.» se pintaba arriba, a -488 px, y nadie lo veía.
+    st.session_state[NUEVO] = bool(cola)
     if cola:
         st.session_state[_VISTOS] = (list(cola), ahora)
     else:
@@ -89,6 +96,8 @@ def mostrar() -> int:
             cola = list(_prev[0])
         else:
             st.session_state.pop(_VISTOS, None)
-    for tipo, texto in cola:
-        getattr(st, tipo, st.info)(texto)
+    if cola:
+        with st.container(key=BLOQUE):
+            for tipo, texto in cola:
+                getattr(st, tipo, st.info)(texto)
     return len(cola)

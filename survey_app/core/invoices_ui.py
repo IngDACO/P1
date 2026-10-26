@@ -537,6 +537,9 @@ def _nueva_factura(grupo):
         if ok:
             st.session_state.pop("_fac_nueva", None)
             st.session_state["_fac_open"] = res
+            # v603 · emitir AVISA (abría la factura sin decir nada, como archivar en v602)
+            flash.exito(t("Invoice No. {n} issued.",
+                          n=(I.get_factura(res) or {}).get("Number", "")))
             st.rerun()
         else:
             st.error(res)

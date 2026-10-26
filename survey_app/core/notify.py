@@ -10,7 +10,9 @@ Secrets:
 
 Degrada con gracia: usa los canales configurados y para los que el usuario tenga contacto.
 """
+import html
 import logging
+import re
 
 from core.i18n import d as _d
 import smtplib
@@ -128,6 +130,28 @@ def any_channel_configured() -> bool:
     return email_configured() or telegram_configured()
 
 
+# v603 · las etiquetas que la app pone A PROPÓSITO en un aviso (y que Telegram admite)
+_ETQ_OK = re.compile(r"&lt;(/?(?:b|i|u|s|code|pre)|br\s*/?)&gt;")
+_A_OK = re.compile(r'&lt;a href="([^"<>]*)"&gt;')
+
+
+def html_seguro(texto: str) -> str:
+    """v603 · El cuerpo de un aviso con el texto de las PERSONAS escapado.
+
+    ⚠️ Los avisos llevan en HTML (correo y Telegram, `parse_mode` HTML) lo que alguien
+    escribió: la alarma del campo, el nombre de la obra, la dirección, la lectura de la IA. Sin
+    escapar, «hueco < 20 mm & riel torcido» llegaba RECORTADO por correo (el «<…» se lee como
+    una etiqueta: medido en el navegador, «Shop 3 <Ground> & 4» salía «Shop 3 & 4»), y
+    Telegram pide escapar todo «<», «>» y «&» que no sean una etiqueta (su documentación),
+    así que el aviso podía no llegar. Se escapa TODO y se devuelven las etiquetas de la app
+    (`<b>`, `<i>`, `<a href="…">`, `<br>`…): ninguna llamada tiene que acordarse.
+    """
+    s = html.escape(str(texto or ""), quote=False)
+    s = _ETQ_OK.sub(r"<\1>", s)
+    s = _A_OK.sub(r'<a href="\1">', s)
+    return s.replace("&lt;/a&gt;", "</a>")
+
+
 def notify_user(usuario: str, subject: str, lines: list, link: str = None) -> dict:
     """Envía a `usuario` por los canales que tenga configurados. Devuelve {email, telegram}."""
     rec = auth.get_user(usuario)
@@ -137,6 +161,7 @@ def notify_user(usuario: str, subject: str, lines: list, link: str = None) -> di
     text = "\n".join(lines)
     if link:
         text += f"\n\n{link}"
+    text = html_seguro(text)                      # v603 · el texto ajeno, escapado
     email = str(rec.get("Email", "")).strip()
     if email and email_configured():
         try:

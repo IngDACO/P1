@@ -562,6 +562,16 @@ Estas cinco mordieron en una sola tanda:
     CONSTANTE del módulo, nunca a un literal; una lectura sin cabecera conocida pasa `None`
     (no crea); `verif_v590` barre los nombres viejos de pestaña en toda la app.
 
+43. ⚠️ **Streamlit 1.64 CONSERVA el desplazamiento al cambiar de vista, y el markdown re-enlaza
+    los emails.** (v603) Abrir una ficha, crear algo o tocar otra sección del menú dejaba la
+    página donde estaba la anterior (la ficha nueva ~190 px abajo, en el móvil 917; un aviso de
+    `flash` a -488 px): desde v603 la shell sube al cambiar de vista (`home_ui._vista`: sección,
+    sub-pestaña, búsqueda y las claves `_…_open…`/`_…_nueva/o`) o a un aviso nuevo oculto; lo que
+    se pidió BAJAR (`_bajar_a`) manda. ⚠️ Una marca de sesión nueva NO puede llamarse `_x_nuevo`
+    ni `_x_open`: entraría en la firma de la vista (pasó con `_flash_nuevo`: subía siempre).
+    Y un email como TEXTO de un `<a>` sale como un enlace VACÍO + otro (el autoenlace de GFM):
+    un enlace con texto va por `maps.enlace_md`, y lo que va en HTML se escapa.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen

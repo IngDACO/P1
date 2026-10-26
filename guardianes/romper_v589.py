@@ -67,8 +67,10 @@ ROTURAS = [
        '                     ":material/build: My company → open the project → :material/attach_file: Files and every tool will use it — or upload the PDF "\n')]),
     ("el botón «Open the project's Files» deja de abrir Files", PL,
      [('            st.session_state["_prj_sec_pending"] = "📎 Archivos"\n', "")]),
+    # (v603 · re-anclada: la etiqueta pasa por `literal_md`)
     ("⚠️ vuelve el «📍» del enlace (dos iconos)", "core/maps.py",
-     [('    return f"[{lbl}]({url})"\n', '    return f"[📍 {lbl}]({url})"\n')]),
+     [('    return f"[{literal_md(lbl)}]({url})"           # v603 · la dirección, TAL CUAL\n',
+       '    return f"[📍 {literal_md(lbl)}]({url})"\n')]),
     ("un sitio pinta el enlace sin su icono", "core/clientes_ui.py",
      [('            st.markdown(":material/place: " + maps.maps_link_md(f.get("Address"), t("See the address on the map")))\n',
        '            st.markdown(maps.maps_link_md(f.get("Address"), t("See the address on the map")))\n')]),

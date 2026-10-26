@@ -175,8 +175,11 @@ at = AppTest.from_string(G, default_timeout=120)
 at.session_state["_cli_open"] = "CLI-1"
 at.run()
 _md = " ".join(str(m.value) for m in at.markdown)
+# (v603 · el email, en MARKDOWN: dentro de un <a> el markdown lo volvía a enlazar y el navegador
+# dejaba un enlace VACÍO delante, medido en producción)
 chk("⚠️ el teléfono LLAMA y el email ESCRIBE (eran texto): `tel:0290001001` y `mailto:`",
-    'href="tel:0290001001"' in _md and 'href="mailto:projects@meridian.example"' in _md, _md[-300:])
+    'href="tel:0290001001"' in _md and "[projects@meridian.example](mailto:projects@meridian.example)" in _md,
+    _md[-300:])
 _exp = next((e for e in list(at.expander) + list(getattr(at, "status", [])) if "Archive client" in str(e.label)), None)
 _clic(at, "cli_arch_CLI-1")
 chk("⚠️ archivar AVISA («Client archived.») y vuelve a la lista",

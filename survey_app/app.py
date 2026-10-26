@@ -380,6 +380,8 @@ if _ROL in ("administrator", "field"):
 # El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;
 # `render_admin_content` cae a la primera del rol (v297).
 _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)
+# v603 · otra vista (o un aviso nuevo fuera de la pantalla) → la página empieza arriba
+_home.subir_si_cambia_la_vista()
 # v562 · la pasada llegó al final: las notas de clic que no usó ningún botón se tiran
 # (`core/botones`: un clic nunca dispara un botón más tarde, en otra pantalla).
 _botones.fin_de_pasada()

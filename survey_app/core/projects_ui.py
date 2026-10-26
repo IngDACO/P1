@@ -5535,6 +5535,8 @@ def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
     """
     if not st.session_state.pop(marca, False):
         return
+    # v603 · esta pasada BAJA a un sitio pedido: la shell no la sube arriba (`_subir_arriba`)
+    st.session_state["_bajada_pedida"] = True
     bloque = bloque if bloque in ("nearest", "start", "center") else "nearest"
     # ⚠️ v600 · cada petición lleva su NÚMERO en el script: con el mismo texto, dos peticiones en
     # pasadas SEGUIDAS (una fila de los informes de Inventory y después una categoría) dejaban
@@ -5555,6 +5557,38 @@ def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
             "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
             "block:'" + bloque + "'});return;}"
             "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
+            "</script>")
+
+
+def _subir_arriba(solo_si_aviso_oculto=False):
+    """v603 · La página vuelve ARRIBA del todo al acabar la pasada (la llama la shell).
+
+    ⚠️ Streamlit CONSERVA el desplazamiento al cambiar de vista: medido en producción, la
+    ficha nueva tras «Create client» se abría ~190 px abajo (el «Client created.» y «Back to
+    clients» fuera de la vista), en el móvil un toque en la tabla abría la ficha 917 px abajo
+    y tocar «Inventory» en el menú dejaba Inventory donde estaba la lista. Con
+    `solo_si_aviso_oculto`, solo si el aviso nuevo de `flash` (`.st-key-cpx_flash`) quedó por
+    ENCIMA de la vista: «1 project linked.» salía a -488 px al vincular desde el final de la
+    ficha. Recuadro y espera, como `_bajar_a`; el número, para que cada petición corra.
+    """
+    _n = st.session_state.get("_bajar_n", 0) + 1
+    st.session_state["_bajar_n"] = _n
+    _solo = "1" if solo_si_aviso_oculto else "0"
+    with st.container(key="cpx_arriba"):
+        st.markdown("<style>.st-key-cpx_arriba,[data-testid=\"stLayoutWrapper\"]:has(> "
+                    ".st-key-cpx_arriba){position:absolute!important;width:1px;"
+                    "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
+                    "</style>", unsafe_allow_html=True)
+        incrustar.script(
+            "<script>/*" + str(_n) + "*/(function(){try{var D=window.parent.document,n=0,"
+            "SOLO=" + _solo + ";function ir(){var a=D.querySelector('[data-testid=\"stApp\"]'),"
+            "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
+            "if(s==='running'){if(++n<40)setTimeout(ir,100);return;}"
+            "var m=D.querySelector('[data-testid=\"stMain\"]');"
+            "if(SOLO){var f=D.querySelector('.st-key-" + flash.BLOQUE + "');if(!f)return;"
+            "var t=m?m.getBoundingClientRect().top:0;if(f.getBoundingClientRect().top>=t-1)return;}"
+            "if(m){m.scrollTo({top:0,behavior:SOLO?'smooth':'auto'});}"
+            "else{window.parent.scrollTo(0,0);}}setTimeout(ir,150);}catch(e){}})();"
             "</script>")
 
 
