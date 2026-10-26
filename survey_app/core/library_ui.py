@@ -223,7 +223,7 @@ def render_biblioteca(grupo=None):
 
     _q, _marca, _modelo, _tipo_f = _barra()
     base = LIB.buscar(_q, marca=_marca, modelo=_modelo, tipo=_tipo_f)
-    _seccion = _secciones(base, r)
+    _seccion = _secciones(base)
     items = [i for i in base if not _seccion or str(i.get("Section", "")) == _seccion]
     # ⚠️ v604 · otra búsqueda u otro filtro = la página 1: la galería se quedaba en la página
     # de ANTES («Page 2 of 89» de la biblioteca entera tras volver de «governor»).
@@ -301,15 +301,22 @@ def _barra():
     return q, marca, (modelo if marca else ""), tipo
 
 
-def _secciones(base, r):
+def _secciones(base):
     """v604 · las secciones, PÍLDORAS con cuántas piezas hay en cada una con la búsqueda de
-    ahora (era un desplegable mudo): «Car · 159» se toca y filtra. Las opciones son las de
-    la biblioteca (fijas); el número, el de los resultados."""
+    ahora (era un desplegable mudo): «Car · 159» se toca y filtra.
+
+    ⚠️ v606 · solo las que TIENEN piezas con la búsqueda y los filtros de ahora (y la elegida,
+    aunque se quede en cero, para poder soltarla): con «Documents» salían «Controller · 0»,
+    «Shaft · 0»… que en la fila del móvil solo estorbaban (visto verificando v605). Que las
+    opciones cambien no rompe nada: un valor que ya no está, Streamlit lo suelta solo (v604)."""
     from core import projects_ui as _PU
     _n = {}
     for i in base:
         _n[str(i.get("Section", ""))] = _n.get(str(i.get("Section", "")), 0) + 1
-    _ops = [s for s in LIB.SECCIONES if r["por_seccion"].get(s)]
+    _elegida = st.session_state.get("lib_seccion")
+    _ops = [s for s in LIB.SECCIONES if _n.get(s) or s == _elegida]
+    if not _ops:
+        return ""
     st.markdown(_CSS_SECCIONES, unsafe_allow_html=True)
     with st.container(key="lib_secs"):
         _PU._bajar_a("lib_secs", "_bajar_lib_secs", bloque="start")
