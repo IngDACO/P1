@@ -102,16 +102,20 @@ for _caso in ([fila("Schindler", ""), fila("Sematic", "")],
         LIB.resumen()["modelos"] == ofrecidos())
 
 # ═════════════════════════════════════════════════════════════════
-sec("4. La tarjeta de la pantalla lee ese número")
+sec("4. Las cifras de la pantalla leen el resumen")
+# ⚠️ v604 · decisión del usuario: las cifras pasan a ser ACTIVAS — todo · fotos · documentos ·
+# secciones — y «Brands · Models» (datos del catálogo) se quitan: la marca está en los filtros.
+# `resumen()["modelos"]` sigue contando como el desplegable (arriba), pero ya no se pinta.
 _a = ast.parse(io.open("core/library_ui.py", encoding="utf-8").read())
 _lee = []
-for n in ast.walk(_a):
-    if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "kpi_row":
-        for x in ast.walk(n):
+for fn in ast.walk(_a):
+    if isinstance(fn, ast.FunctionDef) and fn.name == "_cifras":
+        for x in ast.walk(fn):
             if isinstance(x, ast.Subscript) and isinstance(x.slice, ast.Constant):
                 _lee.append(x.slice.value)
 chk("se encontró la fila de tarjetas (si no, esto pasaría en vacío)", bool(_lee), _lee)
-chk("la tarjeta «Models» lee resumen()['modelos']", "modelos" in _lee, _lee)
+chk("las cifras leen resumen(): total, por_tipo y por_seccion (y ya no «Models»)",
+    {"total", "por_tipo", "por_seccion"} <= set(_lee) and "modelos" not in _lee, _lee)
 
 print("")
 print("=" * 70)

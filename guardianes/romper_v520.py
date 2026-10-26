@@ -40,8 +40,10 @@ ROTURAS = [
      "    if False and str(seccion) not in SECCIONES:"),
 
     # ── (c) las pantallas ────────────────────────────────────────────────────
+    # (v604 · re-anclada: el filtro son píldoras sacadas de SECCIONES)
     ("el filtro lleva una lista copiada a mano (las nuevas no se pueden elegir)",
-     "core/library_ui.py", '[""] + list(LIB.SECCIONES)', '[""] + ["Car", "Pit"]'),
+     "core/library_ui.py", '_ops = [s for s in LIB.SECCIONES if r["por_seccion"].get(s)]',
+     '_ops = [s for s in ["Car", "Pit"] if r["por_seccion"].get(s)]'),
 
     # ── (d) la carga en lote ─────────────────────────────────────────────────
     ("la carga no comprueba la cabecera real (fila posicional, v363)",

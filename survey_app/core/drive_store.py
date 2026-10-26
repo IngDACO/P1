@@ -38,6 +38,10 @@ LEGADO_CARPETAS = {
 FOLDER_MIME = "application/vnd.google-apps.folder"
 _API        = "https://www.googleapis.com/drive/v3/files"
 _UPLOAD     = "https://www.googleapis.com/upload/drive/v3/files"
+# ⚠️ v604 · TODA llamada a Drive con tiempo máximo: sin él una descarga atascada dejaba la
+# pasada colgada para siempre (la galería de Library pide 6-12 a la vez). (conexión, lectura)
+_T = (10, 60)
+_T_SUBIDA = (10, 300)
 _TOKEN_URI  = "https://oauth2.googleapis.com/token"
 
 
@@ -87,7 +91,7 @@ def _find_folder(name, parent=None):
     if parent:
         q += f" and '{parent}' in parents"
     r = requests.get(_API, headers=_headers(),
-                     params={"q": q, "fields": "files(id,name)", "spaces": "drive"})
+                     params={"q": q, "fields": "files(id,name)", "spaces": "drive"}, timeout=_T)
     r.raise_for_status()
     files = r.json().get("files", [])
     return files[0]["id"] if files else None
@@ -96,7 +100,7 @@ def _find_folder(name, parent=None):
 def _rename_folder(fid, nombre):
     """Renombra una carpeta. Conserva su contenido: los ficheros cuelgan por id."""
     r = requests.patch("%s/%s" % (_API, fid), headers=_headers(),
-                       json={"name": nombre}, params={"fields": "id,name"})
+                       json={"name": nombre}, params={"fields": "id,name"}, timeout=_T)
     r.raise_for_status()
     return r.json().get("id")
 
@@ -130,7 +134,7 @@ def _create_folder(name, parent=None):
     body = {"name": name, "mimeType": FOLDER_MIME}
     if parent:
         body["parents"] = [parent]
-    r = requests.post(_API, headers=_headers(), json=body, params={"fields": "id"})
+    r = requests.post(_API, headers=_headers(), json=body, params={"fields": "id"}, timeout=_T)
     r.raise_for_status()
     return r.json()["id"]
 
@@ -172,7 +176,8 @@ def upload_to(folder_id: str, filename: str, data: bytes,
     body = head + (data or b"") + tail
     r = requests.post(_UPLOAD,
                       headers={**_headers(), "Content-Type": f"multipart/related; boundary={b}"},
-                      params={"uploadType": "multipart", "fields": "id"}, data=body)
+                      params={"uploadType": "multipart", "fields": "id"}, data=body,
+                      timeout=_T_SUBIDA)
     r.raise_for_status()
     return r.json()["id"]
 
@@ -189,7 +194,8 @@ def upload(pid: str, filename: str, data: bytes, mime: str = "application/octet-
     body = head + (data or b"") + tail
     r = requests.post(_UPLOAD,
                       headers={**_headers(), "Content-Type": f"multipart/related; boundary={b}"},
-                      params={"uploadType": "multipart", "fields": "id"}, data=body)
+                      params={"uploadType": "multipart", "fields": "id"}, data=body,
+                      timeout=_T_SUBIDA)
     r.raise_for_status()
     return r.json()["id"]
 
@@ -197,16 +203,87 @@ def upload(pid: str, filename: str, data: bytes, mime: str = "application/octet-
 @st.cache_data(ttl=300, show_spinner=False)
 def download(file_id: str) -> bytes:
     """Descarga los bytes de un archivo (cacheado para no re-descargar en cada rerun)."""
-    r = requests.get(f"{_API}/{file_id}", headers=_headers(), params={"alt": "media"})
+    r = requests.get(f"{_API}/{file_id}", headers=_headers(), params={"alt": "media"}, timeout=_T)
     r.raise_for_status()
     return r.content
 
 
-def delete(file_id: str):
+@st.cache_resource(show_spinner=False)
+def _almacen_miniaturas():
+    """{fileId: bytes} de las miniaturas YA hechas, compartido por todas las sesiones.
+
+    ⚠️ Compartir es correcto porque solo se usa para la biblioteca, que es GLOBAL (la misma
+    para todos). Con tope: cada miniatura ronda los 20-30 KB."""
+    import collections
+    import threading
+    return {"datos": collections.OrderedDict(), "cerrojo": threading.Lock(), "tope": 1500}
+
+
+def _hacer_miniatura(datos: bytes, lado: int) -> bytes:
+    """La foto recortada al CUADRADO del centro y reducida a `lado` px (JPEG).
+
+    ⚠️ `exif_transpose` primero: las fotos del móvil vienen giradas por EXIF, y el navegador
+    lo aplica a la foto entera pero PIL no — sin esto la miniatura saldría tumbada."""
+    import io
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(datos)) as im:
+        im = ImageOps.exif_transpose(im).convert("RGB")
+        im = ImageOps.fit(im, (lado, lado), Image.LANCZOS)
+        out = io.BytesIO()
+        im.save(out, "JPEG", quality=78, optimize=True)
+        return out.getvalue()
+
+
+def miniaturas(file_ids, lado: int = 360) -> dict:
+    """v604 · {fileId: bytes de la miniatura} — las que falten, bajadas EN PARALELO.
+
+    ⚠️ La galería de Library bajaba la foto ENTERA (1200×1600, 160-375 KB) para pintarla a
+    206 px, y una detrás de otra: 6 fotos = 4-6 s por página, 9,1 s al abrir (medido en
+    producción). Ahora: las que ya se hicieron salen al instante, las demás a la vez, y el
+    navegador recibe ~25 KB por foto. Un fallo en una no tumba las demás: esa no sale."""
+    from concurrent.futures import ThreadPoolExecutor
+    alm = _almacen_miniaturas()
+    ids = [str(i) for i in dict.fromkeys(file_ids) if str(i or "").strip()]
+    with alm["cerrojo"]:
+        out = {i: alm["datos"][i] for i in ids if i in alm["datos"]}
+    faltan = [i for i in ids if i not in out]
+    if faltan:
+        _h = _headers()          # ⚠️ en el hilo de la pasada: los de abajo no tocan Streamlit
+
+        def _una(fid):
+            r = requests.get(f"{_API}/{fid}", headers=_h, params={"alt": "media"}, timeout=_T)
+            r.raise_for_status()
+            return fid, _hacer_miniatura(r.content, lado)
+
+        with ThreadPoolExecutor(max_workers=min(8, len(faltan))) as ex:
+            for fut in [ex.submit(_una, f) for f in faltan]:
+                try:
+                    fid, mini = fut.result()
+                except Exception as e:
+                    logger.warning("drive_store: miniatura no disponible: %s", e)
+                    continue
+                out[fid] = mini
+                with alm["cerrojo"]:
+                    alm["datos"][fid] = mini
+                    while len(alm["datos"]) > alm["tope"]:
+                        alm["datos"].popitem(last=False)
+    return out
+
+
+def delete(file_id: str) -> bool:
+    """Borra un archivo. True si ya no está (borrado, o no existía: 404).
+
+    ⚠️ v604 · DICE si falló: se tragaba la excepción y ni miraba la respuesta, así que un 403
+    o una caída de red pasaban por borrado — Library contestaba «Removed from the library.» con
+    el archivo aún en Drive. Los llamadores de siempre (best-effort) pueden seguir ignorándolo."""
     try:
-        requests.delete(f"{_API}/{file_id}", headers=_headers())
+        r = requests.delete(f"{_API}/{file_id}", headers=_headers(), timeout=_T)
+        if r.status_code in (200, 204, 404):
+            return True
+        logger.warning("drive_store: no se pudo borrar %s: HTTP %s", file_id, r.status_code)
     except Exception as e:
         logger.warning("drive_store: no se pudo borrar %s: %s", file_id, e)
+    return False
 
 # ══════════════════════════════════════════════════════════
 #  Mantenimiento: inventario y limpieza (v456)
@@ -226,7 +303,7 @@ def _hijos(folder_id: str) -> list:
                   "spaces": "drive", "pageSize": 200}
         if token:
             params["pageToken"] = token
-        r = requests.get(_API, headers=_headers(), params=params)
+        r = requests.get(_API, headers=_headers(), params=params, timeout=_T)
         r.raise_for_status()
         d = r.json()
         out += d.get("files", [])
@@ -278,7 +355,7 @@ def borrar(ids: list) -> tuple:
     ok, errores = 0, []
     for fid in ids:
         try:
-            r = requests.delete(f"{_API}/{fid}", headers=_headers())
+            r = requests.delete(f"{_API}/{fid}", headers=_headers(), timeout=_T)
             if r.status_code in (200, 204):
                 ok += 1
             else:

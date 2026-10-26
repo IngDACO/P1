@@ -32,10 +32,11 @@ ROTURAS = [
      "core/library.py", "return timeclock.get_sheet(SHEET, tuple(HEADERS)), None",
      "return timeclock._get_worksheet()[0], None"),
 
+    # (v604 · re-anclada: cada foto es ahora una pieza con su botón encima)
     ("un `download_button` por foto en la galeria (baja TODO Drive, v147)",
-     "core/library_ui.py", '            _c.caption("**%s**" % it.get("Title", ""))',
-     '            _c.download_button("d", data=b"", key="x%s" % it.get("ID", ""))\n'
-     '            _c.caption("**%s**" % it.get("Title", ""))'),
+     "core/library_ui.py", '                    st.button(t("Open: {x}", x=_titulo(it, pags)), key="libfoto_%s" % _lid,',
+     '                    st.download_button("d", data=b"", key="x%s" % _lid)\n'
+     '                    st.button(t("Open: {x}", x=_titulo(it, pags)), key="libfoto_%s" % _lid,'),
 
     ("la galeria deja de paginar",
      "core/library_ui.py", "_vis = fotos[_pag * _POR_PAGINA:(_pag + 1) * _POR_PAGINA]",
@@ -50,10 +51,11 @@ ROTURAS = [
      "    ok, msg = LIB.add_item(titulo, seccion, tipo)\n"
      "    drive_id = filename = mime = \"\"\n    if up is not None:"),
 
+    # (v604 · re-anclada: si Drive no borra, ya no se borra nada)
     ("al BORRAR se quita la fila ANTES que el archivo (huerfano, v456)",
-     "core/library_ui.py", "                if _did and dr is not None:",
+     "core/library_ui.py", "                if _did and dr is not None and not dr.delete(_did):",
      "                ok, msg = LIB.delete_item(lid)\n"
-     "                if _did and dr is not None:"),
+     "                if _did and dr is not None and not dr.delete(_did):"),
 
     ("`_next_id` vuelve a contar FILAS (el fallo REAL de v428)",
      "core/library.py", 'return hojas.siguiente_id_libre("LIB-", mx, propia=SHEET)',

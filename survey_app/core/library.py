@@ -79,6 +79,9 @@ SECCIONES = [
 ]
 
 TIPOS = ["photo", "manual", "datasheet", "diagram", "other"]
+# v604 · filtro «todo lo que no es una foto» (la cifra «Documents»). ⚠️ NO es un tipo: no se
+# guarda nunca en la hoja, solo filtra — por eso no está en TIPOS.
+DOCUMENTOS = "documents"
 
 # ⚠️ Sin marca y sin modelo es un estado LEGÍTIMO, no un hueco: hay material de una
 # marca sin modelo concreto (un catálogo general) y material que no es de ninguna
@@ -335,10 +338,39 @@ def list_items(marca="", modelo="", seccion="", tipo="") -> list:
             continue
         if seccion and str(r.get("Section", "")).strip() != str(seccion).strip():
             continue
-        if tipo and str(r.get("Type", "")).strip() != str(tipo).strip():
+        if tipo == DOCUMENTOS:
+            if str(r.get("Type", "")).strip() == "photo":
+                continue
+        elif tipo and str(r.get("Type", "")).strip() != str(tipo).strip():
             continue
         out.append(r)
     return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
+
+
+def _orden_id(lid) -> tuple:
+    """«LIB-0010» antes que «LIB-0100» también cuando pase de cuatro cifras."""
+    _n = str(lid).split("-")[-1]
+    return (0, int(_n)) if _n.isdigit() else (1, str(lid))
+
+
+def paginas() -> dict:
+    """v604 · {ID: (n, m)} de las piezas que COMPARTEN título: la página n de m.
+
+    ⚠️ 101 títulos se repiten en la biblioteca (30 páginas se llaman «Landing door Sematic
+    2000 B-CMG Low S2RL — manual page») y en la tabla no había forma de saber cuál era cuál.
+    Se CALCULA al pintar, por orden de ID (el de la carga: las páginas de un manual van
+    seguidas), así que no toca la hoja ni el histórico."""
+    grupos = {}
+    for r in _records():
+        lid = str(r.get("ID", "")).strip()
+        if lid:
+            grupos.setdefault(_norm(r.get("Title", "")).strip(), []).append(lid)
+    out = {}
+    for ids in grupos.values():
+        if len(ids) > 1:
+            for n, lid in enumerate(sorted(ids, key=_orden_id), start=1):
+                out[lid] = (n, len(ids))
+    return out
 
 
 def _norm(s) -> str:

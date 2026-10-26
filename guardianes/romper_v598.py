@@ -40,10 +40,14 @@ ROTURAS = [
      [('            on_select="rerun", selection_mode="single-cell", key="inv_tbl",\n',
        '            on_select="rerun", selection_mode="single-row", key="inv_tbl",\n')]),
     ("…o lee solo `.rows`", IU, [(_LEE4, "    _sr = list(_ev.selection.rows)\n")]),
+    # (v604 · re-ancladas: la tabla va dentro de su bloque y su clave lleva generación)
     ("Library vuelve a `single-row`", LU,
-     [('on_select="rerun", selection_mode="single-cell", key="lib_tbl",',
-       'on_select="rerun", selection_mode="single-row", key="lib_tbl",')]),
-    ("…o lee solo `.rows`", LU, [(_LEE4, "    _sr = list(_ev.selection.rows)\n")]),
+     [('on_select="rerun", selection_mode="single-cell", key="lib_tbl_%d" % _gen,',
+       'on_select="rerun", selection_mode="single-row", key="lib_tbl_%d" % _gen,')]),
+    ("…o lee solo `.rows`", LU,
+     [('        _s = _ev.selection            # v598 · la fila de la CELDA tocada (o la de la casilla)\n'
+       '        _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])\n',
+       "        _sr = list(_ev.selection.rows)\n")]),
     ("⚠️ el ayudante `_tabla_abre_obra` lee solo `.rows` (tres tablas de Expenses y Contacts mudas)", PU,
      [('    _f = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])\n',
        '    _f = list(getattr(_s, "rows", None) or [])\n')]),
@@ -51,7 +55,8 @@ ROTURAS = [
      [('selection_mode="single-cell", key=f"cot_tbl_{_gen}",', 'selection_mode="single-row", key=f"cot_tbl_{_gen}",')]),
 ]
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", LU,
-           [("def _tabla(items):\n", "def _tabla(items):   # (control)\n")])
+           # (v604 · re-anclado: `_tabla` recibe también las páginas y projects_ui)
+           [("def _tabla(items, pags, _PU):\n", "def _tabla(items, pags, _PU):   # (control)\n")])
 
 
 def corre():

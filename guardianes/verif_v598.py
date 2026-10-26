@@ -193,12 +193,13 @@ chk("la celda de la 2ª fila (por nombre: Andamio, Taladro) abre ACT-2 «Taladro
 
 print("\n4. Library: un toque en la celda abre ESE documento")
 GL = PRE + r'''
-from core import library_ui as LU
+from core import library_ui as LU, projects_ui as PU
+# (v604 · `_tabla` recibe las páginas «n/m» y projects_ui, y su clave lleva GENERACIÓN)
 LU._tabla([{"ID": "LIB-1", "Title": "Manual A", "Section": "S", "Type": "manual", "Date": "2026-10-01"},
-           {"ID": "LIB-2", "Title": "Manual B", "Section": "S", "Type": "manual", "Date": "2026-10-02"}])
+           {"ID": "LIB-2", "Title": "Manual B", "Section": "S", "Type": "manual", "Date": "2026-10-02"}], {}, PU)
 '''
 al = AppTest.from_string(GL, default_timeout=120)
-al.session_state["_PRE"] = {"lib_tbl": {"selection": {"rows": [], "columns": [], "cells": [(1, "Title")]}}}
+al.session_state["_PRE"] = {"lib_tbl_0": {"selection": {"rows": [], "columns": [], "cells": [(1, "Title")]}}}
 al.run()
 chk("sin excepción", not al.exception, [e.value for e in al.exception][:1])
 chk("la celda de la 2ª fila abre LIB-2", _ss(al, "_lib_open") == "LIB-2", _ss(al, "_lib_open"))

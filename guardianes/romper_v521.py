@@ -36,8 +36,10 @@ ROTURAS = [
      "    return sum(len(modelos_de(b)) for b in marcas())",
      '    return len([r for r in list_modelos() if str(r.get("Model", "")).strip()])'),
 
-    ("la tarjeta «Models» pinta otro número (el arreglo no se vería)",
-     "core/library_ui.py", 'str(r["modelos"])', 'str(r["marcas"])'),
+    # (v604 · la tarjeta «Models» se quitó por decisión del usuario: las cifras son todo · fotos
+    # · documentos · secciones. La rotura pasa a «las cifras dejan de leer el resumen».)
+    ("las cifras dejan de leer el resumen (la de fotos, fija)",
+     "core/library_ui.py", '_n_fot = int(r["por_tipo"].get("photo", 0))', '_n_fot = 0'),
 ]
 
 # ⚠️ Ancla de 10 o más caracteres: `check_anclas_roturas` ignora las más cortas (v520).

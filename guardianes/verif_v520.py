@@ -129,14 +129,20 @@ LIB._ws, LIB._next_id, LIB._invalidate, timeclock._now = _orig
 # ═════════════════════════════════════════════════════════════════
 sec("3. Las dos pantallas sacan sus opciones de SECCIONES")
 _ui = ast.parse(io.open("core/library_ui.py", encoding="utf-8").read())
+# ⚠️ v604 · el filtro pasó a PÍLDORAS (`st.pills` en `_secciones`, con sus opciones en `_ops`,
+# sacadas de LIB.SECCIONES) y el alta va por GENERACIÓN (`lib_up_sec_{_g}`): se busca la llamada
+# por su clave (o su prefijo) y SECCIONES en la llamada o en la función que la contiene.
 _usan = {}
-for n in ast.walk(_ui):
-    if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "selectbox":
-        _k = [kw.value.value for kw in n.keywords
-              if kw.arg == "key" and isinstance(kw.value, ast.Constant)]
-        if _k and _k[0] in ("lib_seccion", "lib_up_sec"):
-            _usan[_k[0]] = any(isinstance(x, ast.Attribute) and x.attr == "SECCIONES"
-                               for a in n.args for x in ast.walk(a))
+for fn in ast.walk(_ui):
+    if not isinstance(fn, ast.FunctionDef):
+        continue
+    _usa_fn = any(isinstance(x, ast.Attribute) and x.attr == "SECCIONES" for x in ast.walk(fn))
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call) and getattr(n.func, "attr", "") in ("selectbox", "pills"):
+            _k = [ast.unparse(kw.value) for kw in n.keywords if kw.arg == "key"]
+            for _clave, _nom in (("'lib_seccion'", "lib_seccion"), ("f'lib_up_sec_{_g}'", "lib_up_sec")):
+                if _k and _k[0] == _clave:
+                    _usan[_nom] = _usa_fn
 chk("se encontraron los dos desplegables (si no, esto pasaría en vacío)",
     set(_usan) == {"lib_seccion", "lib_up_sec"}, _usan)
 chk("el filtro y el alta leen LIB.SECCIONES", all(_usan.values()), _usan)
