@@ -258,7 +258,7 @@ def reparto(texto, asignacion, tambien=(), sin_responder=()) -> dict:
 # ═════════════════════════════════════════════════════════════════
 # v524 · El registro de la revisión: lo ofrecido y lo marcado
 # ═════════════════════════════════════════════════════════════════
-def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False) -> str:
+def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False, lector="") -> str:
     """Lo que la pantalla ENSEÑÓ y lo que el usuario MARCÓ al revisar un parte, en JSON.
 
     `por_destino` = `{obra: {"ofrecidas": [[tipo, orden, actividad, termino]],
@@ -269,6 +269,9 @@ def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False) 
     y desde v525 `{"": obra | None}` = las líneas que no nombran ningún ascensor.
     `nada=True` = pulsó «Nothing to credit»: lo que tuviera marcado NO se acreditó, así que
     no se registra como aceptado.
+    `lector` (v607) = quién leyó el parte: «» el vocabulario, o el modelo del agente
+    (`parte_agente`) y la versión de sus instrucciones. Sin esto, el acierto de los dos se
+    mezclaría en una cifra que no dice de cuál es.
     """
     dest = {}
     for d, x in (por_destino or {}).items():
@@ -280,6 +283,8 @@ def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False) 
         }
     out = {"v": REGISTRO_V, "app": str(app or ""), "nada": bool(nada), "destinos": dest,
            "dudosos": dict(respuestas or {}), "ascensores": dict(ascensores or {})}
+    if lector:
+        out["lector"] = str(lector)
 
     def _js(o):
         return json.dumps(o, ensure_ascii=False, separators=(",", ":"))

@@ -108,20 +108,23 @@ ROTURAS = [
      PPR, "    retener = {l for x in _sr for l in lineas_de(texto, x, tambien)}",
      "    retener = set()"),
 
+    # ⚠️ v607 · re-ancladas las tres de abajo: `PP.propone_algo`/`PP.propuestas` pasan por
+    # `_propone`/`_props`, que eligen la lectura del agente o el vocabulario (sin agente, que es
+    # como corre este guardián, son lo mismo). La rotura es la MISMA.
     ("se pregunta por un «L2» cuyas lineas no proponen nada (friccion que enseña a no leer)",
-     UI, '    dudosos = [d for d in asc["dudosos"] if PP.propone_algo(PP.lineas_de(texto, d), plan0)]',
+     UI, '    dudosos = [d for d in asc["dudosos"] if _propone(PP.lineas_de(texto, d))]',
      '    dudosos = list(asc["dudosos"])'),
 
     ("se pide obra para un ascensor que no hizo nada («lift 2 was in use by the builders»)",
      UI, "            _rel = [a for a in asc2[\"ascensores\"]\n"
-         "                    if PP.propone_algo(PP.lineas_de(texto, a, tambien), plan0)]",
+         "                    if _propone(PP.lineas_de(texto, a, tambien))]",
      '            _rel = list(asc2["ascensores"])'),
 
     ("lo hecho en ESTA obra esconde el trabajo de otro ascensor (la tarjeta no sale)",
      # v586 · re-anclada: la vista previa se guarda en `_prev` para decir qué pasa cuando no
      # hay nada que confirmar (antes era la condición de un `if` y nada más).
-     UI, '_prev = PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))',
-     '_prev = PP.propuestas(texto, plan0, SP.acreditado(pid))'),
+     UI, '_prev = _props(texto, plan0, {} if partir else SP.acreditado(pid))',
+     '_prev = _props(texto, plan0, SP.acreditado(pid))'),
 
     ("«L2» nace contestado como ascensor",
      UI, 'index=None, horizontal=True, key="%s_dud_%s" % (kp, d))',
@@ -157,8 +160,9 @@ ROTURAS = [
 
     ("la fila nueva vuelve a salir mas CORTA que la cabecera (v363)",
      # ⚠️ Esta SÍ tiene que cambiar con cada columna: la rotura ES la fila una más corta.
-     DLG, '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", ""]',
-     '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", ""]'),
+     # v607 · una más: `Reading`.
+     DLG, '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", "", ""]',
+     '_hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", ""]'),
 
     ("la tarjeta sale tambien en los partes AJENOS (confirmar por quien no estuvo)",
      UI, "if (_mio and not DL.revisado(r)) else", "if (not DL.revisado(r)) else"),

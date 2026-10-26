@@ -85,9 +85,11 @@ ROTURAS = [
      UI, "t(\"Lines that don't name a lift\"), _opts, index=None,",
      "t(\"Lines that don't name a lift\"), _opts, index=0,"),
 
+    # ⚠️ v607 · re-anclada: la lista lleva ahora también lo que solo da el agente (empezadas,
+    # problemas, aparte). La rotura es la MISMA.
     ("un trozo sin nada que ensenar deja un «→ obra» vacio",
-     UI, '"retiradas", "fuera")):\n                continue\n',
-     '"retiradas", "fuera")) and False:\n                continue\n'),
+     UI, '"aparte")):\n                continue\n',
+     '"aparte")) and False:\n                continue\n'),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

@@ -11,11 +11,14 @@ caso normal —escribo hoy lo de hoy— no paga el precio de un widget más, y e
 invitado a tocarlo, y un parte con fecha equivocada es peor que uno sin fecha.
 """
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import streamlit as st
 
 from core import clock, daily_log as DL, flash, theme
 from core.i18n import t
+from core.maps import literal_md
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +104,9 @@ def _linea(r, puede_borrar, key_prefix, extra=None) -> None:
 _AVISO = {
     "incompleto": ":material/warning: The log says this is not finished yet.",
     "otro_dia": ":material/event: The log says this was done on another day.",
+    # v607 · el agente lo leyó como hecho, pero el parte lo lista bajo «Issues/Pending».
+    "bajo_pendiente": ":material/pending: Your log lists this under «Issues/Pending». Tick it "
+                      "only if it was finished.",
 }
 _OTRA = "__otra__"
 
@@ -210,10 +216,231 @@ def _pintar(p, k, titulo=True) -> dict:
     if p["fuera"]:
         st.caption(t(":material/block: Mentioned, but not in this job's plan: {x}",
                      x=", ".join(sorted({f["actividad"] for f in p["fuera"]}))))
+    _resto_agente(p)
     # ⚠️ Sin repetidos: la misma actividad puede salir en una etapa Y en una pregunta
     # («Lights»), y marcada en las dos el botón decía «3 marcadas» para 2 créditos.
     return {"marcadas": list(dict.fromkeys(tick)), "ofrecidas": ofr,
             "hechas": list(dict.fromkeys(hechas))}
+
+
+def _resto_agente(p) -> None:
+    """v607 · Lo que solo el agente distingue, para que ningún trozo del parte quede sin
+    decir qué pasó con él: lo EMPEZADO (no se acredita), los PROBLEMAS y lo que no es avance,
+    con su motivo. En las propuestas del vocabulario estas claves no existen: no pinta nada."""
+    _emp = p.get("empezadas") or []
+    if _emp:
+        st.caption(t(":material/pending: Started, not finished — not credited:") + "  \n"
+                   + "  \n".join("“%s”" % literal_md(x["texto"]) for x in _emp))
+    for x in p.get("problemas") or []:
+        st.caption(t(":material/report: Something the office should know:") + "  \n“%s”%s" % (
+            literal_md(x["texto"]), (" — %s" % literal_md(x["motivo"])) if x.get("motivo") else ""))
+    _ap = p.get("aparte") or []
+    if _ap:
+        # ⚠️ Cerrado: en el corpus real (examen C) es la tercera clase más frecuente —cabeceras
+        # del día, «Issues:», «No issues», viajes—, y abierto alargaba cada tarjeta en el móvil.
+        # Sigue ahí, con su motivo: nada se ignora, pero no estorba.
+        with st.expander(t(":material/info: Not progress on this job ({n})", n=len(_ap))):
+            st.caption("  \n".join(
+                "“%s”%s" % (literal_md(x["texto"]),
+                            (" — %s" % literal_md(x["motivo"])) if x.get("motivo") else "")
+                for x in _ap))
+
+
+# ═════════════════════════════════════════════════════════════════
+# v607 · El agente: lee el parte con el contexto de la obra (`parte_agente`)
+# ═════════════════════════════════════════════════════════════════
+# ⚠️ Regla de siempre: el agente PROPONE, el autor marca. Lo que cambia es QUIÉN lee el
+# parte: un modelo con el plan sellado, lo acreditado y el documento del oficio, en vez de
+# la lista de palabras. Si no puede (sin clave, error, tarda), la tarjeta sale como antes.
+_LECT = "_ag_lecturas"          # {log_id: lectura} leídas en ESTA sesión
+_FALLOS = "_ag_fallos"          # {log_id: (instante, motivo)}
+_RELEER = "_ag_releer"          # la petición de «leer otra vez» que dejó el botón
+# ⚠️ Un parte cuya lectura falló no se reintenta en cada recarga: cada intento puede tardar
+# hasta ~40 s (tiempo máximo y un reintento) con la pantalla quieta.
+_ESPERA_FALLO = 600
+
+_MOTIVOS = {
+    "timeout": "it took too long", "rate_limit": "too many requests right now",
+    "connection": "no connection to the assistant", "auth": "the assistant's key was rejected",
+    "refusal": "the assistant declined to read it", "json": "its answer could not be read",
+    "max_tokens": "its answer was cut short", "max_rondas": "it already read this log {n} times",
+}
+
+
+def _motivo(m) -> str:
+    from core import parte_agente as AG
+    _m = str(m or "")
+    if _m in _MOTIVOS:
+        return t(_MOTIVOS[_m], n=AG.MAX_RONDAS)
+    return t("an error from the assistant ({m})", m=_m or "?")
+
+
+def _lectura(r, plan) -> dict:
+    """La lectura del agente de este parte para este plan, si ya existe (de esta sesión o de
+    la hoja), o `{}`. ⚠️ No llama al modelo: eso solo lo hacen `_leer_pendientes` y
+    `_relectura`, arriba, antes de pintar."""
+    from core import parte_agente as AG
+    lid = str(r.get("ID", "") or "")
+    texto = str(r.get("Text", "") or "")
+    for reg in ((st.session_state.get(_LECT) or {}).get(lid), AG.de_json(r.get("Reading", ""))):
+        if reg and AG.vigente(reg, texto, plan):
+            return reg
+    return {}
+
+
+def _fallo(lid) -> str:
+    """El motivo si la lectura de este parte falló hace poco, o ""."""
+    _f = (st.session_state.get(_FALLOS) or {}).get(str(lid))
+    return _f[1] if _f and time.time() - _f[0] < _ESPERA_FALLO else ""
+
+
+def _apuntar(lecturas, fallos) -> None:
+    """Lo leído, a la sesión y a la hoja (`Reading`); lo fallido, a la sesión. ⚠️ Si la hoja
+    no lo guarda (cuota), la sesión sí: en esta sesión no se vuelve a pagar."""
+    if lecturas:
+        st.session_state.setdefault(_LECT, {}).update(lecturas)
+        from core import parte_agente as AG
+        ok, _n = DL.guardar_lecturas({k: AG.a_json(v) for k, v in lecturas.items()})
+        if not ok:
+            logger.warning("daily_log_ui: no se guardaron %d lecturas en la hoja", len(lecturas))
+    if fallos:
+        st.session_state.setdefault(_FALLOS, {}).update(
+            {k: (time.time(), m) for k, m in fallos.items()})
+
+
+def _plan_de(pid) -> list:
+    """El plan contra el que se lee: el de la obra, si se puede acreditar contra él."""
+    from core import projects as P
+    from core import stage_progress as SP
+    prj = P.get_project(pid) or {}
+    if not SP.plan_de_obra(prj) or SP.version_desfasada(prj):
+        return []
+    return SP.plan_de_obra(prj)
+
+
+def _leer_pendientes(pid, usuario, partes) -> None:
+    """Lee con el agente los partes PROPIOS sin revisar que aún no tienen lectura.
+
+    ⚠️ El primero SOLO y el resto en paralelo: llamadas simultáneas no comparten la caché del
+    prompt (cada una la escribe y la paga, medido: US$0,05 por parte en paralelo frente a
+    US$0,0065 leyendo de la caché), y el primero la deja escrita para los demás.
+    """
+    from core import parte_agente as AG
+    from core import stage_progress as SP
+    from core.i18n import idioma
+    _k = AG.clave_api()
+    if not AG.disponible(_k):
+        return
+    plan = _plan_de(pid)
+    if not plan:
+        return
+    falta = [r for r in partes
+             if str(r.get("Author", "")) == str(usuario) and not DL.revisado(r)
+             and str(r.get("Text", "")).strip() and not _lectura(r, plan)
+             and not _fallo(r.get("ID"))]
+    if not falta:
+        return
+    mapa, idi = SP.acreditado(pid), idioma()
+
+    def _uno(r):
+        return str(r.get("ID", "")), AG.leer(str(r.get("Text", "")), plan, str(r.get("Date", "")),
+                                            mapa, None, None, idi, _k)
+
+    with st.spinner(t("The assistant is reading your log…") if len(falta) == 1
+                    else t("The assistant is reading your {n} logs…", n=len(falta))):
+        res = [_uno(falta[0])]
+        if len(falta) > 1:
+            with ThreadPoolExecutor(max_workers=4) as ex:
+                res += list(ex.map(_uno, falta[1:]))
+    _apuntar({lid: reg for lid, (reg, _m) in res if reg},
+             {lid: m for lid, (reg, m) in res if not reg})
+
+
+def _pedir_relectura(lid, claves) -> None:
+    """`on_click` de «Read it again»: solo APUNTA lo que el autor escribió. La lectura —unos
+    segundos— se hace arriba, antes de pintar la lista (trampa 37: una acción lenta dentro de
+    un bloque con clave deja fantasmas)."""
+    resp = []
+    for linea, texto, k in claves:
+        v = str(st.session_state.get(k, "") or "").strip()
+        if v:
+            resp.append({"linea": linea, "texto": texto, "respuesta": v[:500]})
+    st.session_state[_RELEER] = {"lid": str(lid), "respuestas": resp}
+
+
+def _relectura(pid, usuario, partes) -> None:
+    """Atiende la petición de «Read it again»: una lectura NUEVA con la anterior y TODAS las
+    respuestas del autor como datos (`parte_agente.leer`)."""
+    pet = st.session_state.pop(_RELEER, None)
+    if not pet:
+        return
+    if not pet.get("respuestas"):
+        flash.aviso(t("Write what you meant first, then ask the assistant to read it again."))
+        st.rerun()
+    from core import parte_agente as AG
+    from core import stage_progress as SP
+    from core.i18n import idioma
+    r = next((x for x in partes if str(x.get("ID", "")) == pet["lid"]), None)
+    plan = _plan_de(pid)
+    # ⚠️ Solo el AUTOR y solo sin revisar: como confirmar (v523).
+    if r is None or str(r.get("Author", "")) != str(usuario) or DL.revisado(r) or not plan:
+        return
+    previa = _lectura(r, plan)
+    if not previa:
+        return
+    with st.spinner(t("The assistant is reading your log again…")):
+        reg, mot = AG.leer(str(r.get("Text", "")), plan, str(r.get("Date", "")),
+                           SP.acreditado(pid), previa,
+                           list(previa.get("respuestas") or []) + pet["respuestas"], idioma())
+    if reg:
+        _apuntar({pet["lid"]: reg}, {})
+        flash.exito(t("The assistant read your log again with your answers."))
+    else:
+        # ⚠️ Lo escrito NO se pierde: las cajas llevan la ronda en la clave y la ronda no
+        # avanzó, así que siguen con su texto para volver a intentarlo.
+        flash.error(t("The assistant could not read it again ({m}). What you wrote is still "
+                      "there: try again in a minute.", m=_motivo(mot)))
+    st.rerun()
+
+
+def _hablar(reg, lid, kp) -> None:
+    """Lo que el agente no entendió, con una caja para contestar cada cosa, otra para decirle
+    lo que se le escapó, y «Read it again». ⚠️ Es la parte de «preguntar» que pidió el
+    usuario: antes, lo que la app no reconocía no se enseñaba y parecía ignorado."""
+    from core import parte_agente as AG
+    _ronda = int(reg.get("rondas", 1) or 1)
+    claves = []
+    _dudas = AG.sin_entender(reg)
+    if _dudas:
+        st.markdown(t("**Not understood — tell the assistant what you meant**"))
+        for i, f in enumerate(_dudas):
+            _k = "%s_ag%d_%d" % (kp, _ronda, i)
+            st.text_input("“%s”" % literal_md(f.get("texto", "")), key=_k,
+                          placeholder=f.get("pregunta") or t("What did you mean?"))
+            claves.append((f.get("linea"), f.get("texto", ""), _k))
+    _kg = "%s_ag%d_gen" % (kp, _ronda)
+    with st.expander(t("Something missing or wrong? Tell the assistant"), icon=":material/chat:",
+                     key="%s_ag_exp%d" % (kp, _ronda)):
+        st.text_input(t("What it missed or got wrong"), key=_kg,
+                      placeholder=t("e.g. «the motor» was the machine on the bedplate"))
+    claves.append((0, "", _kg))
+    if _ronda < AG.MAX_RONDAS:
+        st.button(t(":material/refresh: Read it again with my answers"), key="%s_ag_releer" % kp,
+                  on_click=_pedir_relectura, args=(lid, claves), width="stretch")
+    else:
+        st.caption(t(":material/info: The assistant has read this log {n} times. Tick what is "
+                     "right here, and mark anything else in «Progress».", n=_ronda))
+
+
+def _sin_agente(lid) -> None:
+    """Cuando el agente está puesto pero NO pudo leer este parte: dicho, para que la lista de
+    palabras no se tome por lo que leyó el agente. Sin agente (sin clave), nada que decir."""
+    from core import parte_agente as AG
+    _m = _fallo(lid)
+    if _m and AG.disponible():
+        st.caption(t(":material/info: The assistant could not read this log ({m}), so this comes "
+                     "from the app's word list. It will try again in a few minutes.",
+                     m=_motivo(_m)))
 
 
 def _sin_plan(pid) -> str:
@@ -248,13 +475,16 @@ def _nada_que_confirmar(p) -> None:
         st.caption(":material/help: %s" % t(x["motivo"]))
     for x in p["no_avance"]:
         st.caption(":material/info: %s" % t(x["motivo"]))
-    if not (p["fuera"] or p["pendientes"] or p["retiradas"] or p["no_avance"]):
+    _resto_agente(p)
+    if not (p["fuera"] or p["pendientes"] or p["retiradas"] or p["no_avance"]
+            or p.get("empezadas") or p.get("problemas") or p.get("aparte")):
         st.caption(t(":material/search_off: The app did not recognise any activity of this job "
                      "in this log. If something advanced, mark it in «Progress»."))
 
 
 def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     """La tarjeta de UN parte propio y sin revisar."""
+    from core import parte_agente as AG
     from core import parte_propuestas as PP
     from core import projects as P
     from core import stage_progress as SP
@@ -270,24 +500,46 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
         return
 
     plan0 = SP.plan_de_obra(prj)
+    # v607 · Lo que leyó el agente, si lo leyó. Con lectura, TODO lo de abajo (ascensores,
+    # reparto, destinos) sale de ella; sin lectura, del vocabulario, como hasta v606.
+    reg = _lectura(r, plan0)
+
+    def _props(txt, plan, mapa, lineas=None):
+        if reg:
+            return AG.propuestas(reg, plan, mapa, texto, lineas)
+        return PP.propuestas(txt, plan, mapa)
+
+    def _propone(lineas):
+        if reg:
+            return AG.propone_algo(reg, plan0, lineas, texto)
+        return PP.propone_algo(lineas, plan0)
+
     asc = V.ascensores(texto)
     # ⚠️ Solo se pregunta por un «L2» si lo que colgaría de él PROPONE algo: preguntar
     # algo cuya respuesta no cambia nada es fricción, y enseña a contestar sin leer.
-    dudosos = [d for d in asc["dudosos"] if PP.propone_algo(PP.lineas_de(texto, d), plan0)]
+    dudosos = [d for d in asc["dudosos"] if _propone(PP.lineas_de(texto, d))]
     partir = asc["separar"] or bool(dudosos)
     tambien, asignacion = [], {"": str(pid)}
     ops = _asignables(usuario, grupo, pid) if partir else None
     # Vista previa: ¿hay algo que confirmar? Si no, no se pinta tarjeta. ⚠️ Si la nota se
     # va a repartir, sin lo acreditado: lo hecho depende de la obra de DESTINO, y con lo
     # de esta, un ascensor ya terminado aquí escondería el trabajo de otro.
-    _prev = PP.propuestas(texto, plan0, {} if partir else SP.acreditado(pid))
-    if not _prev["hay_algo"]:
+    _prev = _props(texto, plan0, {} if partir else SP.acreditado(pid))
+    # ⚠️ v607 · Con algo SIN ENTENDER también hay tarjeta: es donde se le contesta al agente.
+    if not _prev["hay_algo"] and not (reg and AG.sin_entender(reg)):
         _nada_que_confirmar(_prev)      # v586 · antes, nada debajo
+        if reg:
+            _hablar(reg, lid, kp)
+        else:
+            _sin_agente(lid)
         return
 
     with st.container(border=True):
-        st.markdown(t("##### :material/auto_awesome: What the app read in your log"))
+        st.markdown(t("##### :material/auto_awesome: What the assistant read in your log") if reg
+                    else t("##### :material/auto_awesome: What the app read in your log"))
         st.caption(t("Tick only what is true. Nothing is credited until you confirm."))
+        if not reg:
+            _sin_agente(lid)
         destinos = {str(pid): texto}
         # v524 · Lo que contestó y eligió, para el registro de la revisión.
         respuestas, elegidas = {}, {}
@@ -313,7 +565,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             # use by builders» no necesita obra. Lo que no tiene selector no se asigna, y lo
             # no asignado no se propone — con esas líneas, no había nada que proponer.
             _rel = [a for a in asc2["ascensores"]
-                    if PP.propone_algo(PP.lineas_de(texto, a, tambien), plan0)]
+                    if _propone(PP.lineas_de(texto, a, tambien))]
             # ⚠️ v525 · Y las líneas que NO nombran ascensor. Con la nota repartida, mandarlas
             # a la obra del parte era decidir por él (la 2B del usuario): «cleaned the pit»
             # puede ser de cualquiera de los dos. Selector propio, sin nada elegido, y solo
@@ -321,7 +573,8 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             # «Pendings» siga mandando sobre lo que va debajo.
             _sin_rel, _sin_ev = False, []
             if asc2["separar"] or tambien:
-                _p_sin = PP.propuestas("\n".join(PP.lineas_de(texto, "", tambien)), plan0, {})
+                _l_sin = PP.lineas_de(texto, "", tambien)
+                _p_sin = _props("\n".join(_l_sin), plan0, {}, _l_sin)
                 _sin_rel = _p_sin["hay_algo"]
                 for x in _p_sin["actividades"] + _p_sin["etapas"] + _p_sin["preguntas"]:
                     for l in x.get("pruebas") or []:
@@ -376,11 +629,14 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                 st.caption(t(":material/block: {x} has no stage plan to credit against.",
                              x=(ops or {}).get(d, d)))
                 continue
-            _p = PP.propuestas(txt, plan, SP.acreditado(d))
+            # v607 · Con la nota repartida, el agente solo enseña en cada destino los trozos
+            # de SUS líneas (las que `reparto` le dio); sin repartir, la nota entera.
+            _p = _props(txt, plan, SP.acreditado(d), None if txt == texto else txt.splitlines())
             # ⚠️ v525 · Un trozo sin NADA que enseñar no se pinta: «Install day 12» suelto,
             # repartido a la obra del parte, dejaba un «→ obra» sin nada debajo.
-            if not any(_p[k] for k in ("actividades", "etapas", "preguntas", "pendientes",
-                                       "retiradas", "fuera")):
+            if not any(_p.get(k) for k in ("actividades", "etapas", "preguntas", "pendientes",
+                                           "retiradas", "fuera", "empezadas", "problemas",
+                                           "aparte")):
                 continue
             # ⚠️ El destino se nombra también cuando es UNO solo pero no es esta obra:
             # «Install headers» a secas, debajo del parte de Lift 1, se leería como de Lift 1.
@@ -390,12 +646,17 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab)
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
+        if reg:
+            _hablar(reg, lid, kp)
 
         def _registro(nada):
             # ⚠️ Lo que se ENSEÑÓ y lo que se marcó, en la misma escritura que la revisión:
             # sin esto solo quedaba lo aceptado, y el acierto no se puede medir (v524).
+            # v607 · y QUIÉN lo leyó, para medir el agente aparte del vocabulario.
             return PP.registro(por_destino, respuestas, elegidas, app=_version_app(),
-                               nada=nada)
+                               nada=nada, lector=("%s/p%s" % (reg.get("modelo", ""),
+                                                              reg.get("prompt", "")))
+                               if reg else "")
 
         c1, c2 = st.columns([3, 2])
         if c1.button(t(":material/done_all: Confirm the {n} ticked", n=n) if n
@@ -520,6 +781,10 @@ def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
         return
     st.markdown("")
     st.caption(_cuantos(len(_mios), DL.dias_cubiertos(pid)))
+    # v607 · ANTES de pintar la lista: lo que pidió «Read it again» y los partes propios que
+    # el agente todavía no leyó (solo los que se van a enseñar).
+    _relectura(pid, usuario, _mios[:10])
+    _leer_pendientes(pid, usuario, _mios[:10])
     _hoy_txt = _hoy.strftime("%Y-%m-%d")
     for r in _mios[:10]:
         # Borrar solo lo PROPIO y solo lo de hoy — el módulo lo vuelve a comprobar;

@@ -14,7 +14,11 @@ numpy>=1.26.0,<2
 openpyxl>=3.1.0,<4
 reportlab>=4.0.0,<5
 # v538 · con tope de major, como el resto: sin él, un 2.0 entraría solo al reinstalar.
-anthropic>=0.25.0,<2
+# ⚠️ v607 · FIJO (==): el agente del parte usa la salida con esquema (`output_config`) y el
+# respaldo del servidor (`fallbacks`), que una 1.x vieja no tiene; y lo que prueba la suite
+# en local tiene que ser lo que corre en el Cloud (la lección de Streamlit, v531). 1.17.0 =
+# la última 1.x el 26/10/2026, la que instalaba el Cloud con `<2`.
+anthropic==1.17.0
 svglib>=1.5.0,<2
 gspread>=6.0.0,<7
 google-auth>=2.28.0,<3

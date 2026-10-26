@@ -89,9 +89,14 @@ _sin = {n: s for n, s in reqs.items()
         if n not in comps and n not in SIN_TOPE_PERMITIDO and not s.startswith("==")
         and "<" not in s}
 chk("⚠️ ningún paquete sin tope (`>=` a secas): la regla de v66", not _sin, _sin)
-chk("`anthropic` con tope de major y la versión instalada dentro",
-    "<2" in reqs.get("anthropic", "") and md.version("anthropic").split(".")[0] == "1",
-    (reqs.get("anthropic"), md.version("anthropic")))
+# ⚠️ v607 · `anthropic` va FIJO (==1.17.0: el agente del parte usa `output_config` y
+# `fallbacks`, que una 1.x vieja no tiene; lo vigila verif_v607). Fijo es un tope más estricto
+# que `<2`: vale cualquiera de los dos, siempre con lo instalado dentro.
+_an = reqs.get("anthropic", "")
+chk("`anthropic` con tope de major (o fijo) y la versión instalada dentro",
+    (("<2" in _an and md.version("anthropic").split(".")[0] == "1")
+     or (_an.startswith("==") and _an[2:] == md.version("anthropic"))),
+    (_an, md.version("anthropic")))
 chk("la única excepción es `tzdata`, y está en el requirements",
     SIN_TOPE_PERMITIDO <= set(reqs), SIN_TOPE_PERMITIDO - set(reqs))
 

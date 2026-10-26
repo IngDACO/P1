@@ -64,8 +64,11 @@ SHEET = "DailyLogs"
 # ⚠️ v524 · `Proposals` AL FINAL: lo que la pantalla OFRECIÓ y lo que se MARCÓ al revisar
 # (`parte_propuestas.registro`, JSON). Lo aceptado ya estaba en StageProgress; lo que se
 # dejó sin marcar no estaba en ningún sitio, y sin eso no se puede medir el acierto.
+# ⚠️ v607 · `Reading` AL FINAL: lo que LEYÓ el agente en el parte (`parte_agente`, JSON). Se
+# guarda para no volver a llamar al modelo en cada recarga —cada lectura cuesta— y para que
+# quede lo que vio el autor; distinto de `Proposals`, que es lo que REVISÓ.
 HEADERS = ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source", "Created",
-           "Reviewed", "ReviewedBy", "Proposals"]
+           "Reviewed", "ReviewedBy", "Proposals", "Reading"]
 
 # De dónde salió el parte. Hoy solo escrito a mano; cuando el intérprete proponga y
 # alguien acepte, poder distinguirlos es lo que permitirá medir si acierta.
@@ -216,11 +219,11 @@ def crear(pid, grupo, texto, autor, dia=None) -> tuple:
         # escritos en el mismo minuto empataban y salían en el orden equivocado. Es una
         # hoja nueva, así que no hay histórico que migrar por cambiar el formato — en
         # cualquier otra columna de fecha esto no sería gratis.
-        # ⚠️ La fila es POSICIONAL y va ENTERA: `Reviewed`, `ReviewedBy` y `Proposals` nacen
-        # vacías. (Una fila corta no desplazaría nada —`append_row` deja la cola vacía—,
-        # pero entera se comprueba contra la cabecera igual que las demás, v363.)
+        # ⚠️ La fila es POSICIONAL y va ENTERA: `Reviewed`, `ReviewedBy`, `Proposals` y
+        # `Reading` nacen vacías. (Una fila corta no desplazaría nada —`append_row` deja la
+        # cola vacía—, pero entera se comprueba contra la cabecera igual que las demás, v363.)
         w.append_row([lid, str(grupo), str(pid), _dia, str(autor), _txt, MANUAL,
-                      _hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", ""],
+                      _hoy.strftime("%Y-%m-%d %H:%M:%S"), "", "", "", ""],
                      value_input_option="RAW")
     except Exception as e:
         logger.warning("daily_log.crear(%s): %s", pid, e)
@@ -311,6 +314,38 @@ def marcar_revisado(log_id, quien, propuestas="") -> tuple:
         _invalidate()
         return True, t("Reviewed.")
     return False, t("Daily log not found.")
+
+
+def guardar_lecturas(lecturas) -> tuple:
+    """v607 · Guarda lo que leyó el agente: `{log_id: json}` → columna `Reading`, en UNA
+    escritura. Devuelve `(ok, cuántas)`.
+
+    ⚠️ No mira el autor: la lectura no cambia nada del parte (no lo revisa, no acredita), es
+    una caché que se puede rehacer. ⚠️ La fila se busca leyendo FRESCO (v323).
+    """
+    if not lecturas:
+        return True, 0
+    w = _ws()
+    if w is None:
+        return False, 0
+    try:
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("daily_log.guardar_lecturas: %s", e)
+        return False, 0
+    from core.num import col_letter
+    _c = col_letter(_COL["Reading"])
+    lote = [{"range": "%s%d" % (_c, i + 2), "values": [[str(lecturas[str(r.get("ID", ""))])]]}
+            for i, r in enumerate(recs) if str(r.get("ID", "")) in lecturas]
+    if not lote:
+        return False, 0
+    try:
+        w.batch_update(lote, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("daily_log.guardar_lecturas: %s", e)
+        return False, 0
+    _invalidate()
+    return True, len(lote)
 
 
 def borrar_de_obra(pid) -> int:

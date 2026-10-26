@@ -51,8 +51,9 @@ ROTURAS = [
     ("un componente fijado a una version que NO es la instalada",
      REQ, [("streamlit-folium==0.27.4", "streamlit-folium==0.27.3")]),
 
+    # v607 · re-anclada: `anthropic` va FIJO (==1.17.0). La rotura es la MISMA: sin tope.
     ("anthropic sin tope",
-     REQ, [("anthropic>=0.25.0,<2", "anthropic>=0.25.0")]),
+     REQ, [("anthropic==1.17.0", "anthropic>=1.17.0")]),
 
     ("un paquete nuevo sin tope",
      REQ, [("segno>=1.6,<2", "segno>=1.6,<2\nrequests>=2.0")]),

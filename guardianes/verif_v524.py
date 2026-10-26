@@ -85,8 +85,10 @@ class _Reloj:
 
 # ═════════════════════════════════════════════════════════════════
 sec("1. La columna nueva, al FINAL (v363)")
+# ⚠️ v607 · `[8:11]` y no `[-3:]`: `Reading` (lo que leyó el agente) va DETRÁS de `Proposals`
+# (la vigila verif_v607). Lo que esto protege no cambia: `Proposals`, justo tras las de v523.
 chk("`Proposals` va detrás de `Reviewed`/`ReviewedBy`, al final",
-    DL.HEADERS[-3:] == ["Reviewed", "ReviewedBy", "Proposals"], DL.HEADERS[-3:])
+    DL.HEADERS[8:11] == ["Reviewed", "ReviewedBy", "Proposals"], DL.HEADERS[8:])
 chk("...y las de v516 siguen en su sitio",
     DL.HEADERS[:8] == ["ID", "Group", "ProjectID", "Date", "Author", "Text", "Source",
                        "Created"], DL.HEADERS[:8])

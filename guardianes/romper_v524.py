@@ -82,8 +82,10 @@ ROTURAS = [
     ("el registro se escribe ENCIMA del texto del parte",
      DLG, 'col_letter(_COL["Proposals"])', 'col_letter(_COL["Text"])'),
 
+    # ⚠️ v607 · re-anclada: la cabecera lleva ahora `Reading` detrás (la rotura es la MISMA).
     ("`Proposals` se mete en MEDIO de la cabecera (todo se desplaza, v363)",
-     DLG, '"Reviewed", "ReviewedBy", "Proposals"]', '"Proposals", "Reviewed", "ReviewedBy"]'),
+     DLG, '"Reviewed", "ReviewedBy", "Proposals", "Reading"]',
+     '"Proposals", "Reviewed", "ReviewedBy", "Reading"]'),
 
     ("sin el primer recorte: un registro grande pierde los terminos de golpe",
      PPR, "    if len(s) > _TOPE_REGISTRO:\n        # Primero sin los t",
