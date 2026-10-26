@@ -171,7 +171,8 @@ def _pintar(p, k, titulo=True) -> dict:
     if p["actividades"]:
         if titulo:
             st.markdown(t("**Activities your log mentions**"))
-        for f in p["actividades"]:
+        _acts = p["actividades"]
+        for j, f in enumerate(_acts):
             _et = "#%d · %s" % (f["orden"], f["etapa"])
             if f["hecha"]:
                 _ya(f)
@@ -180,7 +181,14 @@ def _pintar(p, k, titulo=True) -> dict:
                 if st.checkbox(f["actividad"], key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
                                help=_et):
                     tick.append((f["orden"], f["actividad"]))
-            _prueba(f)
+            # ⚠️ v608 · Dos casillas seguidas que salen del MISMO trozo («Finished with rails
+            # cabin and cw» → rieles de cabina y de contrapeso) repetían la cita debajo de cada
+            # una (visto en el ensayo de v607 con los partes reales). Se dice UNA vez, debajo de
+            # la última — si el aviso o lo que cuenta cambian, cada una lleva la suya.
+            _sig = _acts[j + 1] if j + 1 < len(_acts) else None
+            if not (_sig and (_sig.get("pruebas") or []) == (f.get("pruebas") or [])
+                    and _sig.get("aviso") == f.get("aviso") and _sig.get("cuenta") == f.get("cuenta")):
+                _prueba(f)
     for _ie, e in enumerate(p["etapas"]):
         with st.expander(t(":material/checklist: Your log names «{e}» — which of these did "
                            "you finish?", e=e["termino"]), expanded=True, key="%s_exp_%d" % (k, _ie)):
@@ -231,9 +239,8 @@ def _resto_agente(p) -> None:
     if _emp:
         st.caption(t(":material/pending: Started, not finished — not credited:") + "  \n"
                    + "  \n".join("“%s”" % literal_md(x["texto"]) for x in _emp))
-    for x in p.get("problemas") or []:
-        st.caption(t(":material/report: Something the office should know:") + "  \n“%s”%s" % (
-            literal_md(x["texto"]), (" — %s" % literal_md(x["motivo"])) if x.get("motivo") else ""))
+    # (Los PROBLEMAS no van aquí desde v608: van una vez por parte, con su «Tell the office»,
+    # en `_problemas`.)
     _ap = p.get("aparte") or []
     if _ap:
         # ⚠️ Cerrado: en el corpus real (examen C) es la tercera clase más frecuente —cabeceras
@@ -393,6 +400,8 @@ def _relectura(pid, usuario, partes) -> None:
                            SP.acreditado(pid), previa,
                            list(previa.get("respuestas") or []) + pet["respuestas"], idioma())
     if reg:
+        # v608 · Lo ya enviado a la oficina sigue enviado en la lectura nueva.
+        reg["avisos"] = list(previa.get("avisos") or [])
         _apuntar({pet["lid"]: reg}, {})
         flash.exito(t("The assistant read your log again with your answers."))
     else:
@@ -430,6 +439,105 @@ def _hablar(reg, lid, kp) -> None:
     else:
         st.caption(t(":material/info: The assistant has read this log {n} times. Tick what is "
                      "right here, and mark anything else in «Progress».", n=_ronda))
+
+
+# ═════════════════════════════════════════════════════════════════
+# v608 · «Tell the office»: un PROBLEMA del parte, convertido en alarma con un toque
+# ═════════════════════════════════════════════════════════════════
+# Decisión del usuario (27/10/2026). Lo que el agente marca como problema («Dropsaw was broken»,
+# «Missing bolts and clips», «machine room is not ready») se veía en la tarjeta y nadie se
+# enteraba. Ahora, junto a cada uno, un botón: el autor ve el texto, lo corrige y lo manda —
+# `alerts.report_problem`, el MISMO aviso que «Report a problem» de Avisos (alarma abierta +
+# Telegram/correo a los admins del grupo y a los propietarios). ⚠️ Nada es automático.
+_AVISAR = "_ag_avisar"          # la petición que dejó «Send to the office»
+
+
+def _texto_aviso(tx, r) -> str:
+    """Lo que recibe la oficina, ANTES de que el autor lo corrija: sus palabras y de qué parte
+    salen. Nada redactado por el modelo."""
+    return "%s\n\n%s" % (tx, t("(From the daily log of {d}, {i}.)", d=_dmy(r.get("Date")),
+                              i=r.get("ID", "")))
+
+
+def _abrir_aviso(ko, i) -> None:
+    st.session_state[ko] = i
+
+
+def _cerrar_aviso(ko) -> None:
+    st.session_state.pop(ko, None)
+
+
+def _pedir_aviso(lid, texto, kt, ko) -> None:
+    """`on_click` de «Send to the office»: solo APUNTA. El envío —escribe la alarma y avisa por
+    Telegram/correo, segundos— se hace arriba, antes de pintar la lista (trampa 37)."""
+    st.session_state[_AVISAR] = {"lid": str(lid), "texto": str(texto),
+                                 "mensaje": str(st.session_state.get(kt, "") or "").strip()}
+    st.session_state.pop(ko, None)
+
+
+def _avisar(pid, grupo, usuario, partes) -> None:
+    """Atiende «Send to the office». Lo enviado queda en la lectura (`avisos`): el trozo deja de
+    ofrecer el botón y no se avisa dos veces, tampoco en otra sesión."""
+    pet = st.session_state.pop(_AVISAR, None)
+    if not pet:
+        return
+    if not pet.get("mensaje"):
+        flash.aviso(t("Write what the office should know first."))
+        st.rerun()
+    r = next((x for x in partes if str(x.get("ID", "")) == pet["lid"]), None)
+    plan = _plan_de(pid)
+    # ⚠️ Solo el AUTOR, desde su parte sin revisar (la tarjeta es suya, v523).
+    if r is None or str(r.get("Author", "")) != str(usuario) or DL.revisado(r) or not plan:
+        return
+    reg = _lectura(r, plan)
+    if not reg or pet["texto"] in {a.get("texto") for a in reg.get("avisos") or []}:
+        return
+    from core import alerts
+    from core import projects as P
+    _prj = P.get_project(pid) or {}
+    with st.spinner(t("Sending to the office…")):
+        ok, res = alerts.report_problem(pid, grupo, pet["mensaje"][:1000], usuario,
+                                        str(_prj.get("Name", "") or pid))
+    if ok:
+        _apuntar({pet["lid"]: dict(reg, avisos=list(reg.get("avisos") or [])
+                                   + [{"texto": pet["texto"], "alerta": str(res)}])}, {})
+        flash.exito(t("Sent to the office ({a}). The administrators get it by Telegram and email.",
+                      a=res))
+    else:
+        flash.error(t("Could not send it ({m}). Try again in a minute.", m=res))
+    st.rerun()
+
+
+def _problemas(reg, r, kp) -> None:
+    """Los trozos que el agente marcó como PROBLEMA, UNA vez por parte (no por destino), cada uno
+    con «Tell the office»; lo ya enviado, con su alarma."""
+    _fr = [f for f in reg.get("fragmentos") or [] if f.get("clase") == "problem"]
+    if not _fr:
+        return
+    _ya = {a.get("texto"): a.get("alerta") for a in reg.get("avisos") or []}
+    lid = str(r.get("ID", "") or "")
+    _ko = "%s_pb_open" % kp
+    st.markdown(t("**:material/report: Something the office should know**"))
+    for i, f in enumerate(_fr):
+        tx = f.get("texto", "")
+        st.caption("“%s”%s" % (literal_md(tx), (" — %s" % literal_md(f["motivo"]))
+                                if f.get("motivo") else ""))
+        if tx in _ya:
+            st.caption(t(":material/check: Sent to the office ({a}).", a=_ya[tx]))
+            continue
+        if st.session_state.get(_ko) != i:
+            st.button(t(":material/campaign: Tell the office"), key="%s_pb%d" % (kp, i),
+                      type="tertiary", on_click=_abrir_aviso, args=(_ko, i))
+            continue
+        _kt = "%s_pb_txt%d" % (kp, i)
+        st.text_area(t("What the office will receive"), value=_texto_aviso(tx, r), key=_kt,
+                     height=110)
+        c1, c2 = st.columns(2)
+        c1.button(t(":material/send: Send to the office"), key="%s_pb_env%d" % (kp, i),
+                  type="primary", width="stretch", on_click=_pedir_aviso,
+                  args=(lid, tx, _kt, _ko))
+        c2.button(t("Cancel"), key="%s_pb_no%d" % (kp, i), type="tertiary", width="stretch",
+                  on_click=_cerrar_aviso, args=(_ko,))
 
 
 def _sin_agente(lid) -> None:
@@ -529,6 +637,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     if not _prev["hay_algo"] and not (reg and AG.sin_entender(reg)):
         _nada_que_confirmar(_prev)      # v586 · antes, nada debajo
         if reg:
+            _problemas(reg, r, kp)
             _hablar(reg, lid, kp)
         else:
             _sin_agente(lid)
@@ -647,6 +756,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
         if reg:
+            _problemas(reg, r, kp)
             _hablar(reg, lid, kp)
 
         def _registro(nada):
@@ -784,6 +894,7 @@ def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
     # v607 · ANTES de pintar la lista: lo que pidió «Read it again» y los partes propios que
     # el agente todavía no leyó (solo los que se van a enseñar).
     _relectura(pid, usuario, _mios[:10])
+    _avisar(pid, grupo, usuario, _mios[:10])
     _leer_pendientes(pid, usuario, _mios[:10])
     _hoy_txt = _hoy.strftime("%Y-%m-%d")
     for r in _mios[:10]:
