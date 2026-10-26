@@ -10,6 +10,28 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA CITA UNA VEZ Y «TELL THE OFFICE» (v608)
+
+Decisión del usuario (27/10/2026): «dale con 3 y 4», de la auditoría tras v607.
+
+(3) Visto en el ensayo de v607 con los partes reales: dos casillas seguidas que salen del MISMO trozo
+(«Finished with rails cabin and cw» → rieles de cabina y de contrapeso) repetían la cita debajo de
+cada una. → `_pintar` la dice UNA vez, debajo de la última (si el aviso o lo que cuenta cambian, cada
+una lleva la suya). Vale también para la tarjeta del vocabulario.
+
+(4) Lo que el agente marca como PROBLEMA («Dropsaw was broken», «Missing bolts and clips», «machine
+room is not ready»; 240 trozos en las 1070 notas de Simpro) se veía y nadie se enteraba. → `_problemas`
+los enseña UNA vez por parte (también sin tarjeta), cada uno con «Tell the office»: se abre una caja
+con SUS palabras y de qué parte salen, el autor la corrige y «Send to the office» llama a
+`alerts.report_problem` (el mismo aviso que «Report a problem» de Avisos: alarma abierta +
+Telegram/correo a los admins del grupo y a los propietarios). El envío se hace arriba, antes de
+pintar (trampa 37). Lo enviado queda en la lectura (`avisos`: trozo → ALR-####): no se ofrece otra
+vez, ni tras una recarga, ni tras «Read it again», ni en otra sesión, y un doble toque no manda dos.
+Caja vacía: no manda; «Cancel» cierra; un fallo lo dice y el botón sigue. En producción NO se pulsó
+(avisaría a personas reales): lo prueba verif_v608 con la alarma interceptada.
+
+PRODUCCIÓN (27/10/2026, v608 en la etiqueta, cuenta admin): PRJ-0034 y sus 5 partes se pintan sin error. «Tell the office» NO se pulsó en producción (avisaría a los admins y propietarios reales) y los partes de prueba no tienen trozos de problema: lo prueba verif_v608 con la alarma interceptada; la cita una vez, también en verif_v608, con la tarjeta del agente y la del vocabulario · verif_v608 23/23 (la 1ª vuelta, 2 rojos de la SONDA: el modelo sustituido contestaba con un problema a CUALQUIER texto, y «Installed sills and frames» el vocabulario solo lo parte en uno —justo lo que v607 vino a arreglar— → «Installed headers and installed frames») · romper_v608 12/12 + control, a la primera · re-corridas: romper_v607 37/37, v523 30/30, v524 19/19, v525 16/16, v586 15/15, v559 35/35 · check_anclas_roturas: 2088 vivas, 0 muertas · suite 235 verde con Python 3.12.10 (2004 s, a la primera)
+
 ## EL AGENTE DEL PARTE DIARIO (v607)
 
 Decisión del usuario (26/10/2026), tras ver que el parte «no está tomando todo lo que le escribo, no
@@ -14961,7 +14983,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v607 = actual)
+## Versiones desplegadas (v608 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -14969,6 +14991,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v608 | **La cita una vez y «Tell the office».** Dos casillas del mismo trozo repetían la cita → una vez; lo que el agente marca como problema se veía y nadie se enteraba → «Tell the office» (el autor corrige el texto y lo manda como alarma + Telegram/correo; lo enviado no se ofrece otra vez). PRODUCCIÓN (27/10/2026, v608 en la etiqueta, cuenta admin): PRJ-0034 y sus 5 partes se pintan sin error. «Tell the office» NO se pulsó en producción (avisaría a los admins y propietarios reales) y los partes de prueba no tienen trozos de problema: lo prueba verif_v608 con la alarma interceptada; la cita una vez, también en verif_v608, con la tarjeta del agente y la del vocabulario · verif_v608 23/23 (la 1ª vuelta, 2 rojos de la SONDA: el modelo sustituido contestaba con un problema a CUALQUIER texto, y «Installed sills and frames» el vocabulario solo lo parte en uno —justo lo que v607 vino a arreglar— → «Installed headers and installed frames») · romper_v608 12/12 + control, a la primera · re-corridas: romper_v607 37/37, v523 30/30, v524 19/19, v525 16/16, v586 15/15, v559 35/35 · check_anclas_roturas: 2088 vivas, 0 muertas · suite 235 verde con Python 3.12.10 (2004 s, a la primera) |
 | v607 | **El agente del parte diario (Sonnet 5.5).** El parte se leía con una lista de palabras: «Installed yoke, platform, walls, and ceiling» daba solo el yoke y lo demás parecía ignorado → un modelo lo lee entero con el plan, lo acreditado y el documento del oficio, lo reparte en trozos (nada sin casilla), PREGUNTA lo que no entiende y relee con las respuestas; el autor sigue marcando. Examen A 14/14 (vocabulario 2/14), B 34/40 sin errores (23/40), C 1070 notas a US$0,0068. PRODUCCIÓN (27/10/2026, v607 en la etiqueta; el usuario como campo000 en PRJ-0034): la hoja creó `Reading` al final; LOG-0003 («Isntalled the tank…», del que el vocabulario no sacaba nada) leído EN EL CLOUD por claude-sonnet-5-5 en 2,7 s con el documento del oficio entero (ref 40366): «Install CW tank» propuesto y marcado; un parte NUEVO («Installed rails, installed bedplate, installed motor, finished headroom wiring, span the motor, starting beling») leído en 3,9 s LEYENDO DE LA CACHÉ (18433 tokens, ≈US$0,009): 3 hechos (electrical boxes, wire all boxes, spin motor), 2 preguntas (los rieles; el bedplate, ya acreditado), «installed motor» no entendido con su pregunta y «starting beling» empezado SIN acreditar; el usuario marcó 6 y StageProgress tiene las 6 con origen «log», el ID del parte y su día; el registro dice `lector` claude-sonnet-5-5/p1. Antes, el ensayo como campo000 con los datos reales (modelo de verdad, sin escribir) dio la misma tarjeta para LOG-0003. ⚠️ Visto en el ensayo (propuesto y hecho en v608): la misma cita repetida bajo dos casillas del mismo trozo · verif_v607 94/94 (la 1ª vuelta, 3 rojos de la SONDA: 12 caracteres contra un texto de 13, y los avisos de `flash` son st.success/st.warning, que no miraba) · verif_v524 al día con su razón (`Reading` va detrás de `Proposals`) · romper_v607 37/37 + control (35 en la 1ª tanda; las dos de las atribuciones y de `ref`, añadidas después) · re-corridas: romper_v516 20/20, v523 30/30 (3 re-ancladas + la fila), v524 19/19 (re-anclada), v525 16/16 (re-anclada), v526 9/9, v528 19/19, v529 5/5, v537 8/8, v538 6/6 (re-anclada; verif_v538 al día: `anthropic` fijo vale como tope), v559 35/35, v586 15/15 · check_anclas_roturas: 2075 vivas, 0 muertas · suite 234 verde con Python 3.12.10 (2062 s, a la primera) |
 | v606 | **Library: las píldoras, solo las que tienen piezas (Library cerrada).** Con un filtro salían secciones a cero que en la fila del móvil solo estorbaban → las que tienen piezas, más la elegida. PRODUCCIÓN (26/10/2026, cuenta admin, v606 en la etiqueta), con las 750 piezas reales: sin filtros, las 16 secciones; con «Documents», solo las 11 que tienen documentos y ninguna a cero (suman 218; en v605 salían también «Controller · 0», «Shaft · 0»…); «Documentation» elegida (3 documentos) y después «Photos»: «Documentation · 0» SIGUE a la vista y marcada —para poder soltarla— junto a las 15 con fotos, con «Nothing matches those filters.» y «Show all». Library, cerrada · romper_v606 3/3 + control, a la primera · verif_v606 6/6 a la primera · romper_v520 re-anclada (la lista de secciones), 12/12 · re-corridas: romper_v605 11/11, v604 35/35 · check_anclas_roturas: 2037 vivas, 0 muertas · suite 233 verde con Python 3.12.10 (1933 s, a la primera) |
 | v605 | **Lo visto verificando v604 en Library.** ⚠️ El «(n/m)» se cortaba en títulos largos (la tabla y 9 de 9 miniaturas en el móvil) → columna «Page», la primera, e insignia sobre la foto; ⚠️ las 16 píldoras ocupaban ~320 px en el móvil → una fila que se desliza, con la elegida la primera. PRODUCCIÓN (26/10/2026, cuenta admin, v605 en la etiqueta), con las 750 piezas reales: las 9 insignias de la 1ª página a 6 px de la esquina de su foto («1/2», «2/2», «1/3»…); en el móvil (375) las secciones en UNA fila de 66 px que se desliza (2011 en 353; en v604, ~320 px) y la galería a 758 px (en v604, 958); elegir «Signalling» la pone la PRIMERA de la fila y filtra («2 items»); la tabla de documentos con «Page» primera («1/7», «2/7»…, leído del canvas) y el título limpio al lado. ⚠️ Visto verificando (propuesto): con un filtro, las píldoras enseñan secciones a CERO («Controller · 0») que en la fila del móvil solo estorban · romper_v605 11/11 + control, a la primera · verif_v605 12/12 · verif_v604 al día con su razón (la página ya no va al final del título) · ⚠️ romper_v604 dejó escapar «la galería vuelve a apilarse»: verif_v604 buscaba «nowrap» en el FICHERO y v605 lo puso también en el CSS de las secciones (trampa 2) → la regla exacta de la galería, 35/35 · re-corridas: romper_v598 10/10 · check_anclas_roturas: 2033 vivas, 0 muertas · suite 232 verde con Python 3.12.10 (1958 s, a la primera) |
