@@ -265,11 +265,16 @@ chk("«Page 1 of 3» y plurales de verdad («27 photos», «31 items»)",
     _caps(at, "Page") == ["Page 1 of 3"] and "27 photos" in _txt(at) and "31 items" in _txt(at), _caps(at, "Page"))
 _css = fuente("core/library_ui.py")
 chk("⚠️ el CSS: 3 por fila sin apilar (`nowrap`) y el botón ENCIMA de toda la pieza (`absolute`, `inset:0`)",
-    "flex-wrap:nowrap!important" in _css and "position:absolute!important;inset:0" in _css
+    # (v605 · la regla EXACTA de la galería: «nowrap» suelto lo lleva también el CSS de las
+    # secciones, y quitárselo a la galería escapaba — trampa 2)
+    ".st-key-lib_gal [data-testid='stHorizontalBlock']{flex-wrap:nowrap!important" in _css
+    and "position:absolute!important;inset:0" in _css
     and "height:100%!important;opacity:0" in _css)
 _at3 = _app(_lib_pag=2)                                # las dos repetidas están en la página 3
-chk("el número de página en la pieza repetida («Counterweight frame bottom (1/2)» y «(2/2)»)",
-    "Counterweight frame bottom (1/2)" in _txt(_at3) and "Counterweight frame bottom (2/2)" in _txt(_at3))
+# (v605 · el número va en una INSIGNIA sobre la foto: al final del título lo cortaba el límite
+# de 2 líneas en el móvil)
+chk("el número de página en la pieza repetida (insignias «1/2» y «2/2»)",
+    '<div class="lib-pag">1/2</div>' in _txt(_at3) and '<div class="lib-pag">2/2</div>' in _txt(_at3))
 _clic(at, "lib_next")
 chk("⚠️ «Next» pasa de página y BAJA al principio de la galería (se quedaba en los botones)",
     _caps(at, "Page") == ["Page 2 of 3"] and any(".st-key-lib_gal" in s for s in _ss(at, "_LL", [])[-3:]))
@@ -292,9 +297,11 @@ chk("⚠️ volver: la galería en la página de ESA foto (la 3) y bajando a ell
     and any(".st-key-lib_gal" in s for s in _ss(at, "_LL", [])[-3:]), (_ss(at, "_lib_pag"), _caps(at, "Page")))
 at.get("button_group")[0].set_value("Landing doors").run()
 _df = at.dataframe[0].value
-chk("⚠️ la tabla: «… — manual page (1/30)», «Manual» y DD/MM/YYYY (eran «photo» y ISO)",
-    list(_df["Title"])[0] == "Landing door SEMATIC 2000 — manual page (1/30)" and list(_df["Type"])[0] == "Manual"
-    and list(_df["Date"])[0] == "28/09/2026", (list(_df["Title"])[:1], list(_df["Type"])[:1], list(_df["Date"])[:1]))
+# (v605 · la página, su propia columna «Page», la PRIMERA: al final del título la cortaba el ancho)
+chk("⚠️ la tabla: página «1/30», «Manual» y DD/MM/YYYY (eran «photo» y ISO)",
+    list(_df["Page"])[0] == "1/30" and list(_df["Title"])[0] == "Landing door SEMATIC 2000 — manual page"
+    and list(_df["Type"])[0] == "Manual" and list(_df["Date"])[0] == "28/09/2026",
+    (list(_df["Page"])[:1], list(_df["Title"])[:1], list(_df["Type"])[:1], list(_df["Date"])[:1]))
 chk("…sin la columna Model cuando no hay ningún modelo (era «—» entero)", "Model" not in _df.columns, list(_df.columns))
 _g = _ss(at, "_lib_tbl_gen", 0)
 at.session_state["lib_tbl_%d" % _g] = {"selection": {"rows": [], "columns": [], "cells": [(2, "Title")]}}

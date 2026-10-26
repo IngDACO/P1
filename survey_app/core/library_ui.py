@@ -52,11 +52,28 @@ _CSS_GALERIA = (
     ".st-key-lib_gal [class*='st-key-libfoto_'] button{width:100%!important;height:100%!important;opacity:0}"
     ".st-key-lib_gal img{border-radius:8px}"
     ".st-key-lib_gal .lib-ph{aspect-ratio:1/1;border-radius:8px;background:#eef1f5}"
+    # v605 · la insignia «3/30», FUERA del flujo (su bloque ocupaba sitio y la subía 10 px)
+    ".st-key-lib_gal [data-testid='stElementContainer']:has(.lib-pag){position:absolute!important;"
+    "top:6px;left:6px;z-index:1;width:auto!important;pointer-events:none}"
+    ".st-key-lib_gal .lib-pag{background:rgba(26,58,92,.85);color:#fff;font-size:12px;font-weight:600;"
+    "padding:1px 7px;border-radius:10px}"
     ".st-key-lib_gal .lib-tt{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;"
     "-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}"
     ".st-key-lib_gal .lib-ts{font-size:12px;color:#667080;white-space:nowrap;overflow:hidden;"
     "text-overflow:ellipsis}"
     "</style>")
+
+
+# v605 · en estrecho (≤700 px de bloque) las 16 secciones, UNA fila que se desliza de lado: en el
+# móvil ocupaban ~320 px y la galería empezaba a 958 (medido). La ELEGIDA va la primera
+# (`aria-checked`, el contrato de accesibilidad del `st.pills`), para que no quede escondida.
+_CSS_SECCIONES = (
+    "<style>.st-key-lib_secs{container-type:inline-size}"
+    "@container (max-width:700px){"
+    ".st-key-lib_secs [data-testid='stButtonGroup']>div{flex-wrap:nowrap!important;"
+    "overflow-x:auto!important;padding-bottom:6px}"
+    ".st-key-lib_secs [data-testid='stButtonGroup'] button{flex:0 0 auto!important}"
+    ".st-key-lib_secs [data-testid='stButtonGroup'] button[aria-checked='true']{order:-1}}</style>")
 
 
 def _rol() -> str:
@@ -112,6 +129,12 @@ def _fecha(v) -> str:
     if not s:
         return "—"
     return (dmy(s[:10]) + (" " + s[11:16] if len(s) >= 16 else "")).strip()
+
+
+def _pagina(it, pags) -> str:
+    """«3/30» si la pieza comparte título con otras (si no, nada)."""
+    nm = pags.get(str(it.get("ID", "")))
+    return "%d/%d" % nm if nm else ""
 
 
 def _titulo(it, pags) -> str:
@@ -287,6 +310,7 @@ def _secciones(base, r):
     for i in base:
         _n[str(i.get("Section", ""))] = _n.get(str(i.get("Section", "")), 0) + 1
     _ops = [s for s in LIB.SECCIONES if r["por_seccion"].get(s)]
+    st.markdown(_CSS_SECCIONES, unsafe_allow_html=True)
     with st.container(key="lib_secs"):
         _PU._bajar_a("lib_secs", "_bajar_lib_secs", bloque="start")
         return st.pills(t("Section"), _ops, selection_mode="single", key="lib_seccion",
@@ -344,12 +368,17 @@ def _galeria(fotos, pags, _PU):
                 _lid = str(it.get("ID", ""))
                 _mini = _minis.get(str(it.get("DriveID", "")).strip())
                 with _c.container(key="libtile_%s" % _lid):
+                    _pg = _pagina(it, pags)
+                    if _pg:
+                        # ⚠️ v605 · el número, una INSIGNIA sobre la foto: al final del título lo
+                        # cortaba el límite de 2 líneas (en el móvil, 9 de 9 miniaturas)
+                        st.markdown('<div class="lib-pag">%s</div>' % _pg, unsafe_allow_html=True)
                     if _mini:
                         st.image(_mini, width="stretch")
                     else:
                         st.markdown('<div class="lib-ph"></div>', unsafe_allow_html=True)
                     st.markdown('<div class="lib-tt">%s</div><div class="lib-ts">%s</div>' % (
-                        _h.escape(_titulo(it, pags)),
+                        _h.escape(str(it.get("Title", "")).strip()),
                         _h.escape("%s · %s" % (_etiqueta(it), t(str(it.get("Section", "")))))),
                         unsafe_allow_html=True)
                     # la pieza ENTERA se toca: el botón va encima, transparente (_CSS_GALERIA)
@@ -370,8 +399,12 @@ def _tabla(items, pags, _PU):
         _PU._bajar_a("lib_docs", "_bajar_lib_docs", bloque="start")
         T.section(t("Documents"), _plural(len(items), "{n} item", "{n} items"))
         _con_modelo = any(str(it.get("Model", "")).strip() for it in items)
+        _con_pagina = any(_pagina(it, pags) for it in items)
         df = pd.DataFrame([{
-            "Title": _titulo(it, pags),
+            # ⚠️ v605 · la página, su PROPIA columna y la primera: al final del título la cortaba
+            # el ancho («… — installation ste…» sin su «(2/7)», medido en producción)
+            **({"Page": _pagina(it, pags)} if _con_pagina else {}),
+            "Title": str(it.get("Title", "")).strip(),
             "Brand": str(it.get("Brand", "")) or "—",
             **({"Model": str(it.get("Model", "")) or "—"} if _con_modelo else {}),
             "Section": t(str(it.get("Section", ""))),
@@ -388,7 +421,8 @@ def _tabla(items, pags, _PU):
                            column_config=tabla.cfg(None, {
                                # v604 · más ancho: el título se cortaba donde se distingue
                                # (sin fijar: más ancho que el móvil, taparía las demás)
-                               "Title": st.column_config.TextColumn(t("Title"), width=340)}))
+                               "Title": st.column_config.TextColumn(t("Title"), width=340),
+                               "Page": st.column_config.TextColumn(t("Page"), width=56)}))
         _s = _ev.selection            # v598 · la fila de la CELDA tocada (o la de la casilla)
         _sr = [c[0] for c in (getattr(_s, "cells", None) or [])] or list(getattr(_s, "rows", None) or [])
         if _sr and _sr[0] < len(items):
