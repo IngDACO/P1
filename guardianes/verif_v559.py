@@ -205,6 +205,14 @@ def _rm_foto(grupo=None):
                     m[_k] = 0.0
     return m
 auth.rate_map = _rm_foto
+# ⚠️ v613 · La POLÍTICA de contacto también, como el día de la foto: Telegram exigido y bot presente.
+# Desde v613 (decisión del usuario) el Telegram no se exige por ahora, y «helper leader» —con email,
+# sin Telegram— dejó de salir en el aviso de contacto: este guardián perdía su caso. Lo que vigila
+# (el aviso enseña el NOMBRE, no el login) no depende de la política; la política la vigila verif_v613.
+from core import notify as _NT
+_NT.TELEGRAM_OBLIGATORIO_CAMPO = True
+_NT.telegram_configured = lambda: True
+_NT.bot_username = lambda: "copex_bot"
 PU._detalle_proyecto("PRJ-0015", "cliente1")
 '''
 at = AppTest.from_string(GUION_REAL, default_timeout=240)

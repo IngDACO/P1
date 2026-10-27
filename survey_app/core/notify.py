@@ -61,6 +61,32 @@ def bot_username() -> str:
     return str(_sec("TELEGRAM_BOT_USERNAME", "")).lstrip("@")
 
 
+# ── ¿Qué contacto necesita un usuario de campo para usar la app? (v613) ──────
+# ⚠️ Decisión del usuario (27/10/2026): «vamos a desactivar POR AHORA que se tenga que ligar a un
+# Telegram para poder loguear», para probar con más usuarios de campo ficticios — un chat_id es una
+# conversación REAL y no se inventa, así que con el Telegram obligatorio solo podía entrar uno. El
+# email SIGUE siendo obligatorio. Para volver a exigirlo: True (la puerta de `app.py`, el resumen
+# del admin y los paneles de usuarios leen esta MISMA regla: `contacto_campo_ok`).
+TELEGRAM_OBLIGATORIO_CAMPO = False
+
+
+def exige_telegram_campo() -> bool:
+    """¿Se le exige el Telegram al campo? Solo si la política lo pide Y el bot existe (v368: no
+    se exige un canal que no hay — sería un bloqueo sin salida)."""
+    return bool(TELEGRAM_OBLIGATORIO_CAMPO and telegram_configured() and bot_username())
+
+
+def contacto_campo_ok(u) -> bool:
+    """La UNA definición de «el contacto de este usuario de campo está completo» (v613): el
+    email siempre; el Telegram, solo si se exige. Antes la puerta, el resumen del admin y tres
+    paneles pedían los dos por su cuenta: con la política cambiada habrían dicho «no puede usar
+    la app» de quien sí puede."""
+    u = u or {}
+    if not str(u.get("Email", "")).strip():
+        return False
+    return (not exige_telegram_campo()) or bool(str(u.get("TelegramChatID", "")).strip())
+
+
 def _tg(method: str) -> str:
     return f"https://api.telegram.org/bot{_sec('TELEGRAM_BOT_TOKEN')}/{method}"
 

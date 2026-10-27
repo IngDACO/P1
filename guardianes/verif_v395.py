@@ -66,8 +66,12 @@ check("campo y gestores son listas distintas", set(_u) & set(_campo), set())
 _src = (BASE / "core" / "admin_digest.py").read_text(encoding="utf-8")
 check("el gestor se mide con OR (basta un canal)",
       'str(u.get("Email", "")).strip()\n                    or str(u.get("TelegramChatID", "")).strip()' in _src)
-check("el campo se sigue midiendo con AND (ambos obligatorios)",
-      'str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()' in _src)
+# ⚠️ v613 · AL DÍA CON SU RAZÓN (regla v385): exigía el «email Y Telegram» escrito aquí a mano. Desde
+# v613 el campo se mide con la regla de la PUERTA (`notify.contacto_campo_ok`: email siempre, el
+# Telegram solo si se exige — por ahora no, decisión del usuario). Lo que protege sigue entero: el
+# campo y los gestores con criterios DISTINTOS (v325) — el gestor, con OR, comprobado arriba.
+check("el campo se mide con la regla de la puerta (`contacto_campo_ok`), no con el OR del gestor",
+      "_nt.contacto_campo_ok(u)" in _src)
 
 print("\n== 3) una cuenta inactiva no es un pendiente ==")
 check("se filtra por Activo", "auth._ACTIVE_OK" in _src)

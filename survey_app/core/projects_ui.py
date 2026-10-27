@@ -1453,8 +1453,10 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
     for u in usuarios:
         try:
             info = auth.get_user(u) or {}
-            if not (str(info.get("Email", "")).strip()
-                    and str(info.get("TelegramChatID", "")).strip()):
+            # v613 · la regla de la puerta (`notify.contacto_campo_ok`): el Telegram, solo si se
+            # exige. Con la regla copiada aquí, avisaba «no recibirán la asignación» de quien
+            # la recibe por correo (lo cazó el barrido de verif_v613).
+            if not notify.contacto_campo_ok(info):
                 sin_contacto.append(_nm.get(u, u))
         except Exception:
             pass
@@ -1538,8 +1540,12 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         st.warning(":material/badge: **Other credentials to check before sending them to site:**\n\n"
                    + "\n".join(f"- {x}" for x in cred_mal))
     if sin_contacto:
-        st.warning(t(":material/warning: **Without full contact details (email + Telegram):** "
-                     "{x}. They will not receive the assignment or the inductions.")
+        # v613 · lo que falta, según la regla vigente (por ahora, solo el email)
+        st.warning((t(":material/warning: **Without full contact details (email + Telegram):** "
+                      "{x}. They will not receive the assignment or the inductions.")
+                    if notify.exige_telegram_campo() else
+                    t(":material/warning: **Without an email:** {x}. They will not receive the "
+                      "assignment or the inductions."))
                    .replace("{x}", ", ".join(sin_contacto)))
 
 

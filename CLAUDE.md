@@ -1210,11 +1210,13 @@ Avisa a un usuario de campo al **asignarlo** a un proyecto (crear/editar), con l
   Degrada con gracia (sin secrets/sin contacto → no envía, no rompe).
 - **Vinculación Telegram** (sin webhook): el usuario abre `t.me/<bot>?start=<code>` (code=usuario saneado)
   → pulsa Start → la app llama `getUpdates` y matchea el code → guarda el chat_id (`telegram_find_chat_by_code`).
-- **Contacto OBLIGATORIO para campo + solo el ADMIN lo edita (v79):** email+Telegram son requeridos para
-  usuarios de campo. Email obligatorio al crear. El admin/propietario gestiona email y **vincula el Telegram**
-  del usuario (tras que el usuario pulse Start) en `auth_ui._field_contact_ui` (en 🛠 Mi grupo → Usuarios y
-  👑 Administración → Usuarios). **Bloqueo duro** en app.py: un campo sin ambos NO puede usar la app (pantalla
-  de bloqueo con el link de Start; `_contact_ok` cachea). No hay self-service para el campo.
+- **Contacto OBLIGATORIO para campo + solo el ADMIN lo edita (v79):** el email, siempre (obligatorio al
+  crear). ⚠️ **El Telegram, POR AHORA no** (v613, decisión del usuario: pruebas con usuarios de campo
+  ficticios): `notify.TELEGRAM_OBLIGATORIO_CAMPO = False`; con True vuelve a exigirse, solo si el bot
+  existe (v368). UNA regla, `notify.contacto_campo_ok(u)`, la usan la puerta de app.py, el Home, el
+  asistente, los paneles de usuarios y el aviso al asignar — no copiar «email Y Telegram» a mano (lo
+  vigila verif_v613). El admin/propietario gestiona email y **vincula el Telegram** (tras el Start del
+  usuario) en `auth_ui._contacto_uno`. No hay self-service para el campo.
 - Disparadores: `projects_ui._detalle_proyecto` (nuevos asignados al editar) y `app.py` (al crear proyecto).
 
 ## timeclock.py — fichaje (v41-v45; por login v54)

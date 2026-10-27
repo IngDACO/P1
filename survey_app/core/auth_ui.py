@@ -67,6 +67,11 @@ def _contacto_uno(sel, key_prefix="cc"):
     else:
         bot  = notify.bot_username()
         code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
+        if not notify.exige_telegram_campo():
+            # v613 · decisión del usuario: POR AHORA no se exige para entrar (pruebas con usuarios
+            # ficticios); vincularlo sigue sirviendo para que les lleguen los avisos por Telegram.
+            st.caption(t(":material/info: For now Telegram is **optional** to sign in (the email is "
+                         "enough). Link it so their notices also arrive by Telegram."))
         st.caption(t("1) The user opens the bot and presses **Start** (send them this link):"))
         st.code(f"https://t.me/{bot}?start={code}")
         # ⚠️ Telegram SOLO manda el `/start <código>` cuando el chat es NUEVO. Si esa
@@ -694,13 +699,13 @@ def _owner_usuarios():
 
     # ── Tabla-resumen de todos los usuarios (+ contacto ✅/⚠️) ──
     if users:
+        from core import notify as _nt
         _rows = []
         for u in users:
             es_campo = str(u.get("Role", "")).lower() == "field"
+            # v613 · la regla de la puerta (`notify.contacto_campo_ok`): el Telegram, solo si se exige
             _cont = ("—" if not es_campo
-                     else (t("yes") if (str(u.get("Email", "")).strip()
-                                    and str(u.get("TelegramChatID", "")).strip())
-                           else t("missing")))
+                     else (t("yes") if _nt.contacto_campo_ok(u) else t("missing")))
             _rows.append({"User": u.get("User", ""), "Name": u.get("Name", ""),
                           "Role": u.get("Role", ""), "Group": u.get("Group", "") or "—",
                           "Active": u.get("Active", "SI"),
@@ -708,8 +713,7 @@ def _owner_usuarios():
         st.dataframe(pd.DataFrame(_rows), hide_index=True, width="stretch", column_config=tabla.cfg())
         _faltan = [u["User"] for u in users
                    if str(u.get("Role", "")).lower() == "field"
-                   and not (str(u.get("Email", "")).strip()
-                            and str(u.get("TelegramChatID", "")).strip())]
+                   and not _nt.contacto_campo_ok(u)]
         if _faltan:
             st.warning(":material/warning: Field users without full contact details (they cannot use the app): "
                        + ", ".join(_faltan))
@@ -1160,8 +1164,8 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
     k = f"fu_{sel}"
 
     # ── Estado de un vistazo ──
-    contacto_ok = bool(str(u.get("Email", "")).strip()
-                       and str(u.get("TelegramChatID", "")).strip())
+    from core import notify as _nt
+    contacto_ok = _nt.contacto_campo_ok(u)        # v613 · la regla de la puerta
     activo = str(u.get("Active", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
     try:
         _ses = T.open_sessions(u.get("Name") or sel, grupo, sel)
@@ -1305,7 +1309,10 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
 
     elif _sec == "📇 Contacto":
         if not es_campo:
-            st.caption(t("Contact details (email + Telegram) are only required for field users. You can record them anyway."))
+            # v613 · lo que se exige sale de la MISMA regla que la puerta
+            st.caption(t("Contact details (email + Telegram) are only required for field users. You can record them anyway.")
+                       if _nt.exige_telegram_campo() else
+                       t("Only the email is required, and only for field users (Telegram is optional for now). You can record them anyway."))
         elif not contacto_ok:
             st.warning(t(":material/warning: Without complete contact details they **cannot use the app** and receive no assignments or inductions."))
         _contacto_uno(sel, key_prefix=f"{k}_cc")
@@ -1494,8 +1501,8 @@ def _grupo_usuarios(grupo):
         return str(u.get("Active", "")).strip().upper() in ("SI", "TRUE", "1", "SÍ")
 
     def _cont_ok(u):
-        return bool(str(u.get("Email", "")).strip()
-                    and str(u.get("TelegramChatID", "")).strip())
+        from core import notify as _nt
+        return _nt.contacto_campo_ok(u)           # v613 · la regla de la puerta
 
     # ── Fila de SALUD del equipo: ACTIVA (v557) ──
     # ⚠️ Era una línea de texto: «9 with no contact details» no llevaba a nadie. Ahora

@@ -77,16 +77,18 @@ def group_digest(grupo) -> dict:
             pass
 
     campo_sin = []
+    from core import notify as _nt
     for u in auth.list_users(grupo):
         if str(u.get("Role", "")).lower() != "field":
             continue
-        if not (str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()):
+        # v613 · la MISMA regla que la puerta de `app.py` (el Telegram, solo si se exige)
+        if not _nt.contacto_campo_ok(u):
             campo_sin.append(u.get("User", ""))
 
     # ── Quién RECIBE las alarmas de este grupo y no tiene por dónde recibirlas ──
     # ⚠️ Criterio distinto al del campo a propósito (la lección de v325: dos cosas
-    # distintas no van en el mismo aviso). Al campo se le exigen los DOS canales
-    # (v79, es requisito para usar la app); a un admin o propietario le basta UNO
+    # distintas no van en el mismo aviso). Al campo se le exige lo que pida la
+    # puerta de entrada (`notify.contacto_campo_ok`, v79/v613); a un admin o propietario le basta UNO
     # para enterarse. Sin ninguno, la alarma se escribe en la hoja y no sale de ahí:
     # solo la ve quien entre a mirar. Importa desde que un check en NO abre alarma
     # (v373). Sale de `list_users()`, ya cacheado → 0 lecturas nuevas.
@@ -309,9 +311,10 @@ def group_snapshot_text(grupo, max_proys=30) -> str:
             f"| {horas.get(str(p.get('ID', '')), 0.0):.0f} h"
             + (" | " + ", ".join(extra) if extra else ""))
     us = []
+    from core import notify as _nt
     for u in auth.list_users(grupo):
         if str(u.get("Role", "")).lower() == "field":
-            ok = str(u.get("Email", "")).strip() and str(u.get("TelegramChatID", "")).strip()
+            ok = _nt.contacto_campo_ok(u)          # v613 · la regla de la puerta
             us.append(f"{u.get('User', '')}"
                       + ("" if ok else " " + t("(NO full contact details)")))
     if us:

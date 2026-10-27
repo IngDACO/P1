@@ -250,13 +250,14 @@ if _ROL == "field" and not st.session_state.get("_contact_ok"):
     _rec = get_user(st.session_state.auth.get("usuario", ""))
     _has_mail = bool(str(_rec.get("Email", "")).strip())
     _has_tg   = bool(str(_rec.get("TelegramChatID", "")).strip())
-    # ¿el canal Telegram existe en esta instalación?
+    # ¿se exige el Telegram? Solo si la política lo pide (v613: POR AHORA no, decisión del
+    # usuario) Y el canal existe en esta instalación (v368). La regla vive en `notify`.
     try:
-        _tg_hay = bool(notify.telegram_configured() and notify.bot_username())
+        _exige_tg = notify.exige_telegram_campo()
     except Exception:
-        _tg_hay = False
+        _exige_tg = False
     _falta_mail = not _has_mail
-    _falta_tg   = _tg_hay and not _has_tg          # si no hay bot, no se exige
+    _falta_tg   = _exige_tg and not _has_tg        # sin bot o sin la política, no se exige
 
     if not _falta_mail and not _falta_tg:
         st.session_state["_contact_ok"] = True
