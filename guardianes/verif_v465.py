@@ -62,8 +62,11 @@ else:
 # ⚠️ v516 · `DailyLogs`, por la MISMA razon que las anteriores: nace en ingles el
 # 23/09/2026, mucho despues del renombrado, asi que nunca tuvo nombre español y no hay
 # nada con lo que ser compatible. Que `get_sheet` la cree la primera vez es lo CORRECTO.
+# ⚠️ v610 · `AgentMemory` (la memoria del agente del parte), por la MISMA razon: nace en
+# ingles el 27/10/2026 y nunca tuvo nombre español. CADUCADO por un cambio deliberado: la
+# regla sigue exigiendo respaldo a toda hoja que SI lo haya tenido.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
-       "xeroconnections", "stageprogress", "dailylogs"}
+       "xeroconnections", "stageprogress", "dailylogs", "agentmemory"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:

@@ -75,6 +75,11 @@ HOJAS_LECTURA = (
     # volvería a verlo NUNCA — y aquí duele el doble, porque el valor de esto es
     # justamente que el texto se acumule.
     "DailyLogs",
+    # ⚠️ v610: la memoria del agente del parte (`agente_memoria`) lee con `registros(SHEET)` sin
+    # cabeceras. Fuera de aquí, las lecciones se escribirían en el maestro y el agente no las
+    # volvería a leer NUNCA — la regla de v461/v507/v514 por cuarta vez. La cazó romper_v430
+    # (su guardián, rojo de base) antes de desplegar; verif_v610 la vigila desde ahora.
+    "AgentMemory",
 )
 
 

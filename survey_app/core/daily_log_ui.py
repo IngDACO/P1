@@ -347,11 +347,11 @@ def _leer_pendientes(pid, usuario, partes) -> None:
              and not _fallo(r.get("ID"))]
     if not falta:
         return
-    mapa, idi = SP.acreditado(pid), idioma()
+    mapa, idi, _mem = SP.acreditado(pid), idioma(), _memoria()
 
     def _uno(r):
         return str(r.get("ID", "")), AG.leer(str(r.get("Text", "")), plan, str(r.get("Date", "")),
-                                            mapa, None, None, idi, _k)
+                                            mapa, None, None, idi, _k, memoria=_mem)
 
     with st.spinner(t("The assistant is reading your log…") if len(falta) == 1
                     else t("The assistant is reading your {n} logs…", n=len(falta))):
@@ -361,6 +361,32 @@ def _leer_pendientes(pid, usuario, partes) -> None:
                 res += list(ex.map(_uno, falta[1:]))
     _apuntar({lid: reg for lid, (reg, _m) in res if reg},
              {lid: m for lid, (reg, m) in res if not reg})
+
+
+def _memoria() -> str:
+    """v610 · El bloque CREW MEMORY para el agente (`agente_memoria.para_el_agente`), o "".
+    ⚠️ Nunca tumba la lectura: sin memoria el agente lee igual, solo sabe menos."""
+    try:
+        from core import agente_memoria as MEM
+        return MEM.para_el_agente()
+    except Exception as e:
+        logger.warning("daily_log_ui._memoria: %s", e)
+        return ""
+
+
+def _aprender(reg, por_destino, grupo, usuario, lid) -> None:
+    """v610 · Lo que el autor MARCÓ y lo que dejó sin marcar al confirmar un parte que leyó el
+    agente, a la memoria (`agente_memoria.observaciones`). ⚠️ Después de guardar y fuera de
+    él: si la memoria falla, el avance del autor ya está hecho (la regla de la auditoría, v342)."""
+    if not reg:
+        return
+    try:
+        from core import agente_memoria as MEM
+        ok, _n = MEM.aprender(MEM.observaciones(por_destino), grupo, usuario, lid)
+        if not ok:
+            logger.warning("daily_log_ui._aprender: la memoria no guardó lo de %s", lid)
+    except Exception as e:
+        logger.warning("daily_log_ui._aprender(%s): %s", lid, e)
 
 
 def _pedir_relectura(lid, claves) -> None:
@@ -398,7 +424,8 @@ def _relectura(pid, usuario, partes) -> None:
     with st.spinner(t("The assistant is reading your log again…")):
         reg, mot = AG.leer(str(r.get("Text", "")), plan, str(r.get("Date", "")),
                            SP.acreditado(pid), previa,
-                           list(previa.get("respuestas") or []) + pet["respuestas"], idioma())
+                           list(previa.get("respuestas") or []) + pet["respuestas"], idioma(),
+                           memoria=_memoria())
     if reg:
         # v608 · Lo ya enviado a la oficina sigue enviado en la lectura nueva.
         reg["avisos"] = list(previa.get("avisos") or [])
@@ -794,6 +821,9 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                         errores.append(msg)
                 if not errores:
                     ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False))
+                    if ok:
+                        # v610 · y de ahí aprende la memoria (solo si lo leyó el agente).
+                        _aprender(reg, por_destino, grupo, usuario, lid)
             if errores:
                 # ⚠️ No se marca revisado: si algo falló, la tarjeta tiene que seguir ahí.
                 st.error(" · ".join(str(e) for e in errores))
@@ -912,12 +942,104 @@ def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
         st.caption(t("…and {n} older ones.", n=len(_mios) - 10))
 
 
+# ═════════════════════════════════════════════════════════════════
+# v610 · Lo que aprendió el asistente (la memoria, `agente_memoria`)
+# ═════════════════════════════════════════════════════════════════
+# ⚠️ Lo ven el admin (las lecciones de SU grupo y las reglas del propietario) y el propietario
+# (todas). Sirve para ver qué aprendió, borrar una lección equivocada —una mala no se queda
+# para siempre— y enseñarle a mano («installed motor» → Install motor (machine)).
+_MEM_PET = "_mem_pet"           # lo que pidió el panel (olvidar / regla), atendido arriba
+
+
+def _es_propietario() -> bool:
+    return str((st.session_state.get("auth") or {}).get("rol", "")) == "owner"
+
+
+def _pedir_olvidar(kp) -> None:
+    st.session_state[_MEM_PET] = {"accion": "olvidar",
+                                  "ids": list(st.session_state.get("%s_mem_olv" % kp) or [])}
+
+
+def _pedir_regla(kp) -> None:
+    st.session_state[_MEM_PET] = {"accion": "regla",
+                                  "frase": str(st.session_state.get("%s_mem_frase" % kp) or ""),
+                                  "actividad": st.session_state.get("%s_mem_act" % kp)}
+
+
+def _atender_memoria(grupo) -> None:
+    """Lo que pidió el panel, ANTES de pintar (trampa 37). ⚠️ Los permisos los vuelve a mirar
+    `agente_memoria.olvidar`: un admin no quita lo de otro grupo aunque llegue la petición."""
+    pet = st.session_state.pop(_MEM_PET, None)
+    if not pet:
+        return
+    from core import agente_memoria as MEM
+    _u = str((st.session_state.get("auth") or {}).get("usuario", ""))
+    _dueno = _es_propietario()
+    with st.spinner(t("Saving…")):
+        if pet["accion"] == "olvidar":
+            if not pet.get("ids"):
+                flash.aviso(t("Choose what the assistant should forget first."))
+                st.rerun()
+            ok, n = MEM.olvidar(pet["ids"], grupo, _dueno)
+            msg = (t("Forgotten: {n}.", n=n) if ok
+                   else t("Nothing was forgotten (only your group's lessons can be removed)."))
+        else:
+            ok, msg = MEM.poner_regla(pet.get("frase"), pet.get("actividad"),
+                                      "" if _dueno else grupo, _u)
+    (flash.exito if ok else flash.error)(msg)
+    st.rerun()
+
+
+def _panel_memoria(grupo, kp) -> None:
+    from core import agente_memoria as MEM
+    from core import stages as S
+    _dueno = _es_propietario()
+    with st.expander(t("What the assistant has learned"), icon=":material/psychology:",
+                     key="%s_mem_exp" % kp):
+        st.caption(t("Learned from what the crews tick in their daily logs, and from the rules "
+                     "the office sets. It changes what the assistant proposes and asks; nothing "
+                     "is credited without the author's tick."))
+        _l = MEM.lecciones(None if _dueno else grupo)
+        if _l:
+            st.dataframe(
+                [{t("Phrase"): r["Phrase"], t("Activity"): r["Activity"],
+                  t("Kind"): t("Rule") if r.get("Kind") == MEM.REGLA else t("Learned"),
+                  t("Confirmed"): r["Confirmed"], t("Rejected"): r["Rejected"],
+                  t("Updated"): _dmy(str(r.get("Updated", ""))[:10])} for r in _l],
+                hide_index=True, width="stretch", key="%s_mem_tbl" % kp)
+            _mias = {str(r["ID"]): "«%s» → %s" % (r["Phrase"], r["Activity"]) for r in _l
+                     if _dueno or str(r.get("Group", "")) == str(grupo)}
+            if _mias:
+                st.multiselect(t("Forget these"), list(_mias), key="%s_mem_olv" % kp,
+                               format_func=lambda i: _mias.get(i, i),
+                               placeholder=t("— choose lessons —"))
+                st.button(t(":material/delete: Forget the selected"), key="%s_mem_olvidar" % kp,
+                          type="tertiary", on_click=_pedir_olvidar, args=(kp,))
+        else:
+            st.caption(t("Nothing learned yet: it learns when the crew confirms a daily log."))
+        st.markdown(t("**Teach it a rule**"))
+        c1, c2 = st.columns(2)
+        c1.text_input(t("When a log says…"), key="%s_mem_frase" % kp,
+                      placeholder=t("e.g. installed motor"))
+        _acts = sorted({a[0] for v in S.ACTIVIDADES.values() for a in v})
+        c2.selectbox(t("…it means"), _acts, index=None, key="%s_mem_act" % kp,
+                     placeholder=t("— choose the activity —"))
+        st.button(t(":material/add: Add rule"), key="%s_mem_regla" % kp, on_click=_pedir_regla,
+                  args=(kp,))
+
+
 def render_admin(pid, grupo, key_prefix="adm") -> None:
     """Lo que ve quien lleva la obra desde la oficina. Solo lectura: el parte es de
     quien lo escribió, y un admin corrigiéndolo destruiría lo único que lo hace valer."""
+    _atender_memoria(grupo)
     _p = DL.partes(pid)
     theme.section(t("Daily logs"),
                   t("What the crew reported, in their own words."))
+    try:
+        _panel_memoria(grupo, key_prefix)
+    except Exception as e:
+        # ⚠️ La memoria nunca tumba los partes (la hoja puede no existir todavía).
+        logger.warning("daily_log_ui._panel_memoria: %s", e)
     _sp = _sin_plan(pid)
     if _sp:
         st.caption(t(":material/info: This job has no stage plan, so the crew's daily logs "

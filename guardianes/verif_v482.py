@@ -153,10 +153,11 @@ print("5. Las hojas GLOBALES siguen siendo las mismas")
 # ⚠️ v488 · `xeroconnections` entra A PROPOSITO (la conexion de cada empresa vive en
 # el maestro, decision del usuario). Se mantiene la IGUALDAD y no un «contiene»: asi
 # la proxima global que alguien añada tambien obliga a pasar por aqui y decidirlo.
+# v610 · + «agentmemory»: la memoria del agente del parte es GLOBAL (decisión del usuario).
 _esp = {"login", "grupos", "rieles", "manuales", "groups", "rails", "manuals",
-        "library", "librarymodels", "xeroconnections"}
+        "library", "librarymodels", "xeroconnections", "agentmemory"}
 (ok if timeclock.SHEETS_GLOBALES == _esp else fallo)(
-    "las 10 globales intactas", sorted(timeclock.SHEETS_GLOBALES ^ _esp))
+    "las 11 globales intactas", sorted(timeclock.SHEETS_GLOBALES ^ _esp))
 
 # ── 6 ────────────────────────────────────────────────────────────────────────
 print("")

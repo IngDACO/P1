@@ -107,9 +107,10 @@ ROTURAS = [
        '        ok, _n = True, 0\n')]),
     ("lo no entendido sin su caja para contestar", DLU,
      [('    _dudas = AG.sin_entender(reg)\n    if _dudas:\n', '    _dudas = []\n    if _dudas:\n')]),
+    # v610 · re-anclada: la llamada lleva ahora también la memoria (la rotura es la MISMA).
     ("«Read it again» manda solo la última respuesta", DLU,
-     [('                           list(previa.get("respuestas") or []) + pet["respuestas"], idioma())\n',
-       '                           pet["respuestas"], idioma())\n')]),
+     [('                           list(previa.get("respuestas") or []) + pet["respuestas"], idioma(),\n',
+       '                           pet["respuestas"], idioma(),\n')]),
     ("«Read it again» sin respuestas llama igual", DLU,
      [('    if not pet.get("respuestas"):\n', '    if False:\n')]),
     ("⚠️ el fallo del agente no se dice (la lista de palabras pasa por el agente)", DLU,
@@ -136,7 +137,7 @@ ROTURAS = [
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",
-           PA, [('PROMPT_V = 1\n', 'PROMPT_V = 1   # (control)\n')])
+           PA, [('PROMPT_V = 2\n', 'PROMPT_V = 2   # (control)\n')])
 
 
 def aplica(rel, cambios):

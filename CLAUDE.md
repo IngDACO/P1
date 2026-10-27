@@ -939,6 +939,10 @@ texto, lineas)` → la forma de `parte_propuestas.propuestas` + `empezadas/probl
 `fallbacks="default"`. Una lectura por parte en `DailyLogs.Reading`; la pantalla en
 `daily_log_ui` (`_leer_pendientes`, `_relectura`, `_hablar`). El modelo solo PROPONE códigos del plan;
 acredita el autor. Medir con `guardianes/sueltos/examen_agente_parte.py A|B|C` (gasta: con permiso).
+**Memoria (v610, `agente_memoria.py`)**: hoja GLOBAL `AgentMemory` (maestro), aprende al confirmar
+(marcado = confirmada, sin marcar = rechazada) y `para_el_agente()` va PRIMERO en el mensaje, en orden
+fijo (caché). Panel «What the assistant has learned» en los partes del admin. ⚠️ Está en
+`hojas.HOJAS_LECTURA`: su lector va sin cabeceras y fuera del lote leería vacío para siempre.
 
 ---
 

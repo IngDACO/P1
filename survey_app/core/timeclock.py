@@ -149,7 +149,11 @@ SHEETS_GLOBALES = {"login", "grupos", "rieles", "manuales",
                    # MAESTRO (decision del usuario: tokens cifrados en el libro
                    # maestro). Sin esto se crearia en el libro del cliente, donde
                    # el propio cliente puede abrirla.
-                   "xeroconnections"}
+                   "xeroconnections",
+                   # ⚠️ v610: la MEMORIA del agente del parte es GLOBAL (decision del
+                   # usuario, 27/10/2026: «global»). Sin esto cada cliente aprenderia solo
+                   # en su libro, que es justo lo que el usuario NO eligio.
+                   "agentmemory"}
 
 # ── Pestañas en inglés, con respaldo al nombre viejo (v465) ───────────────────
 # ⚠️ Esta capa NO es cosmética y no es opcional: `get_sheet` **crea** la hoja si no

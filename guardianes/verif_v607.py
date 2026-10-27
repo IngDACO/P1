@@ -377,7 +377,8 @@ def _fr(line, text, cl, names=(), q="", r=""):
             "question": q, "reason": r, "lift": ""}
 
 
-def _llamar(api_key, texto, fecha, plan, mapa, previa, respuestas, idioma):
+# v610 · `_llamar` recibe también la memoria del agente (CREW MEMORY).
+def _llamar(api_key, texto, fecha, plan, mapa, previa, respuestas, idioma, memoria=""):
     AG._llam.append({"texto": texto, "previa": bool(previa), "resp": list(respuestas or []),
                      "key": api_key, "t0": time.time()})
     time.sleep(0.05)

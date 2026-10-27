@@ -52,7 +52,8 @@ ROTURAS = [
     ("app.py", "la vuelta desde Xero no se procesa", [
         ("    _xui.procesar_retorno(_ROL, _GRUPO)", "    pass")]),
     ("core/timeclock.py", "la pestana de Xero deja de ser global", [
-        ('                   "xeroconnections"}', '                   "xeroconnectionsX"}')]),
+        # v610 · re-anclada: detrás va ahora «agentmemory» (la rotura es la MISMA).
+        ('                   "xeroconnections",', '                   "xeroconnectionsX",')]),
     ("core/xero_ui.py", "cualquier rol procesa la vuelta", [
         ('    if rol != "administrator":' + NL + "        return",
          "    if False:" + NL + "        return")]),

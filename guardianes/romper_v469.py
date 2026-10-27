@@ -15,7 +15,9 @@ import subprocess
 import sys
 import tempfile
 
-SCRW = os.environ["SCRW"]
+# v610 · la carpeta de los guardianes por defecto, como romper_v470 desde v580 (`SCRW` era la del
+# scratchpad, y sin la variable la batería ni arrancaba: salió «exit 1» en la tanda de v610)
+SCRW = os.environ.get("SCRW") or os.path.dirname(os.path.abspath(__file__))
 RAIZ = r"C:\Users\diego\P1\survey_app"
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 

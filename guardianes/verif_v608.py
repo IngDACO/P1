@@ -86,7 +86,8 @@ def _fr(line, text, cl, names=(), q="", r=""):
             "question": q, "reason": r, "lift": ""}
 
 
-def _llamar(api_key, texto, fecha, plan, mapa, previa, respuestas, idioma):
+# v610 · `_llamar` recibe también la memoria del agente (CREW MEMORY).
+def _llamar(api_key, texto, fecha, plan, mapa, previa, respuestas, idioma, memoria=""):
     AG._llam8.append(texto)
     if texto == T1:
         return {"fragments": [

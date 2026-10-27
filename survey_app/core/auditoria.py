@@ -163,7 +163,11 @@ def diff(antes: dict, despues: dict) -> dict:
         if k not in CAMPOS_CLAVE:
             continue
         viejo = (antes or {}).get(k, "")
-        a, b = str(viejo or "").strip(), str(nuevo or "").strip()
+        # ⚠️ v610 · `None` → vacío, pero un CERO es un cero: con `str(nuevo or "")` un avance
+        # nuevo de 0.0 salía «vacío» y se anotaba «0.0 → 0.0» como un cambio (visto en el
+        # rastro de la migración de v609: PRJ-0030 y PRJ-0032).
+        a = str("" if viejo is None else viejo).strip()
+        b = str("" if nuevo is None else nuevo).strip()
         try:                                     # 40 == 40.0 == "40"
             if a != "" and b != "" and abs(float(a) - float(b)) < 1e-9:
                 continue
