@@ -291,6 +291,8 @@ def olvidar(ids, grupo, es_propietario) -> tuple:
         if not es_propietario and str(r.get("Group", "")) != str(grupo):
             continue
         lote.append({"range": "%s%d" % (_col_letter(_COL["Active"]), i + 2), "values": [["NO"]]})
+        # v611 · y CUÁNDO: «Restore» enseña la fecha en que se olvidó.
+        lote.append({"range": "%s%d" % (_col_letter(_COL["Updated"]), i + 2), "values": [[_ahora()]]})
     if not lote:
         return False, 0
     try:
@@ -299,4 +301,71 @@ def olvidar(ids, grupo, es_propietario) -> tuple:
         logger.warning("agente_memoria.olvidar: %s", e)
         return False, 0
     _invalidate()
-    return True, len(lote)
+    return True, len(lote) // 2
+
+
+# ── deshacer lo olvidado (v611) ──────────────────────────────────────────────
+# ⚠️ Olvidar no tenía vuelta atrás en la pantalla: la fila quedaba (`Active=NO`) pero nadie podía
+# recuperarla, y lo que aprende una cuadrilla en semanas se iba en dos clics.
+def _es_olvidada(r) -> bool:
+    return str(r.get("Active", "")).strip().upper() == "NO"
+
+
+def olvidadas(grupo=None) -> list:
+    """Las lecciones OLVIDADAS que se pueden recuperar: las de `grupo` (un admin solo
+    recupera lo que puede olvidar: lo suyo); `None`, todas (el propietario)."""
+    out = []
+    for r in _records():
+        if not _es_olvidada(r):
+            continue
+        if not str(r.get("Phrase", "")).strip() or not str(r.get("Activity", "")).strip():
+            continue
+        if grupo is not None and str(r.get("Group", "")) != str(grupo):
+            continue
+        out.append(dict(r))
+    return out
+
+
+def restaurar(ids, grupo, es_propietario) -> tuple:
+    """Vuelve a activar lecciones olvidadas: `(ok, recuperadas, repetidas)`. Lee FRESCO (v323).
+    ⚠️ Una que se volvió a aprender DESPUÉS de olvidarla ya tiene otra fila activa con la misma
+    frase y actividad: recuperar la vieja la DUPLICARÍA (dos líneas iguales al agente, y
+    `aprender` sumaría solo en una). Esa se deja como está y se cuenta en `repetidas`."""
+    ids = {str(i) for i in ids or ()}
+    if not ids:
+        return True, 0, 0
+    w = _ws()
+    if w is None:
+        return False, 0, 0
+    try:
+        from core import columnas
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("agente_memoria.restaurar: %s", e)
+        return False, 0, 0
+    vivas = {(normaliza(r.get("Phrase")), str(r.get("Activity", ""))) for r in recs
+             if not _es_olvidada(r)}
+    lote, n, rep, ahora = [], 0, 0, _ahora()
+    for i, r in enumerate(recs):
+        if str(r.get("ID", "")) not in ids or not _es_olvidada(r):
+            continue
+        # el mismo permiso que `olvidar`: un admin, solo lo de SU grupo
+        if not (es_propietario or str(r.get("Group", "")) == str(grupo)):
+            continue
+        k = (normaliza(r.get("Phrase")), str(r.get("Activity", "")))
+        if k in vivas:
+            rep += 1
+            continue
+        vivas.add(k)
+        n += 1
+        lote += [{"range": "%s%d" % (_col_letter(_COL["Active"]), i + 2), "values": [[""]]},
+                 {"range": "%s%d" % (_col_letter(_COL["Updated"]), i + 2), "values": [[ahora]]}]
+    if not lote:
+        return (rep > 0), 0, rep
+    try:
+        w.batch_update(lote, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("agente_memoria.restaurar: %s", e)
+        return False, 0, 0
+    _invalidate()
+    return True, n, rep

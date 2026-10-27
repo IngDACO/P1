@@ -30,6 +30,7 @@ dónde escribir o qué ID toca es como se corrompen los datos (v323). Este módu
 solo para LECTURA de display.
 """
 import logging
+import time
 
 import streamlit as st
 
@@ -103,6 +104,57 @@ def _existentes(sheet_id: str = "") -> set:
     except Exception as e:
         logger.warning("hojas: no se pudo leer el índice del libro: %s", e)
         return set()
+
+
+# ⚠️ v611 · El índice de pestañas (`timeclock._libro`) vive en `@st.cache_resource` y NO
+# caduca, y el lote solo pide las hojas que están en él. Una hoja que crea OTRO proceso (un
+# script de siembra o de migración) no entraba nunca: los lectores sin cabeceras leían VACÍO
+# hasta reiniciar la app. Visto el 27/10/2026 con `AgentMemory`, sembrada desde fuera: «Nothing
+# learned yet» con 8 filas en la hoja. Se rehace el índice de ESE libro (2 llamadas) como mucho
+# una vez cada `_REFRESCO_S`: una hoja que de verdad no existe (las de grupo en el maestro) no
+# cuesta más que eso, y «para siempre» pasa a ser «10 minutos como mucho».
+_REFRESCO_S = 600
+_refrescado = {}            # {sheet_id: time.monotonic() del último refresco}
+
+
+def _indice_al_dia(sheet_id: str) -> bool:
+    """Rehace el índice de pestañas de `sheet_id` si no se rehízo en `_REFRESCO_S`.
+    True si lo rehízo (y entonces el índice ya trae lo que haya creado otro proceso)."""
+    if not sheet_id:
+        return False
+    ahora = time.monotonic()
+    _ult = _refrescado.get(sheet_id)
+    if _ult is not None and ahora - _ult < _REFRESCO_S:
+        return False
+    _refrescado[sheet_id] = ahora
+    try:
+        timeclock._libro.clear(sheet_id)
+        return True
+    except Exception as e:
+        logger.warning("hojas: no se pudo refrescar el índice de %s: %s", sheet_id, e)
+        return False
+
+
+def _aparecio(sheet_id: str, titulo: str) -> bool:
+    """Una hoja del lote que NO vino en él: ¿existe, rehecho el índice? Si sí, se tira el lote
+    de ese libro para que la próxima petición la traiga (1 llamada).
+    (Si otro camino —`ids_referenciados`— ya rehízo el índice dentro del tope, aquí no se rehace,
+    pero el lote la recoge solo al caducar: 120 s como mucho.)"""
+    if titulo not in HOJAS_LECTURA or not _indice_al_dia(sheet_id):
+        return False
+    if timeclock.titulo_real(titulo, sheet_id).strip().lower() not in _existentes(sheet_id):
+        return False
+    logger.info("hojas: %s apareció al rehacer el índice; se vuelve a pedir el lote", titulo)
+    try:
+        _lote.clear(sheet_id)
+    except Exception:
+        # como `invalidar`: si no se puede tirar el de ese libro, todos; y si tampoco, nada
+        # (una LECTURA no puede reventar por esto — lo cazó verif_v590 en la suite de v611).
+        try:
+            _lote.clear()
+        except Exception:
+            pass
+    return True
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -210,7 +262,12 @@ def registros(titulo: str, cabeceras=None, grupo: str = None):
 
     Si la hoja no vino en el lote, cae al camino de siempre (una llamada suya).
     """
-    datos = _lote(timeclock.sheet_id_para(titulo, grupo)).get(titulo)
+    sid = timeclock.sheet_id_para(titulo, grupo)
+    datos = _lote(sid).get(titulo)
+    # ⚠️ v611 · puede existir sin estar en el índice (la creó otro proceso): ver `_aparecio`.
+    # Solo sin cabeceras: con ellas cae a `get_sheet`, que ya rehace el índice antes de crear.
+    if datos is None and cabeceras is None and _aparecio(sid, titulo):
+        datos = _lote(sid).get(titulo)
     if datos is None:
         if cabeceras is None:
             return None                   # que el llamador use su propio lector
@@ -401,6 +458,10 @@ def ids_referenciados(prefijo: str, propia: str = "", sheet_id: str = "") -> set
             propia_l = timeclock.titulo_real(str(propia).strip(), sheet_id).strip().lower()
         # v581 · Todas las hojas que EXISTEN (la auditoría incluida, que es donde queda
         # constancia de lo borrado), no las de una lista que hay que acordarse de ampliar.
+        # ⚠️ v611 · con el índice al día (como mucho 10 min de retraso): sale de una caché que
+        # no caduca, y una pestaña que creó OTRO proceso se quedaba fuera de esta comprobación
+        # para siempre — en una ruta de ESCRITURA, que es justo donde no puede fallar.
+        _indice_al_dia(sheet_id)
         titulos = [h for h in _titulos(sheet_id) if h.strip().lower() != propia_l]
         if not titulos:
             return set()

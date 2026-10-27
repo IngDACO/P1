@@ -961,9 +961,14 @@ def _pedir_olvidar(kp) -> None:
 
 
 def _pedir_regla(kp) -> None:
-    st.session_state[_MEM_PET] = {"accion": "regla",
+    st.session_state[_MEM_PET] = {"accion": "regla", "kp": kp,
                                   "frase": str(st.session_state.get("%s_mem_frase" % kp) or ""),
                                   "actividad": st.session_state.get("%s_mem_act" % kp)}
+
+
+def _pedir_restaurar(kp) -> None:
+    st.session_state[_MEM_PET] = {"accion": "restaurar",
+                                  "ids": list(st.session_state.get("%s_mem_rest" % kp) or [])}
 
 
 def _atender_memoria(grupo) -> None:
@@ -981,11 +986,28 @@ def _atender_memoria(grupo) -> None:
                 flash.aviso(t("Choose what the assistant should forget first."))
                 st.rerun()
             ok, n = MEM.olvidar(pet["ids"], grupo, _dueno)
-            msg = (t("Forgotten: {n}.", n=n) if ok
-                   else t("Nothing was forgotten (only your group's lessons can be removed)."))
+            msg = (t("Forgotten: {n}. You can bring them back under «Show forgotten lessons».", n=n)
+                   if ok else t("Nothing was forgotten (only your group's lessons can be removed)."))
+        elif pet["accion"] == "restaurar":
+            # v611 · deshacer un olvido (los permisos los vuelve a mirar `restaurar`)
+            if not list(pet.get("ids") or []):
+                flash.aviso(t("Choose what the assistant should remember again first."))
+                st.rerun()
+            ok, n, rep = MEM.restaurar(pet["ids"], grupo, _dueno)
+            msg = (t("Restored: {n}.", n=n) if ok
+                   else t("Nothing was restored (only your group's lessons can be restored)."))
+            if ok and rep:
+                # ⚠️ Se volvió a aprender después de olvidarla: ya está activa en otra fila.
+                msg = (msg + " " if n else "") + t(
+                    "{r} already back in the memory (learned again since), left as they are.", r=rep)
         else:
             ok, msg = MEM.poner_regla(pet.get("frase"), pet.get("actividad"),
                                       "" if _dueno else grupo, _u)
+            if ok and pet.get("kp"):
+                # v611 · el formulario, vacío tras guardar: con lo tecleado a la vista, un 2º clic
+                # decía «That rule already exists.». Se ASIGNA (trampa 31) y aún no está pintado.
+                st.session_state["%s_mem_frase" % pet["kp"]] = ""
+                st.session_state["%s_mem_act" % pet["kp"]] = None
     (flash.exito if ok else flash.error)(msg)
     st.rerun()
 
@@ -1000,6 +1022,7 @@ def _panel_memoria(grupo, kp) -> None:
                      "the office sets. It changes what the assistant proposes and asks; nothing "
                      "is credited without the author's tick."))
         _l = MEM.lecciones(None if _dueno else grupo)
+        _olv = MEM.olvidadas(None if _dueno else grupo)
         if _l:
             st.dataframe(
                 [{t("Phrase"): r["Phrase"], t("Activity"): r["Activity"],
@@ -1010,13 +1033,27 @@ def _panel_memoria(grupo, kp) -> None:
             _mias = {str(r["ID"]): "«%s» → %s" % (r["Phrase"], r["Activity"]) for r in _l
                      if _dueno or str(r.get("Group", "")) == str(grupo)}
             if _mias:
+                # ⚠️ v611 · sin «Select all»: con él, lo que una cuadrilla enseña en semanas se
+                # olvidaba en dos clics.
                 st.multiselect(t("Forget these"), list(_mias), key="%s_mem_olv" % kp,
                                format_func=lambda i: _mias.get(i, i),
-                               placeholder=t("— choose lessons —"))
+                               placeholder=t("— choose lessons —"), select_all=False)
                 st.button(t(":material/delete: Forget the selected"), key="%s_mem_olvidar" % kp,
                           type="tertiary", on_click=_pedir_olvidar, args=(kp,))
+        elif _olv:
+            st.caption(t("Nothing active: what it learned was forgotten (you can restore it below)."))
         else:
             st.caption(t("Nothing learned yet: it learns when the crew confirms a daily log."))
+        # v611 · lo olvidado se recupera (antes, olvidar no tenía vuelta atrás en la pantalla)
+        if _olv and st.checkbox(t("Show forgotten lessons ({n})", n=len(_olv)),
+                                key="%s_mem_ver_olv" % kp):
+            _rec = {str(r["ID"]): t("«{f}» → {a} · forgotten {d}", f=r["Phrase"], a=r["Activity"],
+                                    d=_dmy(str(r.get("Updated", ""))[:10]) or "—") for r in _olv}
+            st.multiselect(t("Restore these"), list(_rec), key="%s_mem_rest" % kp,
+                           format_func=lambda i: _rec.get(i, i),
+                           placeholder=t("— choose lessons —"), select_all=False)
+            st.button(t(":material/undo: Restore the selected"), key="%s_mem_restaurar" % kp,
+                      type="tertiary", on_click=_pedir_restaurar, args=(kp,))
         st.markdown(t("**Teach it a rule**"))
         c1, c2 = st.columns(2)
         c1.text_input(t("When a log says…"), key="%s_mem_frase" % kp,

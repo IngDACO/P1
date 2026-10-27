@@ -221,8 +221,13 @@ try:
     chk("⚠️ un admin solo olvida lo de SU grupo", okO and nO == 1, (okO, nO))
     _ws.lotes = []
     okP, nP = MEM.olvidar(["MEM-0007", "MEM-0008"], "cliente1", True)
+    # ⚠️ v611 · al día con su razón: olvidar escribe también `Updated` (CUÁNDO se olvidó, que
+    # enseña «Restore»), así que el lote lleva dos celdas por fila. La afirmación es la misma:
+    # en la columna `Active`, «NO» en las dos — y nada se borra.
+    _ca = _cl(MEM.HEADERS.index("Active") + 1)
+    _act = [d["values"] for d in _ws.lotes[0] if d["range"].rstrip("0123456789") == _ca]
     chk("...el propietario, todo (y olvidar es `Active=NO`: queda rastro)",
-        okP and nP == 2 and all(d["values"] == [["NO"]] for d in _ws.lotes[0]), _ws.lotes)
+        okP and nP == 2 and _act == [[["NO"]], [["NO"]]], _ws.lotes)
 finally:
     MEM._ws, MEM._invalidate = _orig["_ws"], _orig["_invalidate"]
 MEM._ws = lambda: None

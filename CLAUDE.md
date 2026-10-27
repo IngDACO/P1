@@ -144,7 +144,8 @@ C:\Users\diego\P1\survey_app\
 │   ├── expenses.py         # costos: compras + mano de obra + presupuesto + P&L (v105+)
 │   ├── orders.py           # órdenes de compra = dinero COMPROMETIDO (hoja Ordenes, v343)
 │   ├── auditoria.py        # rastro de cambios: quién tocó margen/tarifa/fechas (hoja Auditoria, v342)
-│   ├── hojas.py            # lector por LOTES del libro (1 batchGet para todas las hojas, v339)
+│   ├── hojas.py            # lector por LOTES del libro (1 batchGet para todas las hojas, v339);
+│   │                       #   una hoja creada por OTRO proceso entra en ≤10 min (`_indice_al_dia`, v611)
 │   ├── num.py              # helpers únicos: num() / parse_date() / col_letter() (v323)
 │   ├── flash.py            # mensajes que SOBREVIVEN a un st.rerun() (v365-v367). Módulo HOJA.
 │   │                       #   flash.exito/aviso/error/info() encolan; la shell y el login
@@ -578,6 +579,13 @@ Estas cinco mordieron en una sola tanda:
     si está cargado `streamlit.testing` (la app no lo importa nunca, lo vigila `verif_v607`); un
     guardián que quiera el agente sustituye `clave_api` y `_llamar` a propósito. Y la clave del
     examen (`sueltos/examen_agente_parte.py`) se pasa explícita: ese sí gasta, a mano y con permiso.
+
+45. ⚠️ **Lo que crea un script mío en el libro NO lo ve al instante el proceso del Cloud.** (v610)
+    Sembré `AgentMemory` desde local y producción dijo «Nothing learned yet» con 8 filas en la hoja: el
+    índice de pestañas (`timeclock._libro`, `cache_resource`) era de antes y el lote solo pide lo que
+    hay en él. Desde v611 se rehace como mucho cada 10 min (`hojas._indice_al_dia`), así que tras crear
+    una hoja desde fuera hay que esperar hasta 10 min (o que la app escriba en ella: `get_sheet` rehace
+    el índice) antes de concluir que «no sale». Es la nº 11 (lo local no es lo del Cloud) en el tiempo.
 
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
