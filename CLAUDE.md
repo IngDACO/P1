@@ -144,6 +144,8 @@ C:\Users\diego\P1\survey_app\
 │   ├── expenses.py         # costos: compras + mano de obra + presupuesto + P&L (v105+)
 │   ├── orders.py           # órdenes de compra = dinero COMPROMETIDO (hoja Ordenes, v343)
 │   ├── auditoria.py        # rastro de cambios: quién tocó margen/tarifa/fechas (hoja Auditoria, v342)
+│   ├── tareas.py/_ui       # «To-do» de la obra (hoja Tasks, v615): UNA lista por obra; marca cualquiera,
+│   │                       #   borra el autor o la oficina (oculta: Active=NO); no acredita avance
 │   ├── hojas.py            # lector por LOTES del libro (1 batchGet para todas las hojas, v339);
 │   │                       #   una hoja creada por OTRO proceso entra en ≤10 min (`_indice_al_dia`, v611)
 │   ├── num.py              # helpers únicos: num() / parse_date() / col_letter() (v323)

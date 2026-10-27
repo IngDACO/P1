@@ -81,6 +81,8 @@ HOJAS_LECTURA = (
     # volvería a leer NUNCA — la regla de v461/v507/v514 por cuarta vez. La cazó romper_v430
     # (su guardián, rojo de base) antes de desplegar; verif_v610 la vigila desde ahora.
     "AgentMemory",
+    # v615: la lista de pendientes de la obra (`tareas`), lector SIN cabeceras: la misma regla.
+    "Tasks",
 )
 
 

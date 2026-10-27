@@ -2743,12 +2743,15 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     _psp = st.session_state.pop("_prj_sec_pending", None)
     if _psp:
         st.session_state["cpxseg_prj_sec"] = _psp
+    # v615 · «To-do»: la misma lista de pendientes que ve la cuadrilla; la oficina también apunta
+    # (decisión del usuario) y borra cualquiera. Al final: las 4 de siempre conservan su sitio.
     _sec = st.radio(t("Project section"),
-                    ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"],
+                    ["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos", "✅ Tareas"],
                     format_func=lambda o: {"📊 Estado": t(":material/insights: Status"),
                                            "✏️ Datos": t(":material/edit: Data"),
                                            "💰 Costos": t(":material/payments: Costs"),
-                                           "📎 Archivos": t(":material/folder: Files")}.get(o, o),
+                                           "📎 Archivos": t(":material/folder: Files"),
+                                           "✅ Tareas": t(":material/checklist: To-do")}.get(o, o),
                     # v316: key `cpxseg_*` → el SEGMENTADO del kit (v292): sin bolitas,
                     # con marco y el elegido resaltado. Es la pieza para "una de N", que
                     # es lo que son estas 4 secciones. ⚠️ NO se usa la fila de botones del
@@ -3242,7 +3245,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             with st.expander(t(":material/delete_forever: Delete permanently (irreversible)"), key=f"exp_del_{pid}"):
                 _aso = P.datos_asociados(pid)
                 _hay = {k: v for k, v in _aso.items() if v}
-                st.warning(t("The project and its activities will be deleted. **This cannot be undone.** Almost always what you want is to archive it."))
+                # v615 · lo que se va CON la obra, entero: también sus partes (v516), el avance
+                # acreditado (v514) y su lista de pendientes (v615); antes decía «y sus actividades».
+                st.warning(t("The project will be deleted together with its activities and their progress, its daily logs and its to-do list. **This cannot be undone.** Almost always what you want is to archive it."))
                 if _hay:
                     # v590 · las claves son de la app («Expenses»…); se pinta su nombre con
                     # su plural (antes salían «documentos», «gastos» en la pantalla en inglés).
@@ -3273,6 +3278,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
     elif _sec == "💰 Costos":
         # ── Gastos / compras ──
         render_expenses(pid, grupo, can_delete=True, key_prefix="adm", ver_costos=True)
+
+    elif _sec == "✅ Tareas":
+        # v615 · la lista de pendientes de la obra (`tareas_ui`): la oficina apunta, marca y
+        # borra cualquiera (`gestor`).
+        from core import tareas_ui as _TDU
+        _TDU.render(pid, grupo, (st.session_state.get("auth") or {}).get("usuario", ""),
+                    gestor=True, key_prefix="adm")
 
     elif _sec == "📎 Archivos":
         _plano_section(pid, prj)
@@ -4048,12 +4060,15 @@ def render_field_projects(usuario: str, grupo: str):
     # incluido lo que el catálogo no tiene casilla para recoger (esperas, un acceso
     # cerrado, material que no llegó). Meterlo dentro de Avance habría hecho que el
     # texto pareciera opcional al lado de las casillas.
-    _opts = ["🏗 Avance", "📝 Parte", "🚨 Avisos", "💰 Recibos", "📎 Archivos"]
+    # v615 · «To-do» (la lista de pendientes de la obra, decisión del usuario) va DETRÁS del
+    # parte: el parte cuenta lo que pasó; la lista, lo que falta.
+    _opts = ["🏗 Avance", "📝 Parte", "✅ Tareas", "🚨 Avisos", "💰 Recibos", "📎 Archivos"]
     if P.es_interno(prj):
         _opts = _opts[1:]
     _sec = st.radio(t("Section"), _opts,
                     format_func=lambda o: {"🏗 Avance": t(":material/trending_up: Progress"),
                                            "📝 Parte": t(":material/edit_note: Daily log"),
+                                           "✅ Tareas": t(":material/checklist: To-do"),
                                            "🚨 Avisos": t(":material/report: Alerts"),
                                            "💰 Recibos": t(":material/receipt: Receipts"),
                                            "📎 Archivos": t(":material/folder: Files")}.get(o, o),
@@ -4076,6 +4091,10 @@ def render_field_projects(usuario: str, grupo: str):
                           key_prefix="fld",
                           # v586 · en una obra sin plan, el parte lleva a «Progress»
                           ir_avance=_ir_avance_campo)
+    elif _sec == "✅ Tareas":
+        from core import tareas_ui as _TDU
+        _TDU.render(pid, grupo, (st.session_state.get("auth") or {}).get("usuario", ""),
+                    gestor=False, key_prefix="fld")
     elif _sec == "🚨 Avisos":
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":

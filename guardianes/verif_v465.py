@@ -65,8 +65,10 @@ else:
 # ⚠️ v610 · `AgentMemory` (la memoria del agente del parte), por la MISMA razon: nace en
 # ingles el 27/10/2026 y nunca tuvo nombre español. CADUCADO por un cambio deliberado: la
 # regla sigue exigiendo respaldo a toda hoja que SI lo haya tenido.
+# ⚠️ v615 · `Tasks` (la lista de pendientes de la obra), por la MISMA razon: nace en ingles el
+# 28/10/2026 y nunca tuvo nombre español.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
-       "xeroconnections", "stageprogress", "dailylogs", "agentmemory"}
+       "xeroconnections", "stageprogress", "dailylogs", "agentmemory", "tasks"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:

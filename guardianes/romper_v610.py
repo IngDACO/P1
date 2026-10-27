@@ -70,8 +70,9 @@ ROTURAS = [
     ("⚠️ la memoria deja de ser global (cada cliente aprendería solo)", TC,
      [('                   "agentmemory"}\n', '                   }\n')]),
     # ⚠️ La que cazó romper_v430 en la 1ª tanda: fuera del lote, la memoria se lee VACÍA siempre.
+    # v615 · re-anclada: detrás de «AgentMemory» va ahora «Tasks» (la rotura es la MISMA: quitarla).
     ("⚠️ `AgentMemory` fuera del lote (la memoria se escribe y no se vuelve a leer)", "core/hojas.py",
-     [('    "AgentMemory",\n)', ')')]),
+     [('    "AgentMemory",\n', '')]),
     ("⚠️ bajo AppTest se escribe en la hoja REAL", MEMF,
      [('        return None\n    if not timeclock._secrets_present():\n        return None\n',
        '    if not timeclock._secrets_present():\n        return None\n')]),

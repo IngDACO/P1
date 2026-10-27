@@ -1040,6 +1040,13 @@ def delete_project(pid: str) -> tuple:
     except Exception as e:
         logger.warning("projects.delete_project(%s): no se pudieron borrar los "
                        "partes diarios: %s", pid, e)
+    # v615: y su lista de pendientes, que vive en OTRA hoja (la misma regla, escrita de antemano).
+    try:
+        from core import tareas as _TA
+        _TA.borrar_de_obra(pid)
+    except Exception as e:
+        logger.warning("projects.delete_project(%s): no se pudo borrar la lista de "
+                       "pendientes: %s", pid, e)
     _invalidate()
     return True, t("Project deleted.")
 

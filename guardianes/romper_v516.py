@@ -129,9 +129,10 @@ ROTURAS = [
      "        _linea(r, True, key_prefix, extra=lambda r=r: _estado_revision(r, pid))\n"
      "        DL.borrar(r.get('ID'), 'admin') if False else None"),
 
+    # v615 · re-anclada: detrás de «Parte» va ahora «Tareas» (la rotura es la MISMA).
     ("el campo pierde su seccion (la pantalla deja de existir)",
-     "core/projects_ui.py", '"🏗 Avance", "📝 Parte", "🚨 Avisos"',
-     '"🏗 Avance", "🚨 Avisos"'),
+     "core/projects_ui.py", '"🏗 Avance", "📝 Parte", "✅ Tareas"',
+     '"🏗 Avance", "✅ Tareas"'),
 ]
 
 # ⚠️ El CONTROL tiene que ser un cambio REAL que NO pueda poner nada rojo. En v514 nacio

@@ -212,8 +212,10 @@ chk(not _crudos, f"ningún widget pinta sus opciones crudas ({len(_crudos)})")
 
 print("\n== 8. Las opciones de esos widgets NO se tocaron ==")
 _pu = (CORE / "projects_ui.py").read_text(encoding="utf-8")
-chk('["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos"]' in _pu,
-    "las 4 sub-secciones del detalle conservan su ID (deep-links + matching)")
+# ⚠️ v615 · al día con su razón: el detalle tiene una 5ª sección, «✅ Tareas» (la lista de
+# pendientes), AL FINAL. Lo que protege sigue entero: las 4 conservan su ID y su orden.
+chk('["📊 Estado", "✏️ Datos", "💰 Costos", "📎 Archivos", "✅ Tareas"]' in _pu,
+    "las 4 sub-secciones del detalle conservan su ID (deep-links + matching), y la 5ª va detrás")
 chk('["👥 Equipo", "💰 Gastos", "🦺 Pre-Start", "📎 Archivos", "✏️ Datos"]' in _pu,
     "las 5 de Localizaciones conservan su ID")
 chk('_sec == "👥 Equipo"' in _pu and '_sec == "✏️ Datos"' in _pu,

@@ -266,9 +266,18 @@ chk("...borrando de ABAJO ARRIBA", h.borradas == sorted(h.borradas, reverse=True
 _ap = ast.parse(io.open("core/projects.py", encoding="utf-8").read())
 _del = next((n for n in ast.walk(_ap)
              if isinstance(n, ast.FunctionDef) and n.name == "delete_project"), None)
+# ⚠️ v615 · AL DÍA CON SU RAZÓN: `tareas` tiene también su `borrar_de_obra`, y `delete_project` lo
+# llama. Mirar «alguna llamada a `.borrar_de_obra`» dejó ESCAPAR en romper_v516 la rotura «los partes
+# huérfanos» (trampa nº2 otra vez: la de las tareas la satisfacía). Se exige la del módulo de PARTES:
+# el alias con que `delete_project` importa `core.daily_log`.
+_alias_dl = {(a.asname or a.name) for n in (ast.walk(_del) if _del else [])
+             if isinstance(n, ast.ImportFrom) and n.module == "core"
+             for a in n.names if a.name == "daily_log"}
 _llama = any(isinstance(c, ast.Call) and getattr(c.func, "attr", "") == "borrar_de_obra"
+             and getattr(c.func.value, "id", "") in _alias_dl
              for c in ast.walk(_del)) if _del else False
-chk("`delete_project` lo llama", _llama)
+chk("`delete_project` lo llama (el de los PARTES, no otro `borrar_de_obra`)", bool(_alias_dl) and _llama,
+    _alias_dl)
 
 # ═════════════════════════════════════════════════════════════════
 sec("7. Se lee del más reciente al más viejo, por CUÁNDO se escribió")
