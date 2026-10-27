@@ -391,7 +391,10 @@ _fr = list(_df.iloc[:, 0]) if _df is not None else []
 chk("...con lo de SU grupo y las reglas del propietario, NO lo de otro grupo",
     sorted(_fr) == ["installed motor", "propia"], _fr)
 _ms = next((m for m in at5.multiselect if m.key == "adm_mem_olv"), None)
-chk("...y solo puede elegir para olvidar lo de su grupo", _ms is not None and list(_ms.options) == ["«propia» → Install sills"],
+# ⚠️ v612 · al día con su razón: la etiqueta lleva ahora el tipo y las veces («· learned 2×»), para
+# distinguir dos filas iguales (visto en producción). La afirmación es la misma: SOLO lo de su grupo.
+chk("...y solo puede elegir para olvidar lo de su grupo",
+    _ms is not None and list(_ms.options) == ["«propia» → Install sills · learned 2×"],
     _ms and list(_ms.options))
 _bt(at5, "adm_mem_olvidar").click()
 at5.run()

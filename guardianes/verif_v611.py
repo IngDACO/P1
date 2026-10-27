@@ -356,8 +356,10 @@ chk("...y cerrado: no enseña nada hasta que se pide", _w(at.multiselect, "adm_m
 _cv.check()
 at.run()
 _mr = _w(at.multiselect, "adm_mem_rest")
+# ⚠️ v612 · al día con su razón: la etiqueta lleva el tipo, las veces y la HORA del olvido (dos
+# olvidadas iguales salían con el mismo texto en producción). Lo de aquí sigue: frase, actividad, fecha.
 chk("abierto: «Restore these» con la frase, la actividad y CUÁNDO se olvidó (DD/MM/YYYY)",
-    _mr is not None and list(_mr.options) == ["«vieja» → Install frames · forgotten 26/10/2026"],
+    _mr is not None and list(_mr.options) == ["«vieja» → Install frames · learned 0× · forgotten 26/10/2026 08:00"],
     _mr and list(_mr.options))
 chk("...también sin «Select all»", _mr is not None and _mr.proto.select_all == 0)
 _bt(at, "adm_mem_restaurar").click()
@@ -381,8 +383,10 @@ _w(at2.multiselect, "adm_mem_rest").select("MEM-8")
 at2.run()
 _bt(at2, "adm_mem_restaurar").click()
 at2.run()
+# ⚠️ v612 · al día con su razón: el texto ya no dice «learned again» (también vale para una REGLA
+# re-enseñada) ni «1 … left as they are». La afirmación es la misma: lo dice, y no un «Restored: 0.».
 chk("una que ya volvió a aprenderse: lo dice (no un «Restored: 0.» mudo)",
-    any("already back in the memory" in x for x in _todo(at2)) and not any("Restored: 0" in x for x in _todo(at2)),
+    any("Already back in the memory" in x for x in _todo(at2)) and not any("Restored: 0" in x for x in _todo(at2)),
     _todo(at2)[-3:])
 
 at3 = AppTest.from_string(APP, default_timeout=90)

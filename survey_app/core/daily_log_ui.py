@@ -997,9 +997,12 @@ def _atender_memoria(grupo) -> None:
             msg = (t("Restored: {n}.", n=n) if ok
                    else t("Nothing was restored (only your group's lessons can be restored)."))
             if ok and rep:
-                # ⚠️ Se volvió a aprender después de olvidarla: ya está activa en otra fila.
+                # ⚠️ Se volvió a aprender —o a enseñar— después de olvidarla: ya está activa en otra
+                # fila. v612 · el texto decía «learned again» también de una REGLA re-enseñada, y
+                # «1 … left as they are»: ahora vale para las dos y para cualquier número.
                 msg = (msg + " " if n else "") + t(
-                    "{r} already back in the memory (learned again since), left as they are.", r=rep)
+                    "Already back in the memory (learned or taught again after it was forgotten), "
+                    "so left as is: {r}.", r=rep)
         else:
             ok, msg = MEM.poner_regla(pet.get("frase"), pet.get("actividad"),
                                       "" if _dueno else grupo, _u)
@@ -1010,6 +1013,32 @@ def _atender_memoria(grupo) -> None:
                 st.session_state["%s_mem_act" % pet["kp"]] = None
     (flash.exito if ok else flash.error)(msg)
     st.rerun()
+
+
+def _veces(v) -> int:
+    try:
+        return int(float(str(v or 0)))
+    except ValueError:
+        return 0
+
+
+def _etq_leccion(r, olvidada=False) -> str:
+    """«frase» → actividad, con lo que la DISTINGUE de otra igual (v612): si es regla o aprendida
+    (y cuántas veces), y al recuperar, CUÁNDO se olvidó. ⚠️ Visto en producción: dos olvidadas
+    iguales salían en «Restore these» con el MISMO texto, y una lección y una regla iguales
+    saldrían igual en «Forget these»: no había forma de saber cuál se elegía."""
+    from core import agente_memoria as MEM
+    if str(r.get("Kind", "")) == MEM.REGLA:
+        tipo = t("rule")
+    else:
+        c, x = _veces(r.get("Confirmed")), _veces(r.get("Rejected"))
+        tipo = (t("learned {c}× · rejected {x}×", c=c, x=x) if x else t("learned {c}×", c=c))
+    out = "«%s» → %s · %s" % (r.get("Phrase", ""), r.get("Activity", ""), tipo)
+    if olvidada:
+        _u = str(r.get("Updated", ""))
+        out += " · " + t("forgotten {d}", d=(_dmy(_u[:10]) + (" " + _u[11:16] if len(_u) >= 16 else ""))
+                         if _u else "—")
+    return out
 
 
 def _panel_memoria(grupo, kp) -> None:
@@ -1030,7 +1059,7 @@ def _panel_memoria(grupo, kp) -> None:
                   t("Confirmed"): r["Confirmed"], t("Rejected"): r["Rejected"],
                   t("Updated"): _dmy(str(r.get("Updated", ""))[:10])} for r in _l],
                 hide_index=True, width="stretch", key="%s_mem_tbl" % kp)
-            _mias = {str(r["ID"]): "«%s» → %s" % (r["Phrase"], r["Activity"]) for r in _l
+            _mias = {str(r["ID"]): _etq_leccion(r) for r in _l
                      if _dueno or str(r.get("Group", "")) == str(grupo)}
             if _mias:
                 # ⚠️ v611 · sin «Select all»: con él, lo que una cuadrilla enseña en semanas se
@@ -1047,8 +1076,7 @@ def _panel_memoria(grupo, kp) -> None:
         # v611 · lo olvidado se recupera (antes, olvidar no tenía vuelta atrás en la pantalla)
         if _olv and st.checkbox(t("Show forgotten lessons ({n})", n=len(_olv)),
                                 key="%s_mem_ver_olv" % kp):
-            _rec = {str(r["ID"]): t("«{f}» → {a} · forgotten {d}", f=r["Phrase"], a=r["Activity"],
-                                    d=_dmy(str(r.get("Updated", ""))[:10]) or "—") for r in _olv}
+            _rec = {str(r["ID"]): _etq_leccion(r, olvidada=True) for r in _olv}
             st.multiselect(t("Restore these"), list(_rec), key="%s_mem_rest" % kp,
                            format_func=lambda i: _rec.get(i, i),
                            placeholder=t("— choose lessons —"), select_all=False)
