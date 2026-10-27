@@ -1544,7 +1544,7 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
         st.warning((t(":material/warning: **Without full contact details (email + Telegram):** "
                       "{x}. They will not receive the assignment or the inductions.")
                     if notify.exige_telegram_campo() else
-                    t(":material/warning: **Without an email:** {x}. They will not receive the "
+                    t(":material/warning: **Without a valid email:** {x}. They will not receive the "
                       "assignment or the inductions."))
                    .replace("{x}", ", ".join(sin_contacto)))
 

@@ -76,13 +76,22 @@ def exige_telegram_campo() -> bool:
     return bool(TELEGRAM_OBLIGATORIO_CAMPO and telegram_configured() and bot_username())
 
 
+def email_campo_ok(u) -> bool:
+    """El email de un usuario de campo VALE: escrito y que SEA un correo (v614, decisión del
+    usuario). ⚠️ «driver 1» contaba como contacto completo —la regla solo miraba que no estuviera
+    vacío— y con el Telegram opcional el email es su ÚNICO canal. Una errata probable
+    («x@hotmai.com») no lo invalida: es un correo, y la ficha ya avisa aparte («Check the email»)."""
+    e = str((u or {}).get("Email", "")).strip()
+    return bool(e) and bool(auth.revisar_email(e).get("ok"))
+
+
 def contacto_campo_ok(u) -> bool:
     """La UNA definición de «el contacto de este usuario de campo está completo» (v613): el
-    email siempre; el Telegram, solo si se exige. Antes la puerta, el resumen del admin y tres
-    paneles pedían los dos por su cuenta: con la política cambiada habrían dicho «no puede usar
-    la app» de quien sí puede."""
+    email siempre (y válido, v614); el Telegram, solo si se exige. Antes la puerta, el resumen
+    del admin y tres paneles pedían los dos por su cuenta: con la política cambiada habrían dicho
+    «no puede usar la app» de quien sí puede."""
     u = u or {}
-    if not str(u.get("Email", "")).strip():
+    if not email_campo_ok(u):
         return False
     return (not exige_telegram_campo()) or bool(str(u.get("TelegramChatID", "")).strip())
 

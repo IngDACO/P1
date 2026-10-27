@@ -186,8 +186,10 @@ chk("asignar a quien tiene email y NO Telegram: sin aviso de contacto (le llega 
 at4 = AppTest.from_string(APP2, default_timeout=60)
 at4.session_state["_us"] = ["conmail", "sinmail"]
 at4.run()
-chk("...a quien NO tiene email: «Without an email: Sin Mail» (solo él, y lo que de verdad le falta)",
-    any("**Without an email:** Sin Mail." in x for x in _avisos(at4))
+# ⚠️ v614 · al día con su razón: el texto es «Without a VALID email» (un email que no es un correo
+# tampoco vale, decisión del usuario). La afirmación es la misma: solo él, y lo que le falta.
+chk("...a quien NO tiene email: «Without a valid email: Sin Mail» (solo él, y lo que de verdad le falta)",
+    any("**Without a valid email:** Sin Mail." in x for x in _avisos(at4))
     and not any("Con Mail" in x for x in _avisos(at4)), _avisos(at4))
 at5 = AppTest.from_string(APP2, default_timeout=60)
 at5.session_state["_pol"] = True

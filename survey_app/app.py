@@ -248,7 +248,8 @@ if _ROL in ("administrator", "owner"):
 # tenerlo: exigir un canal inexistente no protege nada, solo deja gente fuera.
 if _ROL == "field" and not st.session_state.get("_contact_ok"):
     _rec = get_user(st.session_state.auth.get("usuario", ""))
-    _has_mail = bool(str(_rec.get("Email", "")).strip())
+    # v614 · un email que NO es un email («driver 1») no cuenta: la misma regla que los paneles
+    _has_mail = notify.email_campo_ok(_rec)
     _has_tg   = bool(str(_rec.get("TelegramChatID", "")).strip())
     # ¿se exige el Telegram? Solo si la política lo pide (v613: POR AHORA no, decisión del
     # usuario) Y el canal existe en esta instalación (v368). La regla vive en `notify`.
@@ -268,6 +269,10 @@ if _ROL == "field" and not st.session_state.get("_contact_ok"):
         # a secas lo deja mirando una pared sin saber a quién pedírselo.
         if _falta_mail and _falta_tg:
             st.warning(t("Your account needs **email and Telegram**. The **email is entered by your administrator**; you link the Telegram yourself with the step below."))
+        elif _falta_mail and str(_rec.get("Email", "")).strip():
+            # v614 · tiene algo escrito, pero no es un correo: decirlo, no «te falta el email»
+            st.warning(t("The **email** on your account («{x}») is not a valid address, and your administrator corrects it. Let them know and sign in again — you cannot set it from here.",
+                         x=str(_rec.get("Email", "")).strip()))
         elif _falta_mail:
             st.warning(t("Your account needs an **email**, and your administrator enters it. Let them know and sign in again — you cannot set it from here."))
         else:

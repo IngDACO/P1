@@ -44,8 +44,9 @@ ROTURAS = [
     ("la regla ignora la política (se exige siempre que haya bot)", NT,
      [('    return bool(TELEGRAM_OBLIGATORIO_CAMPO and telegram_configured() and bot_username())\n',
        '    return bool(telegram_configured() and bot_username())\n')]),
+    # v614 · re-anclada: la línea pregunta ahora a `email_campo_ok` (vacío o no-correo). La rotura es la misma.
     ("⚠️ el email deja de ser obligatorio", NT,
-     [('    if not str(u.get("Email", "")).strip():\n        return False\n', '')]),
+     [('    if not email_campo_ok(u):\n        return False\n', '')]),
     # ── la puerta de app.py ──
     ("⚠️ la puerta exige el Telegram siempre", APPF,
      [('    _falta_tg   = _exige_tg and not _has_tg        # sin bot o sin la política, no se exige\n',

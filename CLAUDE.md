@@ -1211,7 +1211,7 @@ Avisa a un usuario de campo al **asignarlo** a un proyecto (crear/editar), con l
 - **Vinculación Telegram** (sin webhook): el usuario abre `t.me/<bot>?start=<code>` (code=usuario saneado)
   → pulsa Start → la app llama `getUpdates` y matchea el code → guarda el chat_id (`telegram_find_chat_by_code`).
 - **Contacto OBLIGATORIO para campo + solo el ADMIN lo edita (v79):** el email, siempre (obligatorio al
-  crear). ⚠️ **El Telegram, POR AHORA no** (v613, decisión del usuario: pruebas con usuarios de campo
+  crear) y VÁLIDO (v614, `notify.email_campo_ok`: «driver 1» no cuenta; una errata probable, sí). ⚠️ **El Telegram, POR AHORA no** (v613, decisión del usuario: pruebas con usuarios de campo
   ficticios): `notify.TELEGRAM_OBLIGATORIO_CAMPO = False`; con True vuelve a exigirse, solo si el bot
   existe (v368). UNA regla, `notify.contacto_campo_ok(u)`, la usan la puerta de app.py, el Home, el
   asistente, los paneles de usuarios y el aviso al asignar — no copiar «email Y Telegram» a mano (lo
