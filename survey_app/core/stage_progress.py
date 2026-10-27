@@ -466,3 +466,105 @@ def borrar(pid, etapa, actividad, grupo, prj, quien="") -> tuple:
     return acreditar(pid, grupo, prj,
                      [{"etapa": etapa, "actividad": actividad, "pct": 0.0,
                        "nota": t("cleared")}], quien=quien)
+
+
+# ═════════════════════════════════════════════════════════════════
+# v609 · Pasar una obra a la versión de HOY del catálogo, a propósito
+# ═════════════════════════════════════════════════════════════════
+def migrar_catalogo(pid, grupo, prj, quien="") -> tuple:
+    """Pasa una obra de un juego ANTERIOR (`stages.MIGRABLES`) al de hoy. `(ok, mensaje)`.
+
+    Es lo que el aviso de `stages` llama «migrar a propósito»: hasta aquí, cambiar el catálogo
+    dejaba toda obra existente en solo lectura (`version_desfasada`). En UNA lectura fresca y
+    UNA escritura, como `acreditar`:
+      · el `StagePlanJSON` de la obra pasa a la versión de hoy (lo demás del plan, igual);
+      · la etapa renombrada se renombra en su cronograma (`Activities.Name`);
+      · las etapas cuyos pesos cambiaron se RECALCULAN con lo ya acreditado, y la obra con
+        ellas — su avance se mueve, que es el cambio que decidió el usuario — y queda en la
+        auditoría.
+    ⚠️ Se niega si la obra no es de un juego migrable o si tiene un crédito que el juego de
+    hoy no tiene: así un crédito nunca queda colgando de una actividad que ya no existe.
+    """
+    from core import hojas
+    from core import projects as P
+    from core import stages as S
+    import json as _json
+    _pl = P.plan_etapas(prj)
+    _v = str(_pl.get("version", "") or "")
+    if not _pl:
+        return False, t("This job has no stage plan.")
+    if _v == S.VERSION:
+        return True, t("Already on the current catalogue.")
+    _mig = S.MIGRABLES.get(_v)
+    if not _mig:
+        return False, t("Catalogue {old} cannot be migrated to {new}.", old=_v, new=S.VERSION)
+    _plan = S.plan_de(_pl.get("tipo") or str((prj or {}).get("Type", "")),
+                      _pl.get("condicionales") or (), _pl.get("pct_ripout"))
+    w = _ws()
+    aws, _e_act = P._activities_ws()
+    pws, _e_prj = P._projects_ws()
+    if w is None or _e_act or _e_prj:
+        return False, _e_act or _e_prj or timeclock.motivo_sin_hoja()
+    try:
+        _leido = hojas.frescas({SHEET: w, P.ACTIVITIES_SHEET: aws, P.PROJECTS_SHEET: pws})
+    except Exception as e:
+        return False, "%s: %s" % (t("Error saving"), e)
+    _filas, _mapa, _fechas = _indice(_leido.get(SHEET) or [], pid)
+    _validas = {(i, a["nombre"]) for i, e in enumerate(_plan, start=1) for a in e["actividades"]}
+    _validas |= {(i, n) for i, e in enumerate(_plan, start=1)
+                 for n in S.informativas(e.get("pista"), e.get("numero"))}
+    _huerfanos = [k for k, pc in _mapa.items() if pc > 0 and k not in _validas]
+    if _huerfanos:
+        return False, t("Credits that the current catalogue does not have: {x}",
+                        x=", ".join("#%d %s" % k for k in _huerfanos[:3]))
+    _orden = {(e.get("pista"), e.get("numero")): i for i, e in enumerate(_plan, start=1)}
+    # 1) las etapas que cambian de pesos, recalculadas con lo ya acreditado
+    _det = {e["orden"]: e for e in _sobre(_plan, _mapa)}
+    _cambios = []
+    for k in _mig.get("etapas") or ():
+        o = _orden.get(k)
+        if o is None or o not in _det:
+            continue                         # la obra no lleva esa etapa (un desmontaje solo)
+        _dias = sorted(f for f in (_fechas.get((o, a["nombre"])) for a in _det[o]["actividades"]
+                                 if _mapa.get((o, a["nombre"]), 0) > 0) if f)
+        _cambios.append({"orden": o, "avance": _det[o]["pct"], "inicio": _dias[0] if _dias else "",
+                         "fin": _dias[-1] if (_dias and _det[o]["pct"] >= 100) else ""})
+    _hoy = clock.now(grupo).strftime("%Y-%m-%d")[:10]
+    _lote_act, _filas_obra = P._lote_avance(_leido.get(P.ACTIVITIES_SHEET), pid, _cambios, _hoy)
+    # 2) el nombre nuevo de la etapa en SU cronograma
+    for (pista, num), (viejo, nuevo) in (_mig.get("renombres") or {}).items():
+        o = _orden.get((pista, num))
+        for i, r in enumerate(_leido.get(P.ACTIVITIES_SHEET) or []):
+            if (str(r.get("ProjectID", "")) == str(pid) and str(r.get("Order", "")) == str(o)
+                    and str(r.get("Name", "")) == viejo):
+                _lote_act.append({"range": "%s%d" % (_col_letter(P._ACOL["Name"]), i + 2),
+                                  "values": [[nuevo]]})
+    # 3) la obra: su avance con las etapas de ahora y el plan con la versión de hoy
+    _lote_prj, _antes, _nuevos = P._lote_obra(_leido.get(P.PROJECTS_SHEET), pid, _filas_obra)
+    if _lote_prj is None:
+        return False, t("Project not found.")
+    _fila = next(i + 2 for i, r in enumerate(_leido.get(P.PROJECTS_SHEET) or [])
+                 if str(r.get("ID", "")) == str(pid))
+    _nuevo_plan = _json.dumps(dict(_pl, version=S.VERSION), ensure_ascii=False)
+    _lote_prj.append({"range": "%s%d" % (_col_letter(P._PCOL["StagePlanJSON"]), _fila),
+                      "values": [[_nuevo_plan]]})
+    _nuevos = dict(_nuevos, StagePlanJSON=_nuevo_plan)
+    try:
+        hojas.escribir([(aws, _lote_act), (pws, _lote_prj)])
+    except Exception as e:
+        P._invalidate()
+        return False, "%s: %s" % (t("Error saving"), e)
+    _invalidate()
+    P._invalidate()
+    # ⚠️ Fuera del guardado, como en `acreditar` (v342): si la anotación falla, la migración
+    # ya está hecha. La acción lo dice: el avance no lo movió nadie en terreno.
+    try:
+        from core import auditoria
+        auditoria.registrar("proyecto", pid, auditoria.diff(_antes, _nuevos),
+                            grupo=str(_antes.get("Group", "")),
+                            accion="catalogue %s -> %s" % (_v, S.VERSION))
+    except Exception as e:
+        logger.warning("stage_progress.migrar_catalogo: no se pudo auditar %s: %s", pid, e)
+    return True, t("Migrated from {old} to {new}: progress {before}% → {after}%.", old=_v,
+                   new=S.VERSION, before=_antes.get("Progress", "?"),
+                   after=_nuevos.get("Progress", "?"))

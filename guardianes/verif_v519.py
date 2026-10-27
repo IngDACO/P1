@@ -228,7 +228,10 @@ sec("5. ⚠️ Si cambia un PESO, tiene que cambiar `VERSION`")
 # disciplina. Con esta huella, cambiar un peso sin subirla es un ROJO.
 # ⚠️ Las INFORMATIVAS no entran en la huella: no llevan peso, y por eso v519 no subió la
 # versión. Comprobado contra el HEAD anterior: huella idéntica.
-HUELLAS = {"2026-09-22": "7240bebb83ccab8f"}
+# v609 · «2026-10-27»: «Install motor (machine)» 5 % sacado de «Install motor bedplate» (17 → 12)
+# y la etapa renombrada «Shaft Climb, Bedplate & Motor» (decisión del usuario, 27/10/2026). La
+# del juego anterior se queda: es la de las obras que aún no se migren.
+HUELLAS = {"2026-09-22": "7240bebb83ccab8f", "2026-10-27": "403431515eacd4b4"}
 
 
 def huella():
@@ -247,13 +250,15 @@ chk("...y los pesos casan con ella: nadie cambió un peso sin subir la versión"
 _k = next(iter(sorted(S.ACTIVIDADES)))
 _bak = list(S.ACTIVIDADES[_k])
 S.ACTIVIDADES[_k] = [(_bak[0][0], _bak[0][1] + 0.1, _bak[0][2])] + _bak[1:]
-chk("...y la huella SÍ cambia con una décima de peso", huella() != HUELLAS["2026-09-22"])
+# v609 · contra la huella de la versión de HOY: con la vieja escrita a mano, el cambio de
+# juego ponía rojas dos comprobaciones que no tenían nada que ver con él.
+chk("...y la huella SÍ cambia con una décima de peso", huella() != HUELLAS[S.VERSION])
 S.ACTIVIDADES[_k] = _bak
 # ⚠️ Y que las informativas NO la mueven: si la movieran, añadir una obligaría a subir la
 # versión y bloquearía obras cuyo avance no ha cambiado.
 _bak_i = dict(S.INFORMATIVAS)
 S.INFORMATIVAS[("install", 1)] = ["Algo informativo de prueba"]
-chk("...y añadir una informativa NO la mueve", huella() == HUELLAS["2026-09-22"])
+chk("...y añadir una informativa NO la mueve", huella() == HUELLAS[S.VERSION])
 S.INFORMATIVAS.clear()
 S.INFORMATIVAS.update(_bak_i)
 

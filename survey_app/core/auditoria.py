@@ -77,6 +77,11 @@ CAMPOS_CLAVE = {
     # hueco que `MargenMO` en v344 y `CostoUnit` en v352, tercera vez. Si un campo
     # mueve dinero, entra aquí en el MISMO lote en que se crea.
     "HourlyProfitJSON", "FixedProfit",
+    # ⚠️ v609 · `StagePlanJSON` (v512) decide con qué JUEGO DE PESOS se mide la obra, o sea
+    # su avance, que se reclama: cambiarlo mueve dinero. Llevaba sin auditar desde que nació
+    # — el hueco de v344/v352/v373 por cuarta vez — y lo destapó la primera migración de
+    # catálogo (`stage_progress.migrar_catalogo`), cuyo rastro salía sin el plan.
+    "StagePlanJSON",
 }
 
 

@@ -53,7 +53,12 @@ No importa nada de `core`. Es un catálogo con aritmética pura, así que se pue
 ejercitar entero sin Sheets ni Streamlit — la lección de `quote_from_plan` (v509).
 """
 
-VERSION = "2026-09-22"          # juego de pesos; ver el aviso de arriba
+# ⚠️ v609 · «2026-10-27» = decisión del usuario (27/10/2026): el montaje del MOTOR es una
+# actividad propia —el agente del parte lo preguntaba en cada «installed motor» porque el plan
+# no la tenía—, con un 5% que sale del 17% de «Install motor bedplate» (queda en 12), y la etapa
+# se llama «Shaft Climb, Bedplate & Motor». Las obras de «2026-09-22» se pasan A PROPÓSITO con
+# `stage_progress.migrar_catalogo` (ver `MIGRABLES`), como prevé el aviso de arriba.
+VERSION = "2026-10-27"          # juego de pesos; ver el aviso de arriba
 
 PISTA_INSTALL = "install"
 PISTA_RIPOUT = "ripout"
@@ -86,7 +91,7 @@ ETAPAS = [
     (PISTA_INSTALL, 3, "Plumbing & Survey", 5),
     (PISTA_INSTALL, 4, "Car Assembly", 11),
     (PISTA_INSTALL, 5, "Counterweight (CW) Assembly", 5),
-    (PISTA_INSTALL, 6, "Shaft Climb & Bedplates", 13),
+    (PISTA_INSTALL, 6, "Shaft Climb, Bedplate & Motor", 13),      # v609: era «… & Bedplates»
     (PISTA_INSTALL, 7, "Landing Doors", 11),
     (PISTA_INSTALL, 8, "Pit Mechanical", 4),
     (PISTA_INSTALL, 9, "Headroom Wiring", 7),
@@ -218,7 +223,8 @@ ACTIVIDADES = {
         ("Install rings to top", 22, False),
         ("Install car rails to top", 18, False),
         ("Install CW rails to top", 18, False),
-        ("Install motor bedplate", 17, False),
+        ("Install motor bedplate", 12, False),       # v609: 17 → 12 (5 al motor)
+        ("Install motor (machine)", 5, False),       # v609: nueva (decisión del usuario)
         ("Install single bedplate", 13, False),
         ("Seal machine room / shaft penetrations", 12, False),
     ],
@@ -326,6 +332,24 @@ ACTIVIDADES = {
 }
 
 TOLERANCIA = 0.05      # las sumas se comparan con esta holgura, no con ==
+
+# ═════════════════════════════════════════════════════════════════
+# v609 · Juegos ANTERIORES que se pueden pasar a este SIN rehacer la obra
+# ═════════════════════════════════════════════════════════════════
+# Un juego es migrable si tiene las MISMAS etapas en el MISMO orden y no QUITA ni renombra
+# ninguna actividad: así cada crédito guardado (`StageProgress`: orden de etapa + nombre de
+# actividad) sigue apuntando a lo mismo. Lo que cambia se dice aquí, y `migrar_catalogo` solo
+# toca eso: renombra la etapa en el cronograma de la obra y recalcula las etapas cuyos pesos
+# cambiaron (su avance y el de la obra se mueven: es el cambio que el usuario decidió).
+MIGRABLES = {
+    "2026-09-22": {
+        "renombres": {(PISTA_INSTALL, 6): ("Shaft Climb & Bedplates",
+                                           "Shaft Climb, Bedplate & Motor")},
+        "etapas": [(PISTA_INSTALL, 6)],
+        "motivo": "Install motor (machine) added with 5% taken from Install motor bedplate "
+                  "(17 → 12); stage renamed (user's decision, 27/10/2026)",
+    },
+}
 
 
 def etapas(pista=None) -> list:

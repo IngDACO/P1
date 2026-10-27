@@ -72,8 +72,9 @@ ROTURAS = [
 
     # ── el modulo hoja ──
     ('core/stages.py deja de ser modulo HOJA', "core/stages.py",
-     'VERSION = "2026-09-22"',
-     'from core import num  # rotura' + N + 'VERSION = "2026-09-22"'),
+     # v609 · re-anclada: el juego de pesos es ahora «2026-10-27» (la rotura es la MISMA).
+     'VERSION = "2026-10-27"',
+     'from core import num  # rotura' + N + 'VERSION = "2026-10-27"'),
 
     # ── el puente al cronograma ──
     ('⚠️ se deja de repartir el resto (la entrega se mueve)', "core/schedule.py",

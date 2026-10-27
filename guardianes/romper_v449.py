@@ -26,7 +26,8 @@ ROTURAS = [
     # `schedule.py`. Llevaba muerta desde v453, que es cuando esos nombres se migraron
     # al ingles: la rotura pretendia TRADUCIR un nombre espanol que ya no existia. Ahora
     # los nombres viven en el catalogo y la rotura va al reves, que es el riesgo de hoy.
-    ("core/stages.py", '(PISTA_INSTALL, 6, "Shaft Climb & Bedplates", 13)',
+    # v609 · re-anclada: la etapa se llama ahora «Shaft Climb, Bedplate & Motor» (la rotura es la MISMA).
+    ("core/stages.py", '(PISTA_INSTALL, 6, "Shaft Climb, Bedplate & Motor", 13)',
      '(PISTA_INSTALL, 6, "Montaje de rieles (guías)", 13)',
      "se traduce un nombre de ETAPA (es dato de la hoja)"),
     # v569 · CADUCADA desde v467 (la carpeta ya se llama «COPEX Assets» y la vieja se

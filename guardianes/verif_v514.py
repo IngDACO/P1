@@ -166,7 +166,10 @@ print("\n[3] lo que ve la pantalla")
 _con([])
 _d = SP.detalle("PRJ-T", PRJ)
 ck("salen las 14 etapas de la instalacion", len(_d), 14)
-ck("...con sus 143 actividades", sum(len(e["actividades"]) for e in _d), 143)
+# v609 · el número sale del CATÁLOGO (trampa 16), no de un literal: 144 desde «Install motor
+# (machine)». Lo que se protege es que el detalle no PIERDA ninguna.
+_N_INST = sum(1 for (p, _n), v in S.ACTIVIDADES.items() if p == "install" for a in v if not a[2])
+ck("...con sus %d actividades" % _N_INST, sum(len(e["actividades"]) for e in _d), _N_INST)
 ck("el orden va de 1 a N sin huecos",
    [e["orden"] for e in _d], list(range(1, len(_d) + 1)))
 ck("sin creditos, todo a cero", {e["pct"] for e in _d}, {0.0})
@@ -174,7 +177,9 @@ ck("sin creditos, todo a cero", {e["pct"] for e in _d}, {0.0})
 # Un credito real, superpuesto al catalogo.
 _con([{"StageOrder": "6", "Activity": "Install motor bedplate", "Pct": "100"}])
 _d6 = next(e for e in SP.detalle("PRJ-T", PRJ) if e["orden"] == 6)
-cerca("⚠️ acreditar el bedplate (17% de su etapa) da 17%", _d6["pct"], 17.0)
+# v609 · el peso del bedplate, del catálogo (17 → 12 en «2026-10-27»), no escrito a mano.
+_PB = float(dict((a[0], a[1]) for a in S.actividades("install", 6))["Install motor bedplate"])
+cerca("⚠️ acreditar el bedplate (%g%% de su etapa) da %g%%" % (_PB, _PB), _d6["pct"], _PB)
 ck("...y solo esa actividad queda marcada",
    [a["nombre"] for a in _d6["actividades"] if a["pct"] >= 100],
    ["Install motor bedplate"])
@@ -218,7 +223,7 @@ ck("⚠️ se escribe el avance de la etapa en Activities", len(_llam), 1)
 _cam = _llam[0] if _llam else []
 ck("...solo la etapa TOCADA", [c["orden"] for c in _cam], [6])
 cerca("...con el % calculado, no con el de la casilla",
-      _cam[0]["avance"] if _cam else -1, 17.0)
+      _cam[0]["avance"] if _cam else -1, _PB)
 
 # Solo las tocadas: acreditar en la 6 no puede reescribir las otras trece.
 _hoja, _m = _con([])

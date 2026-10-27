@@ -231,7 +231,9 @@ ck("no importa nada de core", [i for i in _imp if "core" in i], [])
 ck("...ni streamlit ni gspread",
    [i for i in _imp if "streamlit" in i or "gspread" in i], [])
 ck("el catalogo trae las 18 etapas", len(S.ETAPAS), 18)
-ck("...y 173 actividades", sum(len(v) for v in S.ACTIVIDADES.values()), 173)
+# v609 · 174: «Install motor (machine)», decisión del usuario (27/10/2026); la huella de los
+# pesos la vigila verif_v519.
+ck("...y 174 actividades", sum(len(v) for v in S.ACTIVIDADES.values()), 174)
 ck("el juego de pesos esta versionado", bool(S.VERSION), True)
 
 # ═════ 8 · el cronograma sale del catalogo ═══════════════════════════════════
