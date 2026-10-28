@@ -132,37 +132,73 @@ def _bloqueos_de(pid, grupo=None) -> dict:
         return {}
 
 
+_ALR_PET = "_alr_pet"      # v616 · «Mark as resolved», atendido ARRIBA (trampa 37)
+
+
+def _es_gestor() -> bool:
+    """Oficina (admin o propietario) — la que resuelve cualquier alarma (v616)."""
+    return str((st.session_state.get("auth") or {}).get("rol", "")) in ("administrator", "owner")
+
+
+def _pedir_resolver(pid, aid) -> None:
+    st.session_state[_ALR_PET] = {"pid": str(pid), "id": str(aid)}
+
+
+def _fecha_hora(iso) -> str:
+    """«2026-10-28 08:05» → «28/10/2026 08:05» (v616: las alarmas la enseñaban en ISO)."""
+    s = str(iso or "")
+    return _fmt_fecha(s) + (" " + s[11:16] if len(s) >= 16 else "")
+
+
 def _alerts_section(pid, grupo, project_name="", allow_report=False):
     """Alarmas abiertas del proyecto + resolver; si allow_report, el campo puede reportar."""
     if not alerts.is_configured():
         return
     usuario = st.session_state.get("auth", {}).get("usuario", "")
+    gestor = _es_gestor()
+    # ⚠️ v616 · ACCIÓN DIFERIDA (trampa 37): «resolver» se ejecutaba DENTRO de la lista y
+    # relanzaba desde ahí — el patrón del bloque fantasma. El botón apunta; se hace aquí, antes
+    # de pintar. Una petición de OTRA obra se tira.
+    _pet = st.session_state.pop(_ALR_PET, None)
+    if _pet and _pet.get("pid") == str(pid):
+        with st.spinner(t("Saving…")):
+            ok, msg = alerts.resolve_alert(_pet.get("id"), usuario, gestor=gestor)
+        (flash.exito if ok else flash.error)(msg)
+        st.rerun()
     abiertas = alerts.list_alerts(pid, "abierta")
     st.markdown(f"**{':red[:material/notifications:] ' + str(len(abiertas)) if abiertas else ':material/notifications:'} Alerts**")
     if abiertas:
         for al in abiertas:
             emo = ":red[:material/error:]" if str(al.get("Type")) == "problema" else ":blue[:material/info:]"
             c = st.columns([6, 1])
-            c[0].write(f"{emo} _{al.get('Date')}_ · **{al.get('CreatedBy')}**: {al.get('Message')}")
-            if c[1].button(":material/check_circle:", key=f"resolv_{al.get('ID')}", help=t("Mark as resolved")):
-                ok, msg = alerts.resolve_alert(al.get("ID"), usuario)
-                if ok:
-                    st.rerun()
-                else:
-                    st.error(msg)
+            # v616 · la fecha DD/MM/YYYY HH:MM, la persona por su NOMBRE (v559) y su texto tal
+            # cual (un «*» o un «$» lo hacían cursiva o fórmula, v603)
+            _quien = _nombres_de([al.get("CreatedBy")], grupo)[0]
+            c[0].markdown(f"{emo} _{_fecha_hora(al.get('Date'))}_ · **{maps.literal_md(_quien)}**: "
+                          f"{maps.literal_md(al.get('Message'))}")
+            # v616 · el campo, solo lo suyo (decisión del usuario): `alerts.puede_resolver`
+            if alerts.puede_resolver(al, usuario, gestor):
+                c[1].button(":material/check_circle:", key=f"resolv_{al.get('ID')}",
+                            help=t("Mark as resolved"), on_click=_pedir_resolver,
+                            args=(pid, al.get("ID")))
     else:
         st.caption(t("No open alerts."))
     if allow_report:
         with st.expander(t(":material/report: Report a problem to the administrator"), key=f"exp_rep_{pid}"):
-            msg = st.text_area(t("Describe the problem or issue on site"), key=f"rep_{pid}")
+            # ⚠️ v616 · GENERACIÓN: tras enviar, la caja conservaba el texto y un 2º toque mandaba
+            # OTRA alarma igual a la oficina (como el recibo en v560). Nace vacía tras enviar.
+            _rg = st.session_state.get(f"_rep_gen_{pid}", 0)
+            msg = st.text_area(t("Describe the problem or issue on site"),
+                               key=f"rep_{pid}" + (f"_{_rg}" if _rg else ""))
             if st.button(t("Send alert"), key=f"repb_{pid}"):
                 if not msg.strip():
                     st.error(t("Describe the problem."))
                 else:
                     with st.spinner(t("Sending alert…")):
                         ok, res = alerts.report_problem(pid, grupo, msg.strip(), usuario, project_name)
-                    (flash.exito if ok else st.error)("Alert sent to the administrator." if ok else res)
+                    (flash.exito if ok else st.error)(t("Alert sent to the administrator.") if ok else res)
                     if ok:
+                        st.session_state[f"_rep_gen_{pid}"] = _rg + 1
                         st.rerun()
 
 
@@ -604,6 +640,8 @@ _DOC_TIPOS  = _DOC_SUBIR + ["plano"]           # para VER (el plano se sigue mos
 _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
                "prestart", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
+# v616 · lo que el campo puede subir: imágenes (HEIC/HEIF, las del iPhone; WEBP, las de Android)
+_FOTO_EXT = ["jpg", "jpeg", "png", "webp", "heic", "heif"]
 # Etiquetas legibles para el filtro de tipo del buscador (v165).
 # v559 · «Informe admin» y «Matriz survey» seguían en español (visto en producción).
 _TIPO_LABEL = {"plano": "Drawing", "informe_cliente": "Client report",
@@ -1030,8 +1068,17 @@ def _subir_documento(pid, es_campo, sube_tipos, usuario):
         # en «Upload» lo subía DOS veces. Un `file_uploader` no se vacía asignando: se
         # vacía con otra clave. Con la generación 0 la clave es la de siempre.
         _ug = st.session_state.get(f"_updoc_gen_{pid}", 0)
-        up   = st.file_uploader(t("File"), key=f"updoc_{pid}" + (f"_{_ug}" if _ug else ""))
-        tipo = st.selectbox(t("Type"), sube_tipos, key=f"uptipo_{pid}")
+        # ⚠️ v616 · El campo: SOLO imágenes (decía «solo fotos» y aceptaba cualquier archivo) y
+        # sin el selector de tipo, que le ofrecía UNA opción y en español («foto»).
+        up   = st.file_uploader(t("Photo") if es_campo else t("File"),
+                                key=f"updoc_{pid}" + (f"_{_ug}" if _ug else ""),
+                                type=_FOTO_EXT if es_campo else None)
+        if es_campo:
+            tipo = "foto"
+        else:
+            # v616 · por su etiqueta (salían los valores internos: «informe_cliente», «foto»…)
+            tipo = st.selectbox(t("Type"), sube_tipos, key=f"uptipo_{pid}",
+                                format_func=lambda x: _TIPO_LABEL.get(x, x))
         if st.button(t("Upload"), key=f"upbtn_{pid}"):
             if up is None:
                 st.error(t("Choose a file first."))
@@ -1044,7 +1091,7 @@ def _subir_documento(pid, es_campo, sube_tipos, usuario):
                     st.session_state[f"_updoc_gen_{pid}"] = _ug + 1
                     st.rerun()
                 except Exception as ex:
-                    st.error(f"It could not be uploaded: {ex}")
+                    st.error(t("It could not be uploaded: {e}", e=ex))          # v616 · traducible
 
 
 def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
@@ -3960,7 +4007,8 @@ def render_field_projects(usuario: str, grupo: str):
                     roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
         except Exception:
             pass
-        with st.expander(t(":material/route: My route (my sites on the map)")):
+        # v616 · con clave, como todo desplegable (trampa 35; hoy no tiene controles dentro)
+        with st.expander(t(":material/route: My route (my sites on the map)"), key="exp_mi_ruta"):
             try:
                 from core import route_ui
                 route_ui.render_mi_ruta(usuario, grupo)
@@ -4041,15 +4089,20 @@ def render_field_projects(usuario: str, grupo: str):
                 _kpi_card(t("Person in charge"),
                           P.head_installers_label(prj, grupo) or "—")]
     else:
+        # ⚠️ v616 · DOS tarjetas: con tres, en el móvil «Client» se quedaba SOLA en una segunda
+        # fila con media fila vacía, y empujaba la lista de trabajo ~90 px abajo (medido a 375).
+        # El cliente no se pierde: va en la línea de la dirección, que es donde se lee.
         tarj = [_kpi_card(t("Status"), est),
-                _kpi_card(t("Project progress"), f"{avance:.0f}%"),
-                _kpi_card(t("Client"), prj.get("Client") or "—")]
+                _kpi_card(t("Project progress"), f"{avance:.0f}%")]
     st.markdown('<div class="cpx-kpis" style="margin:0 0 8px">'             # v581
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     if not P.es_interno(prj):
         st.progress(min(1.0, avance / 100.0))
-    if _ub:
-        st.caption(":material/place: " + maps.maps_link_md(_ub, _ub))
+    _cli = "" if P.es_interno(prj) else str(prj.get("Client") or "").strip()
+    _linea = ([":material/business: " + maps.literal_md(_cli)] if _cli else []) + \
+             ([":material/place: " + maps.maps_link_md(_ub, _ub)] if _ub else [])
+    if _linea:
+        st.caption("  ·  ".join(_linea))
 
     # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
     # ⚠️ v423: una localización interna NO tiene actividades, así que «Avance» sería una
@@ -4076,6 +4129,19 @@ def render_field_projects(usuario: str, grupo: str):
                     # misma pieza que el admin: la coherencia entre pantallas es lo que
                     # hace que parezca un producto y no cuatro cosas pegadas.
                     horizontal=True, key="cpxseg_fld_sec", label_visibility="collapsed")
+    # v616 · casillas de «Progress» marcadas y SIN guardar: se conservan al cambiar de pestaña
+    # (`stage_progress_ui`), y aquí se dice, con la vuelta a un toque — si no, quien marcó y se fue
+    # a escribir el parte no sabría que aquello no cuenta.
+    try:
+        from core import stage_progress_ui as _SPU0
+        _npend = len(_SPU0.pendientes("fld", pid))
+    except Exception:
+        _npend = 0
+    if _npend and _sec != "🏗 Avance":
+        st.warning(t(":material/edit_note: **{n} unsaved ticks in «Progress».** They only count "
+                     "once saved.", n=_npend))
+        st.button(t(":material/trending_up: Go to Progress and save"), key=f"fld_ir_pend_{pid}",
+                  on_click=_ir_avance_campo)
     if _sec == "🏗 Avance":
         _induccion_section(pid, prj, grupo, allow_send=False)
         # v514: si la obra tiene plan de etapas, el campo marca QUÉ hizo y el % sale
@@ -4098,7 +4164,10 @@ def render_field_projects(usuario: str, grupo: str):
     elif _sec == "🚨 Avisos":
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=True)
     elif _sec == "💰 Recibos":
-        render_expenses(pid, grupo, can_delete=False, key_prefix="fld")
+        # v616 · el campo ve SOLO sus recibos (decisión del usuario): el dinero de la obra
+        # —lo que compró la oficina, lo de los compañeros— es de gestión (v481).
+        render_expenses(pid, grupo, can_delete=False, key_prefix="fld",
+                        solo_de=(st.session_state.get("auth") or {}).get("usuario", ""))
     else:   # :material/attach_file: Archivos
         _archivos_section(pid)
 
@@ -4715,7 +4784,7 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
 
 
 def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
-                    ver_costos=False):
+                    ver_costos=False, solo_de=None):
     """Costos del proyecto (v144).
 
     ⚠️ Antes respondia solo "cuanto llevas gastado". La pregunta accionable es
@@ -4767,18 +4836,29 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                         st.rerun()
 
     items = gastos["items"]
+    # ⚠️ v616 · `solo_de`: el CAMPO ve solo los recibos que subió él (decisión del usuario). Veía
+    # TODOS los de la obra, con importe y proveedor —también lo que compró la oficina—, cuando el
+    # dinero de la obra es de gestión desde v481.
+    if solo_de is not None:
+        items = [r for r in items if str(r.get("CreatedBy", "")) == str(solo_de)]
     if items:
         # v213: recibos ACTIVOS — tocar uno muestra su foto inline (antes: tabla
         # redundante + botones de solo-descarga).
-        with st.expander(t(":material/receipt_long: Receipts ({n})").replace("{n}", str(len(items))),
-                         key=f"{key_prefix}_exp_recibos"):
+        _titr = (t(":material/receipt_long: Your receipts ({n})", n=len(items)) if solo_de is not None
+                 else t(":material/receipt_long: Receipts ({n})").replace("{n}", str(len(items))))
+        with st.expander(_titr, key=f"{key_prefix}_exp_recibos"):
             st.caption(t("Tap a receipt to see the photo."))
             for r in items:
                 _rid = str(r.get("ID", ""))
                 _did = str(r.get("DriveID", "")).strip()
-                _lbl = f":material/receipt_long: {r.get('Date')} · {r.get('Category')} · ${E._num(r.get('Amount')):,.0f}"
-                _ex = " · ".join(x for x in [str(r.get('Supplier') or ''),
-                                             str(r.get('Description') or '')] if x)
+                # v616 · la fecha DD/MM/YYYY (salía en ISO), la categoría por su etiqueta, el
+                # «$» escapado (dos «$» en la etiqueta abren una fórmula) y el texto de la
+                # persona, tal cual (v603).
+                _lbl = (f":material/receipt_long: {_fmt_fecha(r.get('Date'))} · "
+                        f"{maps.literal_md(_etq(str(r.get('Category') or '')))} · "
+                        f"\\${E._num(r.get('Amount')):,.0f}")
+                _ex = " · ".join(maps.literal_md(x) for x in [str(r.get('Supplier') or ''),
+                                                             str(r.get('Description') or '')] if x)
                 if _ex:
                     _lbl += f" · {_ex}"
                 cc = st.columns([6, 1])

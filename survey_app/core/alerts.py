@@ -161,13 +161,30 @@ def create_alert(pid, grupo, origen, tipo, mensaje, creado_por) -> tuple:
     return True, aid
 
 
-def resolve_alert(alert_id, resuelto_por) -> tuple:
+def puede_resolver(al, usuario, gestor) -> bool:
+    """v616 · Quién da una alarma por resuelta (decisión del usuario): la OFICINA (admin o
+    propietario), cualquiera; el CAMPO, los avisos que le manda la oficina («cambio») y los
+    problemas que reportó ÉL. ⚠️ Antes el campo resolvía cualquiera: también el problema que
+    reportó un compañero y la oficina todavía no había visto, que así desaparecía sin que nadie
+    de la oficina lo leyera."""
+    if gestor:
+        return True
+    tipo = str((al or {}).get("Type", ""))
+    return tipo == "cambio" or (tipo == "problema"
+                                and str((al or {}).get("CreatedBy", "")) == str(usuario))
+
+
+def resolve_alert(alert_id, resuelto_por, gestor=True) -> tuple:
+    """`gestor` (v616): False para el campo — el permiso se mira AQUÍ, sobre la fila FRESCA, no
+    solo en la pantalla. Por defecto True: los llamadores de la oficina no cambian."""
     w, err = _ws()
     if err:
         return False, err
     recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(alert_id):
+            if not puede_resolver(r, resuelto_por, gestor):
+                return False, _d("Only the office can resolve that alert.")
             row = i + 2
             w.batch_update([
                 {"range": f"{_col_letter(_COL['Status'])}{row}", "values": [["resuelta"]]},
