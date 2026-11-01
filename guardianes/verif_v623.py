@@ -329,6 +329,9 @@ chk("ningún aviso armado con f-string sin `t()`", not re.search(r'st\.(success|
     re.findall(r'st\.\w+\(f"[^\n]{0,50}', _s2)[:3])
 chk("la cabecera, 2 + 2 también en el móvil", 'theme.por_fila("cpx_ps_cab", 2)' in _src)
 chk("lo pendiente, por sección", 'section 1: {n} to answer' in _src)
+# (v624 · visto verificando v623: a 859 px con el menú, 17 px de la firma quedaban cortados)
+chk("⚠️ la columna de la firma cabe el lienzo: [1, 2] en los dos sitios",
+    _src.count("c1, c2 = st.columns([1, 2])") == 2 and "st.columns([2, 3])" not in _src)
 
 print("")
 print("=== %d comprobaciones · %d fallos ===" % (n_ok + len(fallos), len(fallos)))

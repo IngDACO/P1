@@ -209,7 +209,9 @@ def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list, kp: str) ->
     for a in personas:
         nom = a["nombre"]
         _k = _clave_firma(a)
-        c1, c2 = st.columns([2, 3])
+        # v624 · [1, 2], como `_bloque_firmar`: con [2, 3], a 859 px con el menú la columna medía
+        # 283 px y el lienzo 300: se cortaban 17 px de la firma (medido en producción).
+        c1, c2 = st.columns([1, 2])
         with c1:
             st.markdown(f"**{literal_md(nom)}**")
             st.caption(t("clocked in here today") if a["ficho"] else

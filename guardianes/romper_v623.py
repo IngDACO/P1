@@ -78,6 +78,8 @@ ROTURAS = [
                          "most recent one is offered; if you signed a different one, tell whoever "
                          "recorded it.", n=_otras + 1))''',
        '''st.warning(f":material/info: Today there are **{_otras + 1} talks** recorded on this site.")''')]),
+    ("⚠️ el lienzo de firma vuelve a cortarse", U,
+     [("        _k = _clave_firma(a)\n", "        _k = _clave_firma(a)\n        st.columns([2, 3])\n")]),
     ("la cabecera vuelve a apilarse en el móvil", U,
      [('    st.markdown(theme.por_fila("cpx_ps_cab", 2), unsafe_allow_html=True)\n', "")]),
 ]
