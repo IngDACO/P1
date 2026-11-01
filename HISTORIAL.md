@@ -10,6 +10,24 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## RECORRIDO DEL CAMPO: LIBRARY (v629)
+
+Decisión del usuario («Dale con todo»). Con esto el recorrido del campo queda COMPLETO. Library no se escribe: todo en
+solo lectura, con sus 750 piezas reales.
+
+- ⚠️ **El buscador exigía la frase exacta:** «buffer pit» 0 de 24, «lock door» 0 de 4, «rail bracket» 1 de 8, «sills» 0 de
+  17 → todas las palabras, en cualquier orden y con singular o plural (`library._palabras`).
+- ⚠️ **Una foto no se podía ampliar:** la pantalla completa de Streamlit la deja a 351 px de 1200, y la página del Cloud lleva
+  `user-scalable=no` → 1× · 2× · 3× en un recuadro que se mueve con el dedo y arranca centrado, sin volver a bajar la foto
+  (`_bajar`: `drive_store.download` no guarda nada).
+- ⚠️ **Atrás sacaba de Library**, y el gesto del móvil pasa por ese botón (`_mobile_back_trap`) → con una foto abierta,
+  `←` y el menú llevan a la lista, a su página (`home_ui._foto_abierta`). Fuera de Library, `←` hace lo de siempre.
+- ⚠️ **Al entrar no se veía ninguna foto** (812 px en una pantalla de 812) → búsqueda en su fila, Type y Brand juntos, sin
+  Model si no hay modelos (ninguna de las 750 lo tiene) y sin el pie de las cifras en estrecho: a 633 px.
+- «Previous · n of m · Next» en una fila; «Filed by», solo al propietario.
+
+medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254
+
 ## LO VISTO VERIFICANDO v627: EL NÚMERO DE LAS CIFRAS (v628)
 
 Las cifras de credenciales salían a 12 px y en gris: el tema solo agranda el número en tarjetas de TRES líneas, y estas
@@ -15370,7 +15388,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v628 = actual)
+## Versiones desplegadas (v629 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15378,6 +15396,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v629 | **Recorrido del campo: Library** (el último). ⚠️ El buscador por palabras, en cualquier orden y con plural («buffer pit» daba 0 de 24); zoom 1× · 2× · 3× (no se podía ampliar); `←` y el menú vuelven a la lista; la primera foto a 633 px (estaba a 812). medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254 |
 | v628 | **El número de las cifras de credenciales**, a 26 px (estaba a 12, como un pie). medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253 |
 | v627 | **Recorrido del campo: Self-service.** ⚠️ Ya no se cancela lo disfrutado, cancelar pide confirmación, la baja se registra sin saldo y decide la oficina, lo pendiente cuenta; contador de días en vivo; credenciales en tarjetas; ⚠️ nóminas sin generar todos los PDF en cada pasada (21 s por toque con un año semanal). medido en producción a 375 px: título único, saldo 20 − 4 − 2 = 14, retirar una pendiente sube a 16, «Keep it» no toca nada, lo pasado con candado y 12 nóminas en 0,7 s; contra la hoja real, sin avisos: una baja de 11 días con su nota y su tablero, y el motor niega cancelar lo pasado; sin probar en vivo: cancelar una aprobada futura (avisa a 5 cuentas) · verif_v627 111/111 · romper_v627 59/59 y 9 baterías afectadas en verde · suite 253/253 |
 | v626 | **Lo visto verificando v625.** ⚠️ Bajar dejaba lo buscado bajo la barra de Streamlit (60 px) → margen, en toda la app. Campana una línea por obra; Files dice qué fila tocar; fuera el texto de oficina del campo. medido en producción a 375 px: las cifras de Belting a 68 px con la barra de 60 (estaban a 0); la campana agrupada, el aviso de Files y el texto del campo, solo por el guardián · verif_v626 28/28 · romper_v626 12/12, romper_v625 63/63 y 3 baterías afectadas en verde · suite 252/252 |
