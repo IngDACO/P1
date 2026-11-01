@@ -10,6 +10,23 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE DESTAPARON LAS PRUEBAS REALES DE v630 (v631)
+
+Decisión del usuario («Ok dale»), con permiso para repetir en producción las preguntas de LFKK y de la baja.
+
+- ⚠️ **LFKK:** admitía no saberlo y aun así decía que era «el del primer riel», y LFGK «el del último»: falso, Case 1 y
+  Case 2 usan los dos. La regla general no bastó → bloque «Siglas de las herramientas».
+- ⚠️ **El plan cambió al mirar el código:** iba a marcar como «sin definir» siglas que la app SÍ define en sus pantallas
+  (RZ/RO, RF/RB, HKP, HKPR, HQ, HGP, HGPR, DSTS). Marcarlas así habría hecho que el asistente contradijera a la app →
+  el bloque dice lo que dice cada pantalla, y `verif_v631` lo compara con ella y con el motor (`compute_case1/2`: LFKK
+  solo mueve los cortes de cabina y LFGK los de contrapeso). Solo LFKK y LFGK quedan sin definición, y lo dice.
+- ⚠️ **El atajo de la baja no registra nada:** solo lleva a My absences. Lo dice la guía, y el guardián lee el botón.
+- ⚠️ **«Switch project» a 64 px:** vivía en media columna de una columna → su propia fila, bajo «Leave the project».
+- ⚠️ **El anexo de firmas:** «Proyecto» en español y la fecha ISO, pegado detrás de un documento en inglés y DD/MM/YYYY.
+- Ancla al día: `romper_v546` (la línea de `_armar_aviso_prestart` cambió de sangría) y `romper_v630` (la línea de Rails).
+
+medido en producción: 2 preguntas reales como campo. LFKK sale bien (no tiene la definición, solo lo de Rails y cabina, sin lo del primer riel), ⚠️ salvo que dice que está en «the shaft data section» del plano. ⚠️ La baja sale a medias: ya no dice que el atajo la registra y termina en Record the sick leave, pero pone el atajo dentro de My absences (está en Timeclock) y dice «your crew knows» (no consta). «Switch project» a 210 px con el menú abierto a 859 de ancho (era 64; ahí aún corta las últimas letras de la obra) y 353 a 375; cambia de obra y avisa del Pre-Start de la nueva. Firmar tarde: PDF de 2 páginas, anexo con «Project» y 02/11/2026. Datos de prueba borrados · verif_v631 50/50 · romper_v631 22/22, romper_v630 26/26, romper_v621 24/24, romper_v546 12/12 y romper_v439 8/8 · suite 256/256
+
 ## EL ASISTENTE DEL CAMPO (v630)
 
 Lo destapó la auditoría de «¿ya terminamos con el campo?»: el asistente nunca entró en el recorrido. Decisión del
@@ -15404,7 +15421,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v630 = actual)
+## Versiones desplegadas (v631 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15412,6 +15429,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v631 | **Lo que destaparon las pruebas reales de v630.** ⚠️ El asistente seguía inventando parte de LFKK → bloque de siglas comparado con cada pantalla y con el motor (solo LFKK y LFGK quedan sin definición, y lo dice); ⚠️ el atajo de la baja solo lleva a My absences; «Switch project» de 64 a 210 px; anexo de firmas en inglés y DD/MM/YYYY. medido en producción: 2 preguntas reales como campo. LFKK sale bien (no tiene la definición, solo lo de Rails y cabina, sin lo del primer riel), ⚠️ salvo que dice que está en «the shaft data section» del plano. ⚠️ La baja sale a medias: ya no dice que el atajo la registra y termina en Record the sick leave, pero pone el atajo dentro de My absences (está en Timeclock) y dice «your crew knows» (no consta). «Switch project» a 210 px con el menú abierto a 859 de ancho (era 64; ahí aún corta las últimas letras de la obra) y 353 a 375; cambia de obra y avisa del Pre-Start de la nueva. Firmar tarde: PDF de 2 páginas, anexo con «Project» y 02/11/2026. Datos de prueba borrados · verif_v631 50/50 · romper_v631 22/22, romper_v630 26/26, romper_v621 24/24, romper_v546 12/12 y romper_v439 8/8 · suite 256/256 |
 | v630 | **El asistente del campo.** ⚠️ Mandaba a pantallas que ya no existen, decía dos cosas falsas desde v625 y no conocía Absences, To-do, Daily log ni Library → la guía entera con los nombres de la app, y el menú comparado con `home_ui` por un guardián; regla de no inventar. medido en producción, 4 preguntas reales como campo: la baja, las nóminas y el saldo (sin inventar cifras) y Buffers sin fichar, con pantallas y botones correctos; ⚠️ fallan dos cosas: de LFKK admite que no tiene la definición y aun así inventa una parte, y dice que el atajo de Timeclock registra la baja (solo lleva a My absences). También cerradas dos pruebas pendientes: firmar tarde (PS-0003, PDF de 2 páginas con el anexo) y cambiar de obra (la anterior cierra y la nueva abre en el mismo segundo, con la jornada abierta); ⚠️ vistos ahí: «Switch project» a 64 px con el menú abierto a 859 de ancho (353 a 375) y el anexo con «Proyecto» y la fecha ISO. Datos de prueba borrados · verif_v630 85/85 · romper_v630 26/26 y romper_v621 24/24 · suite 255/255 |
 | v629 | **Recorrido del campo: Library** (el último). ⚠️ El buscador por palabras, en cualquier orden y con plural («buffer pit» daba 0 de 24); zoom 1× · 2× · 3× (no se podía ampliar); `←` y el menú vuelven a la lista; la primera foto a 633 px (estaba a 812). medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254 |
 | v628 | **El número de las cifras de credenciales**, a 26 px (estaba a 12, como un pie). medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253 |
