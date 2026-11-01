@@ -923,7 +923,7 @@ def render_timeclock_tab():
           ("proy", t("Charged to projects"), f"{hoy['proyecto']:.2f} h",
            f"{len(hoy['por_proyecto'])} {t('project(s)')}"),
           ("sina", t("Unassigned"), f"{hoy['sin_asignar']:.2f} h",
-           t("travel, waiting or a project not clocked in")),
+           t("travel or waiting")),       # v622 · el largo se cortaba a 375 px («…or a proje…»)
           ("sem", t("This week"), f"{sem['general']:.2f} h",
            f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}")]
     if hoy["sin_asignar"] > 2:

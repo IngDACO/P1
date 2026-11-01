@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Batería de roturas de v620. ⚠️ Verde de BASE primero (v459) y NO en paralelo con la suite (v455)."""
+"""Batería de roturas de v622. ⚠️ Verde de BASE primero (v459) y NO en paralelo con la suite (v455)."""
 import io
 import os
 import subprocess
@@ -9,25 +9,31 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 SCRW = os.path.dirname(os.path.abspath(__file__))
 RAIZ = r"C:\Users\diego\P1\survey_app"
 ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
-G = "verif_v620"
+G = "verif_v622"
 TOPE_S = 180
 AUI = "core/auth_ui.py"
+TU = "core/timeclock_ui.py"
 
 ROTURAS = [
-    ("⚠️ la restauración deja de olvidar la página anterior", AUI,
-     [("                _olvidar_pagina_anterior()\n", "")]),
-    ("se tira también lo del gestor de cookies", AUI,
-     [('        if not str(k).startswith(("_", "login_", "copex_")):\n',
-       '        if not str(k).startswith(("_", "login_")):\n')]),
-    ("no se tira nada", AUI,
-     [("            del st.session_state[k]\n", "            pass\n")]),
-    ("⚠️ se olvida antes de saber si la cookie vale", AUI,
-     [("        if _u and _t:\n            try:\n                _a = auth.validate_session(_u, _t)\n",
-       "        if _u and _t:\n            _olvidar_pagina_anterior()\n            try:\n"
-       "                _a = auth.validate_session(_u, _t)\n")]),
+    ("⚠️ restaurar deja de pedir la recarga", AUI,
+     [('                st.session_state["_restaurada"] = True         # v622: ver `_RECARGAR_SI_VIEJA`\n', "")]),
+    ("⚠️ el script no se inyecta", AUI,
+     [("        incrustar.script(_RECARGAR_SI_VIEJA)\n", "        pass\n")]),
+    ("⚠️ se repite en cada pasada", AUI,
+     [('    if st.session_state.pop("_restaurada", False):\n', '    if st.session_state.get("_restaurada", False):\n')]),
+    ("⚠️ abrir la app con la cookie recarga siempre", AUI,
+     [('"if(n-w.performance.timeOrigin>20000&&n-a>120000){', '"if(n-a>120000){')]),
+    ("⚠️ sin seguro contra bucles", AUI,
+     [('"if(n-w.performance.timeOrigin>20000&&n-a>120000){', '"if(n-w.performance.timeOrigin>20000){')]),
+    ("no apunta la recarga", AUI,
+     [("w.sessionStorage.setItem(k,String(n));", "")]),
+    ("recarga el recuadro y no la app", AUI,
+     [("<script>try{var w=window.parent,", "<script>try{var w=window,")]),
+    ("el pie vuelve a cortarse", TU,
+     [('t("travel or waiting")', 't("travel, waiting or a project not clocked in")')]),
 ]
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", AUI,
-           [('    """v620 · Al restaurar desde la cookie la sesión es NUEVA,', '    """(control) v620 · Al restaurar desde la cookie la sesión es NUEVA,')])
+           [("# ⚠️ v622 · Una sesión restaurada desde una página VIEJA", "# (control) v622 · Una sesión restaurada desde una página VIEJA")])
 
 
 def corre():

@@ -271,15 +271,18 @@ def render_my_credentials():
 _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
 
-def _olvidar_pagina_anterior() -> None:
-    """v620 · Al restaurar desde la cookie la sesión es NUEVA, pero el toque que destapó que la
-    anterior ya no existía llega con el valor de su control. Medido en producción: se tocó «To-do»
-    y, ya restaurada, el menú marcaba «Progress» —el navegador había quitado ese selector— con el
-    contenido de «To-do», que era lo que tenía el servidor. En una sesión recién nacida no hay
-    nada más que eso: se tira todo menos lo del propio login y el gestor de cookies."""
-    for k in list(st.session_state.keys()):
-        if not str(k).startswith(("_", "login_", "copex_")):
-            del st.session_state[k]
+# ⚠️ v622 · Una sesión restaurada desde una página VIEJA: el navegador conserva lo que tenía. Medido en
+# producción con 31 min sin conexión: se tocó «To-do» y, ya restaurada, el menú marcaba «Progress» con
+# el contenido de «To-do». v620 lo quiso curar borrando ese valor en el servidor y NO funcionó (la
+# clave ni siquiera está en la sesión nueva hasta que se pinta el control, y el navegador lo reenvía:
+# trampa 31); su guardián dio verde con un caso preparado a mano. Lo que limpia al navegador es
+# recargar. Se decide en el NAVEGADOR, por la edad de la página: una recién abierta (lo normal, con la
+# cookie) no se recarga, y `sessionStorage` impide un bucle si la app tardara más de eso en cargar.
+_RECARGAR_SI_VIEJA = (
+    "<script>try{var w=window.parent,k='cpx_recarga',n=Date.now(),"
+    "a=Number(w.sessionStorage.getItem(k)||0);"
+    "if(n-w.performance.timeOrigin>20000&&n-a>120000){w.sessionStorage.setItem(k,String(n));"
+    "w.location.reload();}}catch(e){}</script>")
 
 
 def render_login() -> bool:
@@ -312,7 +315,7 @@ def render_login() -> bool:
                 # v533 · La sesión se acaba de validar contra la hoja: un veredicto del
                 # heartbeat guardado de antes es más viejo y no puede expulsarla.
                 auth.heartbeat_olvidar(_a.get("usuario", ""), _a.get("token", ""))
-                _olvidar_pagina_anterior()
+                st.session_state["_restaurada"] = True         # v622: ver `_RECARGAR_SI_VIEJA`
                 st.session_state["auth"] = _a
                 st.session_state["_hb_last"] = time.time()
                 st.session_state["_remember_session"] = True   # v222: había cookie → recordar
@@ -437,6 +440,11 @@ def render_login() -> bool:
 def render_user_bar():
     """Usuario logueado + grupo + botón salir (sidebar)."""
     a = st.session_state.get("auth", {})
+    # v622 · Aquí y no al restaurar: el `st.rerun()` de allí descartaría el script (es un render
+    # que TERMINA, como la cookie de abajo).
+    if st.session_state.pop("_restaurada", False):
+        from core import incrustar
+        incrustar.script(_RECARGAR_SI_VIEJA)
     # v222: (re)escribir la cookie PERSISTENTE si el usuario pidió recordar la sesión.
     # Va AQUÍ (render que TERMINA, en el sidebar de cada página logueada), no en
     # _do_login (que hace st.rerun y descartaría el componente). Idempotente y rolling.

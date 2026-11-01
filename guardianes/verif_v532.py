@@ -105,14 +105,20 @@ chk("los 19 dibujos y cronómetros van por `incrustar.dibujo`",
 # v603 · un 6º, a propósito: la página vuelve ARRIBA al cambiar de vista (o a un aviso nuevo
 # que quedó por encima), `projects_ui._subir_arriba`, que llama la shell al final de la pasada:
 # Streamlit conservaba el desplazamiento (la ficha nueva de Contacts ~190 px abajo, medido).
-chk("⚠️ los 6 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
-    "ir a la ficha del Panel, ir a la herramienta del Resumen, volver arriba)",
+# (v622 · uno más: recargar una página vieja tras restaurar la sesión con la cookie, `auth_ui`)
+chk("⚠️ los 7 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
+    "ir a la ficha del Panel, ir a la herramienta del Resumen, volver arriba, recargar)",
     _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1,
-             "core/roster_ui.py": 1, "core/projects_ui.py": 2}, _scr)
+             "core/roster_ui.py": 1, "core/projects_ui.py": 2, "core/auth_ui.py": 1}, _scr)
 for f in _scr:
     _s = io.open(os.path.join(RAIZ, f), encoding="utf-8").read()
-    _args = [ast.unparse(n.args[0]) for n in ast.walk(ast.parse(_s)) if isinstance(n, ast.Call)
+    _arb = ast.parse(_s)
+    # (v622 · el script puede ir en una constante del módulo: se mira lo que vale, no su nombre)
+    _const = {n.targets[0].id: ast.unparse(n.value) for n in _arb.body
+              if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name)}
+    _args = [ast.unparse(n.args[0]) for n in ast.walk(_arb) if isinstance(n, ast.Call)
              and ast.unparse(n.func) == "incrustar.script"]
+    _args = [_const.get(a, a) for a in _args]
     chk("...%s sigue actuando sobre `window.parent` (la página de la app)" % f,
         all("window.parent" in a for a in _args), _args[:1])
 
