@@ -10,6 +10,22 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL ASISTENTE DEL CAMPO (v630)
+
+Lo destapó la auditoría de «¿ya terminamos con el campo?»: el asistente nunca entró en el recorrido. Decisión del
+usuario («Dale»), con permiso para preguntas reales y para las dos pruebas que faltaban.
+
+- ⚠️ **Su menú era de otra época:** mandaba a «Mis colillas» y «Mis credenciales» y no conocía Self-service ni Library →
+  el menú de los tres roles, y `verif_v630` lo DERIVA de `home_ui`: cambiar un menú sin cambiar la guía pone rojo.
+- ⚠️ **Lo falso:** «si no ha fichado, la herramienta se lo pide» y que solo la oficina guarda el Survey (los dos, desde
+  v625) → corregido, y lo nuevo del campo: My absences, My payslips, To-do, Daily log, Library.
+- ⚠️ **Todas las pantallas en español con la app en inglés** → los nombres que se ven, en la guía entera.
+- ⚠️ **Inventó qué es LFKK** (07/10) → regla «lo que no sabes, no lo inventes» (no alcanzó: ver abajo).
+- El guardián compara lo que afirma la guía con el código (baja sin aprobación, 10 nóminas, 18 botones citados): buscar
+  la frase en la guía no prueba que sea verdad.
+
+medido en producción, 4 preguntas reales como campo: la baja, las nóminas y el saldo (sin inventar cifras) y Buffers sin fichar, con pantallas y botones correctos; ⚠️ fallan dos cosas: de LFKK admite que no tiene la definición y aun así inventa una parte, y dice que el atajo de Timeclock registra la baja (solo lleva a My absences). También cerradas dos pruebas pendientes: firmar tarde (PS-0003, PDF de 2 páginas con el anexo) y cambiar de obra (la anterior cierra y la nueva abre en el mismo segundo, con la jornada abierta); ⚠️ vistos ahí: «Switch project» a 64 px con el menú abierto a 859 de ancho (353 a 375) y el anexo con «Proyecto» y la fecha ISO. Datos de prueba borrados · verif_v630 85/85 · romper_v630 26/26 y romper_v621 24/24 · suite 255/255
+
 ## RECORRIDO DEL CAMPO: LIBRARY (v629)
 
 Decisión del usuario («Dale con todo»). Con esto el recorrido del campo queda COMPLETO. Library no se escribe: todo en
@@ -15388,7 +15404,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v629 = actual)
+## Versiones desplegadas (v630 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15396,6 +15412,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v630 | **El asistente del campo.** ⚠️ Mandaba a pantallas que ya no existen, decía dos cosas falsas desde v625 y no conocía Absences, To-do, Daily log ni Library → la guía entera con los nombres de la app, y el menú comparado con `home_ui` por un guardián; regla de no inventar. medido en producción, 4 preguntas reales como campo: la baja, las nóminas y el saldo (sin inventar cifras) y Buffers sin fichar, con pantallas y botones correctos; ⚠️ fallan dos cosas: de LFKK admite que no tiene la definición y aun así inventa una parte, y dice que el atajo de Timeclock registra la baja (solo lleva a My absences). También cerradas dos pruebas pendientes: firmar tarde (PS-0003, PDF de 2 páginas con el anexo) y cambiar de obra (la anterior cierra y la nueva abre en el mismo segundo, con la jornada abierta); ⚠️ vistos ahí: «Switch project» a 64 px con el menú abierto a 859 de ancho (353 a 375) y el anexo con «Proyecto» y la fecha ISO. Datos de prueba borrados · verif_v630 85/85 · romper_v630 26/26 y romper_v621 24/24 · suite 255/255 |
 | v629 | **Recorrido del campo: Library** (el último). ⚠️ El buscador por palabras, en cualquier orden y con plural («buffer pit» daba 0 de 24); zoom 1× · 2× · 3× (no se podía ampliar); `←` y el menú vuelven a la lista; la primera foto a 633 px (estaba a 812). medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254 |
 | v628 | **El número de las cifras de credenciales**, a 26 px (estaba a 12, como un pie). medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253 |
 | v627 | **Recorrido del campo: Self-service.** ⚠️ Ya no se cancela lo disfrutado, cancelar pide confirmación, la baja se registra sin saldo y decide la oficina, lo pendiente cuenta; contador de días en vivo; credenciales en tarjetas; ⚠️ nóminas sin generar todos los PDF en cada pasada (21 s por toque con un año semanal). medido en producción a 375 px: título único, saldo 20 − 4 − 2 = 14, retirar una pendiente sube a 16, «Keep it» no toca nada, lo pasado con candado y 12 nóminas en 0,7 s; contra la hoja real, sin avisos: una baja de 11 días con su nota y su tablero, y el motor niega cancelar lo pasado; sin probar en vivo: cancelar una aprobada futura (avisa a 5 cuentas) · verif_v627 111/111 · romper_v627 59/59 y 9 baterías afectadas en verde · suite 253/253 |
