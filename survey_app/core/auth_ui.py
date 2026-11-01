@@ -188,14 +188,20 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         _sts = [C.status(r.get("ExpiryDate")) for r in creds]
         _kf = f"_cred_filtro_{usuario}"
         _f = st.session_state.get(_kf, "")
-        _kp = [("", t("Credentials"), len(creds)),
-               ("vigente", t(":material/check_circle: Valid"), _sts.count("vigente")),
-               ("por_vencer", t(":material/schedule: Expiring"), _sts.count("por_vencer")),
-               ("vencido", t(":material/cancel: Expired"), _sts.count("vencido"))]
+        # ⚠️ v628 · TRES líneas: el tema solo agranda la cifra si lleva pie (`p:nth-child(2):not(
+        # :last-child)`); con dos, el número salía a 12 px y en gris, como un pie (medido).
+        _kp = [("", t("Credentials"), len(creds), t("on record")),
+               ("vigente", t(":material/check_circle: Valid"), _sts.count("vigente"),
+                t("over 30 days left")),
+               ("por_vencer", t(":material/schedule: Expiring"), _sts.count("por_vencer"),
+                t("within 30 days")),
+               ("vencido", t(":material/cancel: Expired"), _sts.count("vencido"),
+                t("need renewing"))]
         st.markdown(T.por_fila("cpx_cred_kpis", 4), unsafe_allow_html=True)
         with st.container(key="cpx_cred_kpis"):
-            for _col, (_s, _l, _v) in zip(st.columns(len(_kp)), _kp):
-                if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_cred_{_s or 'todas'}", width="stretch"):
+            for _col, (_s, _l, _v, _pie) in zip(st.columns(len(_kp)), _kp):
+                if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_cred_{_s or 'todas'}",
+                               width="stretch"):
                     st.session_state[_kf] = "" if _f == _s else _s
                     st.rerun()
         _vis = [r for r in creds if not _f or C.status(r.get("ExpiryDate")) == _f]

@@ -367,6 +367,9 @@ a = cr()
 _md = [str(x.value) for x in a.markdown]
 chk("⚠️ sin título propio", not [x for x in _md if x.startswith("#")], _md[:3])
 chk("⚠️ sin tabla: una tarjeta por credencial", not list(a.dataframe) and len(a.get("expandable")) == 0)
+chk("⚠️ v628 · cada cifra con su pie: el tema solo agranda el número en tarjetas de TRES líneas",
+    all(str(b.label).count("\n\n") == 2 for b in a.button if str(b.key).startswith("cpxkpi_cred_")),
+    [str(b.label) for b in a.button if str(b.key).startswith("cpxkpi_cred_")])
 chk("sin `st.metric`: cifras que se pueden tocar", not list(a.metric)
     and sorted(b.key for b in a.button if str(b.key).startswith("cpxkpi_cred_"))
     == ["cpxkpi_cred_por_vencer", "cpxkpi_cred_todas", "cpxkpi_cred_vencido", "cpxkpi_cred_vigente"])
