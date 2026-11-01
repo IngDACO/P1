@@ -2,13 +2,20 @@
 
 Un subconjunto curado da la sensacion de cobertura sin la cobertura: cuando
 reportaba "13 en verde", la suite completa tenia 48 y 13 estaban en rojo.
+
+Desde 01/11/2026 corre EN PARALELO, `PROCESOS` a la vez (de 35 a unos 6 min). `--procesos=1` los
+corre de uno en uno, para saber cuál de los que corrían a la vez tocó el código.
 """
+import atexit
 import hashlib
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 AQUI = pathlib.Path(__file__).parent
@@ -16,15 +23,20 @@ AQUI = pathlib.Path(__file__).parent
 # directorio de trabajo, asi que lanzarlos desde otro sitio los tumba a todos con
 # "No secrets found" — 16 rojos que no eran rojos de verdad.
 CWD = r"C:\Users\diego\P1\survey_app"
-# ⚠️ Y se espacian: 16 guardianes leen la hoja real y el techo son 60 lecturas/min
-# por cuenta de servicio. Amontonarlos es provocar un 429 y leer un falso rojo
-# (es el error de v377: el verificador reventando por el problema que verificaba).
-PAUSA = 2.5
+# ⚠️ El techo son 60 lecturas/min por cuenta de servicio, y es la MISMA cuenta de la app en producción:
+# amontonarlas es provocar un 429 y leer un falso rojo (el error de v377: el verificador reventando
+# por el problema que verificaba). Hasta 01/11/2026 se cuidaba con 2,5 s tras CADA guardián: 10 de los
+# 35 min de la suite durmiendo, y repartía 1351 peticiones que eran casi todas la misma. Ahora cada
+# lectura se pide UNA vez por tanda (`arnes/sitecustomize.py`), y si se pasa del techo, ROJO.
+PROCESOS = 5
+TECHO_HOJA = 50
+_HOST_HOJA = "sheets.googleapis.com"
 # ⚠️ El hijo hereda un stdout en cp1252, así que un guardián que imprima un emoji
 # (🔩, 🌐…) muere con UnicodeEncodeError y sale con código != 0 — ROJO que no es rojo:
 # el fallo está en la consola, no en el código auditado. Pasó con 4 a la vez. Es la
 # misma familia que el CWD de v19: el entorno de ejecución fabricando falsos rojos.
-ENTORNO = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+ENTORNO = {**os.environ, "PYTHONIOENCODING": "utf-8",
+           "PYTHONPATH": os.pathsep.join(x for x in (str(AQUI / "arnes"), os.environ.get("PYTHONPATH")) if x)}
 
 
 def _python_del_cloud():
@@ -61,6 +73,9 @@ guardianes = sorted(p for p in AQUI.glob("*.py")
 _filtro = [a for a in sys.argv[1:] if not a.startswith("-")]
 if _filtro:
     guardianes = [p for p in guardianes if any(f in p.name for f in _filtro)]
+for _a in sys.argv[1:]:
+    if _a.startswith("--procesos="):
+        PROCESOS = max(1, int(_a.split("=", 1)[1]))
 APP = AQUI.parent / "survey_app"
 
 
@@ -72,7 +87,30 @@ def _huella():
     return {str(f.relative_to(APP)): hashlib.md5(f.read_bytes()).hexdigest()
             for f in APP.rglob("*.py") if "__pycache__" not in f.parts}
 
-print(f"{len(guardianes)} guardianes · {_ver}{AVISO_PY}\n")
+
+def _correr(p, carpeta_red):
+    """(guardián, código, última línea, segundos, [(host, método)] de lo que salió de verdad a la
+    red). Código None = no terminó."""
+    red = os.path.join(carpeta_red, p.stem + ".txt")
+    t = time.time()
+    try:
+        r = subprocess.run([PY, str(p)], capture_output=True, cwd=CWD, env={**ENTORNO, "COPEX_RED": red},
+                           text=True, encoding="utf-8", errors="replace", timeout=240)
+        cod, cola = r.returncode, ([l for l in (r.stdout or "").splitlines() if l.strip()][-1:] or [""])[0]
+    except subprocess.TimeoutExpired:
+        cod, cola = None, "timeout 240 s"
+    except Exception as e:                                   # noqa: BLE001
+        cod, cola = None, repr(e)[:90]
+    seg = time.time() - t
+    try:
+        with open(red, encoding="utf-8") as f:
+            peticiones = [tuple(l.split()) for l in f if l.strip()]
+    except OSError:
+        peticiones = []
+    return p, cod, cola, seg, peticiones
+
+
+print(f"{len(guardianes)} guardianes · {PROCESOS} a la vez · {_ver}{AVISO_PY}\n", flush=True)
 # ⚠️ Un guardián que necesita datos y no los tiene NO debe salir verde (sería el paso
 # en vacío de la trampa nº1: un OK que no comprobó nada) ni rojo (no hay nada roto).
 # Sale con código 2 = SIN DATOS y se cuenta aparte: así vaciar la demo no deja rojos
@@ -80,37 +118,52 @@ print(f"{len(guardianes)} guardianes · {_ver}{AVISO_PY}\n")
 # esconde que esas afirmaciones dejaron de comprobarse.
 SIN_DATOS = 2
 verde, rojo, roto, sindatos = [], [], [], []
+tiempos, salidas = {}, {}
 t0 = time.time()
-for p in guardianes:
-    try:
-        _h0 = _huella()
-        r = subprocess.run([PY, str(p)], capture_output=True, cwd=CWD, env=ENTORNO,
-                           text=True, encoding="utf-8", errors="replace", timeout=240)
-        time.sleep(PAUSA)
-        cola = [l for l in (r.stdout or "").splitlines() if l.strip()][-1:] or [""]
+_h0 = _huella()
+_carpeta_red = tempfile.mkdtemp(prefix="suite_red_")
+atexit.register(shutil.rmtree, _carpeta_red, ignore_errors=True)
+# ⚠️ Datos reales: fuera del repo y borrados al acabar. Si la tanda ya trae carpeta, es suya.
+if not ENTORNO.get("COPEX_CACHE_HOJA"):
+    ENTORNO["COPEX_CACHE_HOJA"] = tempfile.mkdtemp(prefix="suite_hoja_")
+    atexit.register(shutil.rmtree, ENTORNO["COPEX_CACHE_HOJA"], ignore_errors=True)
+with ThreadPoolExecutor(PROCESOS) as _varios:
+    _futuros = [_varios.submit(_correr, p, _carpeta_red) for p in guardianes]
+    for _f in as_completed(_futuros):
+        p, cod, cola, seg, peticiones = _f.result()
+        tiempos[p.name] = seg
+        if peticiones:
+            salidas[p.name] = peticiones
+        # ⚠️ Después de CADA guardián. Con varios a la vez, el que toca el código es él o uno de
+        # los que corrían con él: `--procesos=1` y `verif_v573` (estático) dicen cuál.
         _h1 = _huella()
         _tocados = sorted(k for k in set(_h0) | set(_h1) if _h0.get(k) != _h1.get(k))
+        _h0 = _h1
         if _tocados:
-            rojo.append((p.name, "TOCÓ el código de la app: %s" % ", ".join(_tocados)[:70]))
-            print(f"  ROJO  {p.name}   TOCÓ el código de la app: {', '.join(_tocados)[:70]}")
-        elif r.returncode == 0:
+            _m = "TOCÓ el código de la app (él o uno de los que corrían a la vez): %s" % ", ".join(_tocados)[:70]
+            rojo.append((p.name, _m))
+            print(f"  ROJO  {p.name}   {_m}", flush=True)
+        elif cod is None:
+            roto.append((p.name, cola))
+            print(f"  ROTO  {p.name}   {cola}", flush=True)
+        elif cod == 0:
             verde.append(p.name)
-            print(f"  ok    {p.name}")
-        elif r.returncode == SIN_DATOS:
-            sindatos.append((p.name, cola[0][:90]))
-            print(f"  --    {p.name}   (sin datos) {cola[0][:70]}")
+            print(f"  ok    {p.name}", flush=True)
+        elif cod == SIN_DATOS:
+            sindatos.append((p.name, cola[:90]))
+            print(f"  --    {p.name}   (sin datos) {cola[:70]}", flush=True)
         else:
-            rojo.append((p.name, cola[0][:90]))
-            print(f"  ROJO  {p.name}   {cola[0][:90]}")
-    except subprocess.TimeoutExpired:
-        roto.append((p.name, "timeout 240 s"))
-        print(f"  ROTO  {p.name}   timeout")
-    except Exception as e:                                   # noqa: BLE001
-        roto.append((p.name, repr(e)[:90]))
-        print(f"  ROTO  {p.name}   {e!r:.90}")
+            rojo.append((p.name, cola[:90]))
+            print(f"  ROJO  {p.name}   {cola[:90]}", flush=True)
 
+_dur = time.time() - t0
+_lect = [n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] == ["GET"]]
+_escr = sorted({n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] != ["GET"]})
+_ritmo = len(_lect) / max(_dur / 60, 1)
+if _ritmo > TECHO_HOJA:
+    rojo.append(("hoja real", f"{_ritmo:.0f} lecturas/min, por encima de {TECHO_HOJA}: mirar qué se dejó de guardar"))
 print(f"\n=== {len(verde)} verde · {len(rojo)} rojo · {len(roto)} roto "
-      f"· {time.time() - t0:.0f} s · {_ver} ==={AVISO_PY}")
+      f"· {_dur:.0f} s · {_ver} ==={AVISO_PY}")
 for n, c in rojo + roto:
     print(f"  {n}: {c}")
 if sindatos:
@@ -119,4 +172,13 @@ if sindatos:
     print("     tampoco es una garantía: esas afirmaciones dejaron de comprobarse.")
     for n, c in sindatos:
         print(f"     {n}: {c}")
+print("")
+print("  Más lentos: " + " · ".join(f"{n[:-3]} {s:.0f} s" for n, s in
+                                    sorted(tiempos.items(), key=lambda x: -x[1])[:8]))
+print(f"  Hoja real: {len(_lect)} lecturas de verdad, {_ritmo:.0f}/min (techo {TECHO_HOJA})")
+if _escr:
+    print(f"  ⚠️ Escriben en la hoja real: {', '.join(x[:-3] for x in _escr)}")
+_fuera = sorted({h for v in salidas.values() for h, *m in v if "googleapis.com" not in h})
+if _fuera:
+    print(f"  ⚠️ Salen a otros sitios: {', '.join(_fuera)}")
 sys.exit(0 if not rojo and not roto else 1)

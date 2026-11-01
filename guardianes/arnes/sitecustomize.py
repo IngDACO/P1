@@ -1,0 +1,120 @@
+# -*- coding: utf-8 -*-
+"""El arnés de los guardianes. Python importa `sitecustomize` solo al arrancar, y esta carpeta entra
+en PYTHONPATH SOLO cuando lanzan `run_suite.py` o `tanda.py`: sin ellos no existe. Así tres cosas
+valen para los 400 ficheros de guardianes y baterías sin tocar ni uno.
+
+1. `COPEX_RED=<fichero>`: apunta cada petición HTTP que sale de verdad del proceso.
+   ⚠️ Lo medido el 01/11/2026 desmintió lo que decía la documentación: no eran 16 guardianes los que
+   leían la hoja real, eran 110 (1351 peticiones), casi todos solo por arrancar (`clock` lee los
+   grupos). Y 9 de los que se creían lectores no la leen.
+2. `COPEX_CACHE_HOJA=<carpeta>`: la lectura de una hoja se pide a Google UNA vez por tanda y los
+   demás procesos la toman de esa carpeta. Sin esto, correr en paralelo eran ~180 lecturas/min contra
+   un techo de 60 que comparte la app en producción (la misma cuenta de servicio). Una escritura
+   vacía la carpeta: quien lee después de escribir ve lo escrito.
+   ⚠️ Son datos reales: la carpeta va fuera del repo y se borra al acabar. El token de acceso NO se
+   guarda (solo los GET de la API de hojas).
+3. `COPEX_CORTE=1`: un guardián termina en su primer «FALLO» (con ese FALLO ya impreso). Una rotura
+   cazada ya no corre el resto del guardián.
+   ⚠️ Solo en un guardián: la batería que lo lanza imprime sus propios textos con «FALLO».
+   ⚠️ Una batería NUEVA va SIN corte (`tanda.py`): es donde se prueba que el guardián SALE con
+   código de error. Con el corte, uno que imprimiera «FALLO» y saliera con 0 —verde en la suite—
+   parecería cazar la rotura.
+"""
+import os
+import sys
+import threading
+
+
+def _es_guardian():
+    return os.path.basename(sys.argv[0] if sys.argv else "").startswith(("verif_", "check_"))
+
+
+def _apuntar_red(fichero):
+    import http.client
+    _real = http.client.HTTPConnection.putrequest
+    # ⚠️ Con cerrojo: dos hilos del mismo proceso pisaban la línea del otro y salían hosts que no
+    # existen («is.com», el trozo final de «…googleapis.com»).
+    _cerrojo = threading.Lock()
+
+    def putrequest(self, method, url, *a, **k):
+        try:
+            with _cerrojo, open(fichero, "a", encoding="utf-8") as f:
+                f.write("%s %s\n" % (self.host, method))
+        except OSError:
+            pass
+        return _real(self, method, url, *a, **k)
+
+    http.client.HTTPConnection.putrequest = putrequest
+
+
+def _guardar_lecturas(carpeta):
+    import hashlib
+    import requests
+    import requests.adapters
+    _real = requests.adapters.HTTPAdapter.send
+    _host = os.environ.get("COPEX_CACHE_HOST") or "sheets.googleapis.com"
+
+    def _vaciar():
+        for n in os.listdir(carpeta):
+            try:
+                os.remove(os.path.join(carpeta, n))
+            except OSError:
+                pass
+
+    def send(self, request, *a, **k):
+        if _host not in str(request.url):
+            return _real(self, request, *a, **k)
+        if request.method != "GET":
+            r = _real(self, request, *a, **k)
+            _vaciar()
+            return r
+        f = os.path.join(carpeta, hashlib.sha1(str(request.url).encode("utf-8")).hexdigest())
+        try:
+            with open(f, "rb") as fh:
+                cuerpo = fh.read()
+        except OSError:
+            r = _real(self, request, *a, **k)
+            if r.status_code == 200:          # ⚠️ un 429 o un 500 no se guarda como si fuera el dato
+                tmp = "%s.%d.%d" % (f, os.getpid(), threading.get_ident())
+                with open(tmp, "wb") as fh:
+                    fh.write(r.content)
+                os.replace(tmp, f)
+            return r
+        r = requests.Response()
+        r.status_code, r._content, r._content_consumed = 200, cuerpo, True
+        r.url, r.request, r.connection, r.encoding = request.url, request, self, "utf-8"
+        r.headers["Content-Type"] = "application/json; charset=UTF-8"
+        return r
+
+    requests.adapters.HTTPAdapter.send = send
+
+
+def _es_fallo(primero):
+    """«  FALLO x», «   FALLO», «  *** FALLO  x»; NO «FALLOS: 3» ni «HAY FALLOS»: esas son el recuento
+    del final y ahí el guardián ya termina solo."""
+    t = str(primero).lstrip(" \n*")
+    return t == "FALLO" or t.startswith(("FALLO ", "FALLO:"))
+
+
+def _cortar_en_fallo():
+    import builtins
+    _real = builtins.print
+
+    def print_(*a, **k):
+        _real(*a, **k)
+        if a and _es_fallo(a[0]) and _es_guardian():
+            try:
+                sys.stdout.flush()
+            except Exception:                                    # noqa: BLE001
+                pass
+            os._exit(1)
+
+    builtins.print = print_
+
+
+if os.environ.get("COPEX_RED"):
+    _apuntar_red(os.environ["COPEX_RED"])
+if os.environ.get("COPEX_CACHE_HOJA"):
+    _guardar_lecturas(os.environ["COPEX_CACHE_HOJA"])
+if os.environ.get("COPEX_CORTE"):
+    _cortar_en_fallo()

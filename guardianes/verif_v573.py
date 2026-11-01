@@ -132,13 +132,19 @@ chk("⚠️ ningún guardián de la suite escribe en el árbol de la app (%d mir
     len(_suite) > 150 and not _mal, _mal)
 
 # La red en ejecución sigue puesta en el runner
+# (01/11/2026 · la suite corre en paralelo: la huella se toma ANTES de lanzarlos y DESPUÉS de que
+# termine CADA uno, dentro del bucle que recoge los resultados. Antes, dos veces por guardián.)
 _rs = ast.parse(io.open(os.path.join(GUAR, "run_suite.py"), encoding="utf-8").read())
 _hu = [n for n in ast.walk(_rs) if isinstance(n, ast.FunctionDef) and n.name == "_huella"]
-_bucle = [n for n in _rs.body if isinstance(n, ast.For)]
-_llam = [c for b in _bucle for c in ast.walk(b) if isinstance(c, ast.Call)
-         and getattr(c.func, "id", "") == "_huella"]
-chk("run_suite.py toma la huella del código de la app ANTES y DESPUÉS de cada guardián",
-    bool(_hu) and len(_llam) == 2, (len(_hu), len(_llam)))
+_es_h = lambda c: isinstance(c, ast.Call) and getattr(c.func, "id", "") == "_huella"
+_bucles = [n for n in ast.walk(_rs) if isinstance(n, ast.For)
+           and getattr(n.iter, "func", None) is not None
+           and getattr(n.iter.func, "id", "") == "as_completed"]
+_tras = [c for b in _bucles for c in ast.walk(b) if _es_h(c)]
+_antes = [c for n in _rs.body if isinstance(n, ast.Assign) for c in ast.walk(n) if _es_h(c)]
+chk("run_suite.py toma la huella del código de la app ANTES de lanzarlos y DESPUÉS de cada uno",
+    bool(_hu) and len(_bucles) == 1 and len(_tras) == 1 and len(_antes) == 1,
+    (len(_hu), len(_bucles), len(_tras), len(_antes)))
 
 print("")
 print("=== %d comprobaciones · %d fallos ===" % (n_ok + len(fallos), len(fallos)))

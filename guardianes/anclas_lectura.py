@@ -148,6 +148,7 @@ def analiza(ruta, fuente=None):
     arbol = ast.parse(fuente if fuente is not None else ruta.read_text(encoding="utf-8"))
     env = entorno(arbol, ruta)
     out = {"vivas": 0, "muertas": [], "ilegibles": [], "sin_forma": [], "repetidas": [],
+           "sitios": [],     # (fichero, ancla) de cada ancla viva: lo usa `baterias_afectadas.py`
            # v581 · ¿esta batería se SALTA un ancla que casa más de una vez? (las que piden
            # `count(...) != 1`); las de `replace(..., 1)` rompen la primera, a propósito
            "unica": "!= 1" in (fuente if fuente is not None else ruta.read_text(encoding="utf-8"))}
@@ -206,6 +207,7 @@ def _tuplas(ruta, L, f, val, env, out):
                 out["ilegibles"].append("%s:%s[%d] ancla no es texto" % (ruta.name, L, k))
             elif src.count(a.replace("\r\n", "\n")) >= 1:
                 out["vivas"] += 1
+                out["sitios"].append((rel, a))
                 if src.count(a.replace("\r\n", "\n")) >= 2:
                     out["repetidas"].append("%s:%s[%d] %s x%d <- %r" % (
                         ruta.name, L, k, rel, src.count(a.replace("\r\n", "\n")), a[:70]))
