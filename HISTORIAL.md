@@ -10,6 +10,36 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO VISTO VERIFICANDO v627: EL NÚMERO DE LAS CIFRAS (v628)
+
+Las cifras de credenciales salían a 12 px y en gris: el tema solo agranda el número en tarjetas de TRES líneas, y estas
+tenían dos → llevan pie («within 30 days», «need renewing»). Trampa 49.
+
+medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253
+
+## RECORRIDO DEL CAMPO: SELF-SERVICE (v627)
+
+Decisión del usuario («Ok dale con todo incluido lo recomendado»):
+
+- ⚠️ **Se podían cancelar días ya disfrutados:** devolvía el saldo y quitaba esas horas de la nómina → su dueño
+  cancela lo pendiente y lo que no ha empezado (`ausencias.cancelable_por_el_campo`, también en el motor); lo demás,
+  la oficina (`cancelar(..., gestor=True)`).
+- ⚠️ **Un toque cancelaba unas vacaciones aprobadas**, con correo a 5 cuentas → confirmación, como la oficina (v555),
+  y acción diferida.
+- ⚠️ **Sin saldo no dejaba registrar una baja** → se registra siempre (decisión del usuario), queda en `AdminNote` y el
+  correo dice que pasa del saldo: la oficina decide cómo se paga.
+- ⚠️ **Lo pendiente no contaba:** con 20 días se podían pedir 20 y otros 20 → `saldo()` da `pendientes` y `disponibles`,
+  y `solicitar` lo niega en el motor.
+- El formulario deja de ser `st.form`: cuenta los días en vivo («This takes 3 days · 17 left after this») y va por
+  generación, porque vaciar una clave no llega al navegador (trampa 31; comprobado en un navegador real con una
+  mini-app, para no mandar correos).
+- ⚠️ **Los PDF de nómina se generaban todos en cada pasada** (411 ms cada uno, medido: un año de nómina semanal, 21 s por
+  toque) → diferidos, y las 10 últimas. Los documentos de las credenciales, igual: se bajaban todos de Drive.
+- Credenciales: cifras 2×2 que filtran y una tarjeta por credencial con lo vencido primero; la oficina conserva su tabla,
+  en DD/MM/YYYY. Self-service sin título doble, cifras activas, nombres en vez de logins, «paid on …».
+
+medido en producción a 375 px: título único, saldo 20 − 4 − 2 = 14, retirar una pendiente sube a 16, «Keep it» no toca nada, lo pasado con candado y 12 nóminas en 0,7 s; contra la hoja real, sin avisos: una baja de 11 días con su nota y su tablero, y el motor niega cancelar lo pasado; sin probar en vivo: cancelar una aprobada futura (avisa a 5 cuentas) · verif_v627 111/111 · romper_v627 59/59 y 9 baterías afectadas en verde · suite 253/253
+
 ## LO VISTO VERIFICANDO v625: LA BARRA, LA CAMPANA Y FILES (v626)
 
 - ⚠️ **Bajar dejaba lo buscado debajo de la barra de Streamlit** (`stHeader`: 60 px, encima de la página y
@@ -15340,7 +15370,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v626 = actual)
+## Versiones desplegadas (v628 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15348,6 +15378,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v628 | **El número de las cifras de credenciales**, a 26 px (estaba a 12, como un pie). medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253 |
+| v627 | **Recorrido del campo: Self-service.** ⚠️ Ya no se cancela lo disfrutado, cancelar pide confirmación, la baja se registra sin saldo y decide la oficina, lo pendiente cuenta; contador de días en vivo; credenciales en tarjetas; ⚠️ nóminas sin generar todos los PDF en cada pasada (21 s por toque con un año semanal). medido en producción a 375 px: título único, saldo 20 − 4 − 2 = 14, retirar una pendiente sube a 16, «Keep it» no toca nada, lo pasado con candado y 12 nóminas en 0,7 s; contra la hoja real, sin avisos: una baja de 11 días con su nota y su tablero, y el motor niega cancelar lo pasado; sin probar en vivo: cancelar una aprobada futura (avisa a 5 cuentas) · verif_v627 111/111 · romper_v627 59/59 y 9 baterías afectadas en verde · suite 253/253 |
 | v626 | **Lo visto verificando v625.** ⚠️ Bajar dejaba lo buscado bajo la barra de Streamlit (60 px) → margen, en toda la app. Campana una línea por obra; Files dice qué fila tocar; fuera el texto de oficina del campo. medido en producción a 375 px: las cifras de Belting a 68 px con la barra de 60 (estaban a 0); la campana agrupada, el aviso de Files y el texto del campo, solo por el guardián · verif_v626 28/28 · romper_v626 12/12, romper_v625 63/63 y 3 baterías afectadas en verde · suite 252/252 |
 | v625 | **Recorrido del campo: Tools.** ⚠️ El fichaje iba por el nombre: con dos obras iguales usaba y guardaba en la otra → por ID. ⚠️ El campo guarda su Survey sin pisar uno guardado: cálculo nuevo y la oficina decide (campana → Files → cargarlo o quedarse el suyo). Sin fichar usa su obra; calcular baja al resultado; la portada solo sus obras. medido en producción: Survey real del campo en PRJ-0027 (28 s, 8 filas, interpretaciones reales), bajada en Belting a 375 px de 199 a 982 px, guardar sin fichar y la portada; el segundo guardado y la decisión de la oficina, ensayados contra la hoja y el Drive reales con IA y correo sustituidos (2 → 1 → 0 en la campana) · verif_v625 132/132 · romper_v625 63/63 y 10 baterías afectadas en verde · suite 251/251 |
 | v624 | **La firma ya no se corta** a 859 px con el menú. PRODUCCIÓN (01/11/2026, v624 en la etiqueta): a 859 px con el menú, la columna de la firma mide 315 px (283 en v623) para un lienzo de 300 · verif_v623 64/64 (una afirmación más) · romper_v623 30/30 + control · check_anclas_roturas: 2378 vivas, 0 muertas · tanda 6:54 en verde: suite 250 verde con Python 3.12.10 (281 s) |
