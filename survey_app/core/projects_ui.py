@@ -865,6 +865,9 @@ def _archivos_section(pid: str):
             _ok, _msg = P.delete_document_record(pid, _pend.get("did"))
             if _ok:
                 flash.exito(t("«{x}» deleted.", x=_pend.get("nombre") or t("file")))
+                if _pend.get("did"):
+                    toolruns.decidir_por_drive(_pend["did"],
+                                               st.session_state.get("auth", {}).get("usuario", ""))
             else:
                 flash.error(_msg)
         except Exception as ex:
@@ -1006,6 +1009,73 @@ def _archivos_section(pid: str):
     _subir_documento(pid, es_campo, sube_tipos, usuario)
 
 
+def _cargar_en_survey(pid, prj, grupo, params, matriz):
+    """Deja parámetros y matriz en el Survey, listos para calcular (lo guardado en la obra, o
+    el survey de campo que la oficina va a revisar, v625)."""
+    # v534 · Se carga A PROPÓSITO: el Survey no lo olvida al pintarse aunque
+    # la última vez estuviera con otra obra. v539 · Y es de ESTE proyecto:
+    # elegirlo luego en el selector no deja que el plano pise lo cargado.
+    from core import estado_vivo as _ev
+    _ev.respetar("sv", pid)
+    for k, v in params.items():
+        try:
+            st.session_state[f"inp_{k}"] = float(v)
+        except Exception:
+            pass
+    if params.get("NS"):
+        try:
+            st.session_state["ns"] = int(float(params["NS"]))
+        except Exception:
+            pass
+    if matriz:
+        try:
+            st.session_state["survey_df"] = pd.DataFrame(matriz)
+            # v542 · Matriz nueva para el navegador: si no, las celdas
+            # tecleadas en el survey anterior quedaban ENCIMA de la de la obra.
+            _ev.tabla_nueva("sv")
+        except Exception:
+            pass
+    st.session_state["proyecto"]  = str(prj.get("Name", ""))
+    st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
+    st.session_state["_rebuilt_from"] = str(prj.get("Name", ""))
+
+
+def _decidir_survey(pid, did, run):
+    """v625 · El survey del campo en una obra que ya tenía uno: aquí decide la oficina. Cargarlo
+    NO sustituye nada: lo sustituye guardarlo desde el Survey, después de verlo calculado."""
+    pendiente = bool(toolruns.datos_de(run).get("por_decidir"))
+    _usr = st.session_state.get("auth", {}).get("usuario", "")
+    if pendiente:
+        st.info(t(":material/rule: Saved from the field on a project that already had a survey, "
+                  "so it did not replace it. Load it to review it: the project's survey only "
+                  "changes if you then save this one from the Survey."))
+    _c1, _c2 = st.columns(2)
+    if _c1.button(t(":material/sync: Load it into the Survey"), key=f"arch_svcarga_{pid}",
+                  width="stretch"):
+        import json as _json
+        try:
+            _d = _json.loads(drive_store.download(did))
+            _params, _matriz = _d.get("params") or {}, _d.get("matriz") or []
+        except Exception as ex:
+            st.error(t("It could not be read: {e}", e=ex))
+            return
+        _prj = P.get_project(pid) or {}
+        _cargar_en_survey(pid, _prj, str(_prj.get("Group", "")), _params, _matriz)
+        # La obra ya elegida: al guardar desde el Survey va aquí sin buscarla
+        st.session_state["pl_prj_sv"] = f"{_prj.get('Name')} ({pid})"
+        if pendiente:
+            toolruns.decidir_survey(run, "loaded", _usr)
+        st.session_state["_admin_nav_pending"] = ("herramientas", "📐 Survey")
+        st.rerun()
+    if pendiente and _c2.button(t(":material/check: Keep the project's survey"),
+                                key=f"arch_svquedar_{pid}", width="stretch"):
+        if toolruns.decidir_survey(run, "kept", _usr):
+            flash.info(t("The project keeps its survey. This one stays in Files."))
+        else:
+            flash.error(t("It could not be saved. Try again."))
+        st.rerun()
+
+
 def _acciones_archivo(pid, e, puede_borrar):
     """Descargar / reabrir / borrar el archivo elegido. Solo aquí se descarga."""
     did = e["did"]
@@ -1025,6 +1095,8 @@ def _acciones_archivo(pid, e, puede_borrar):
                                key=f"arch_dl_{pid}_{did}", width="stretch")
         except Exception as ex:
             st.error(f"It could not be downloaded: {ex}")
+    if puede_borrar and did and bool(run) and toolruns.es_survey_a_decidir(run):
+        _decidir_survey(pid, did, run)
     if reabrible:
         if st.button(t(":material/replay: Reopen in the tool"), key=f"arch_reab_{pid}",
                      width="stretch"):
@@ -3346,32 +3418,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                 if not params:
                     st.error(t("This project has no saved parameters."))
                 else:
-                    # v534 · Se carga A PROPÓSITO: el Survey no lo olvida al pintarse aunque
-                    # la última vez estuviera con otra obra. v539 · Y es de ESTE proyecto:
-                    # elegirlo luego en el selector no deja que el plano pise lo cargado.
-                    from core import estado_vivo as _ev
-                    _ev.respetar("sv", pid)
-                    for k, v in params.items():
-                        try:
-                            st.session_state[f"inp_{k}"] = float(v)
-                        except Exception:
-                            pass
-                    if params.get("NS"):
-                        try:
-                            st.session_state["ns"] = int(float(params["NS"]))
-                        except Exception:
-                            pass
-                    if matriz:
-                        try:
-                            st.session_state["survey_df"] = pd.DataFrame(matriz)
-                            # v542 · Matriz nueva para el navegador: si no, las celdas
-                            # tecleadas en el survey anterior quedaban ENCIMA de la de la obra.
-                            _ev.tabla_nueva("sv")
-                        except Exception:
-                            pass
-                    st.session_state["proyecto"]  = str(prj.get("Name", ""))
-                    st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
-                    st.session_state["_rebuilt_from"] = str(prj.get("Name", ""))
+                    _cargar_en_survey(pid, prj, grupo, params, matriz)
                     st.success(t(":material/check_circle: Loaded. Go to **:material/architecture: Survey** and press **Calculate** to regenerate everything."))
         # ── Archivos del proyecto (buscable) ──
         _archivos_section(pid)

@@ -136,6 +136,7 @@ def render_belting_tab():
         else:
             st.session_state[_K] = {"results": compute_belting(hgp, hq, hgpr_list),
                                     "hgp": hgp, "hq": hq, "firma": _ahora}
+            st.session_state["_bajar_cpx_belt_kpis"] = True   # v625 · al resultado, solo si lo hay
 
     est = st.session_state.get(_K)
     if not est:
@@ -153,7 +154,9 @@ def render_belting_tab():
     _K3 = [("hq", t("HQ (travel)"), f"{_hq:.0f} mm"), ("hgp", t("HGP (design)"), f"{_hgp:.0f} mm"),
            ("n", t("Lifts"), str(len(results)))]
     st.markdown(T.por_fila("cpx_belt_kpis", 3), unsafe_allow_html=True)
+    from core import projects_ui as _PU
     with st.container(key="cpx_belt_kpis"):
+        _PU._bajar_a("cpx_belt_kpis", "_bajar_cpx_belt_kpis", bloque="start")      # v625
         for _col, (_s, _l, _v) in zip(st.columns(len(_K3)), _K3):
             if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_belt_{_s}", width="stretch",
                            help=t("See it on the diagram")):
@@ -177,7 +180,6 @@ def render_belting_tab():
     st.caption(_formula)
 
     svg = belting_svg(results, proyecto=_pr)
-    from core import projects_ui as _PU
     with st.container(key="cpx_belt_dibujo"):        # v595 · destino de las cifras
         _PU._bajar_a("cpx_belt_dibujo", "_bajar_cpx_belt_dibujo", bloque="start")
         st.subheader(t(":material/architecture: Diagram"))

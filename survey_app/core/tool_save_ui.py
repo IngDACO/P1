@@ -14,6 +14,7 @@ from core.i18n import t
 from core import estado_vivo
 from core import projects as P
 from core import toolruns
+from core.maps import literal_md
 
 # Prefijo de las claves de session_state de cada herramienta. Sirve para
 # fotografiar sus entradas sin enumerarlas a mano (asi las claves dinamicas,
@@ -218,36 +219,30 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
 
     if hecho.get("firma") == firma:
         c2.success(t(":green[:material/check_circle:] Saved as **{i}** in {x}.", i=hecho.get("id"),
-                     x=hecho.get("nombre"))
+                     x=literal_md(hecho.get("nombre")))
                    + ("" if hecho.get("drive") else " " + t("(The PDF was not filed in Drive: "
                                                              "check the connection.)")))
 
     # ── Campo: destino AUTOMÁTICO = el proyecto donde fichó ──
     # No lo elige de una lista; ya está trabajando allí. Mismo criterio que el plano
     # (v137), Mis proyectos (v138) y el Pre-Start (v170). ID primero, nombre de
-    # respaldo (v145).
+    # respaldo (v145) solo si es de UNA obra (v625, `plan_ui.obra_del_fichaje`).
     _fich = None
     if rol == "field":
         try:
             from core import timeclock
             _ses = timeclock.open_sessions(nombre, grupo, usuario)
-            _open = (_ses.get(timeclock.TIPO_PROYECTO)
-                     or _ses.get(timeclock.TIPO_GENERAL) or {})
-            _fpid = str(_open.get("proyecto_id", "")).strip()
-            _fpn  = str(_open.get("proyecto", "")).strip()
-            for _p in proys:
-                if (_fpid and str(_p.get("ID", "")).strip() == _fpid) or \
-                   (not _fpid and _fpn and
-                    str(_p.get("Name", "")).strip().casefold() == _fpn.casefold()):
-                    _fich = _p
-                    break
+            _fich = plan_ui.obra_del_fichaje(_ses.get(timeclock.TIPO_PROYECTO)
+                                             or _ses.get(timeclock.TIPO_GENERAL) or {}, proys)
         except Exception:
             pass
 
     with c2:
         if _fich is not None:
-            st.caption(t(":material/save: It will be saved to **{x}** — where you clocked in.",
-                         x=_fich.get('Name')))
+            # v625 · Ya guardado, el futuro sobra: decía «It will be saved» bajo «Saved as CAL-…»
+            if not _ya(_fich):
+                st.caption(t(":material/save: It will be saved to **{x}** — where you clocked in.",
+                             x=literal_md(_fich.get('Name'))))
             if st.button(t(":material/check: Saved") if _ya(_fich) else
                          t(":material/save: Save to the project"), width="stretch",
                          key=f"save_{key}", disabled=_ya(_fich)):
@@ -260,7 +255,8 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
                              disabled=(not sel or sel == _VACIO or _ya(idmap.get(sel)))):
                     _guardar(idmap[sel])
         else:
-            if rol == "field":
+            # v625 · Con la obra ya elegida arriba, no hay nada que «elegir» ni fichaje que pedir
+            if rol == "field" and not obra_id:
                 st.caption(t("You have not clocked in to a project yet (:material/schedule: Time clock). Choose one:"))
             # ⚠️ v592 · Con la obra elegida ARRIBA, ya elegida (una vez por cálculo, o si el
             # widget es nuevo; si quien guarda elige otra, se respeta). Sin obra arriba, sin

@@ -120,6 +120,7 @@ def render_buffer_cut_tab():
             st.warning(t(":material/edit: Fill in before calculating: {x}.", x="; ".join(_faltan)))
         else:
             st.session_state[_K] = dict(compute_buffer_cut(hkp, hkpr_list), firma=_ahora)
+            st.session_state["_bajar_cpx_bc_kpis"] = True     # v625 · al resultado, solo si lo hay
 
     res = st.session_state.get(_K)
     if not res:
@@ -140,7 +141,11 @@ def render_buffer_cut_tab():
     st.markdown(T.por_fila("cpx_bc_kpis", 3)
                 + ("<style>.st-key-cpxkpi_bc_rev button{border-left-color:#c0392b!important}</style>"
                    if _n_warn else ""), unsafe_allow_html=True)
+    from core import projects_ui as _PU
     with st.container(key="cpx_bc_kpis"):
+        # v625 · Tras calcular, el resultado quedaba debajo del borde en el móvil y parecía que
+        # el botón no había hecho nada.
+        _PU._bajar_a("cpx_bc_kpis", "_bajar_cpx_bc_kpis", bloque="start")
         for _col, (_s, _l, _v, _dest) in zip(st.columns(len(_K3)), _K3):
             if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_bc_{_s}", width="stretch",
                            help=t("Go to it")):
@@ -155,7 +160,6 @@ def render_buffer_cut_tab():
     } for b in res["buffers"]]
     # v594 · los destinos de las cifras: cada bloque envuelve su TÍTULO (claves literales,
     # para que verif_v585 lo compruebe)
-    from core import projects_ui as _PU
     with st.container(key="cpx_bc_tabla"):
         _PU._bajar_a("cpx_bc_tabla", "_bajar_cpx_bc_tabla", bloque="start")
         st.subheader(t("Result — cuts (mm)"))

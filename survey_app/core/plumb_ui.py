@@ -184,6 +184,7 @@ def render_plumb_tab():
             "SF1": sf1, "SF2": sf2, "BSR": b, "BS": bs,
             "SG": sg, "TG": tg, "OMEGA_SIDE": omega,
         }) for b in bsr_list]}
+        st.session_state["_bajar_cpx_plb_res"] = True         # v625 · al resultado, solo si lo hay
 
     data = st.session_state.get("plb_res_multi")
     if not data:
@@ -209,7 +210,10 @@ def render_plumb_tab():
         return " · ".join(x for x in (_pr_base, suf) if x) or d("Lift {i}", i=i)
 
     # ── La plantilla (compartida, UNA vez) ──
-    st.markdown(t("#### :material/architecture: The template (the same for every lift)"))
+    from core import projects_ui as _PU
+    with st.container(key="cpx_plb_res"):      # v625 · el destino tras calcular: el título
+        _PU._bajar_a("cpx_plb_res", "_bajar_cpx_plb_res", bloque="start")
+        st.markdown(t("#### :material/architecture: The template (the same for every lift)"))
     # ⚠️ v592 · ACTIVAS (eran HTML): cada cifra lleva al dibujo donde se ve y se mide.
     _K = [("dbp", t("DBP"), f"{r0['dbp']:.1f}", t("between the plumb lines")),
           ("dbpw", t("DBPW"), f"{r0['dbpw']:.1f}", t("front wall → plumb")),

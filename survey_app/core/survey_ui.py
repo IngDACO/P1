@@ -46,6 +46,7 @@ from core import incrustar
 from core import estado_vivo
 from core import theme as T
 from core.num import nombre_archivo
+from core.maps import literal_md
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,36 @@ def _limpiar_survey():
     for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
                "sched_start", "_rebuilt_from", "_diag_pdf", "_sv_ns_obra"):
         st.session_state.pop(_k, None)
+
+
+def _survey_para_la_oficina(prj, params, matriz, resumen, usuario, grupo) -> str:
+    """v625 · El survey del campo en una obra que YA tiene uno: no lo pisa. Se archiva como
+    cálculo nuevo y la oficina decide (campana → Files de la obra → cargarlo en el Survey,
+    donde solo sustituye al guardado si ella lo guarda).
+
+    ⚠️ Los parámetros y la matriz van en un JSON en Drive: en `DataJSON` no caben (se corta a
+    4800 caracteres) y lo cortado no se podría cargar. Sin Drive no se guarda: una fila sin
+    archivo le pediría a la oficina decidir sobre algo que no está.
+
+    Devuelve el ID del cálculo, o "" si no se guardó (y lo ha dicho)."""
+    import json as _json
+    if not (drive_store.is_configured() and drive_store.is_available()):
+        st.error(t("It could not be saved: Drive is not connected, and this survey is filed "
+                   "there. Your results are still here: try again in a moment."))
+        return ""
+    _cuando = clock.now().strftime("%Y-%m-%d_%H%M")
+    res = toolruns.registrar(
+        pid=str(prj.get("ID", "")), grupo=str(prj.get("Group", grupo)), herramienta="survey",
+        resumen=resumen,
+        datos={"por_decidir": True, "ns": params.get("NS")}, usuario=usuario,
+        pdf=_json.dumps({"params": params, "matriz": matriz}, ensure_ascii=False,
+                        default=str).encode("utf-8"),
+        filename=f"Survey_{_cuando}_{usuario}.json", mime="application/json")
+    if not (res.get("ok") and res.get("drive_id")):
+        st.error(t("It could not be saved: {e}", e=res.get("error") or t("the file did not "
+                                                                         "reach Drive")))
+        return ""
+    return str(res.get("id"))
 
 
 def render_survey_tab(_ROL, _GRUPO):
@@ -1378,6 +1409,9 @@ def render_survey_tab(_ROL, _GRUPO):
             # ⚠️ v589 · UN aviso y un botón: antes, cuatro cabeceras (Results, Schedule, Client
             # report, Save to the project) cada una con su «do the calculation first».
             st.info(t("No calculation yet. Fill in the survey data and press **:material/play_arrow: "
+                      "Calculate and see the results**: the solutions, the schedule and saving "
+                      "to the project appear here.") if _ROL == "field" else
+                    t("No calculation yet. Fill in the survey data and press **:material/play_arrow: "
                       "Calculate and see the results**: the solutions, the schedule, the client "
                       "report and saving to the project appear here."))
             if st.button(t(":material/edit: Go to Survey data"), key="btn_sv_ir_datos"):
@@ -1437,10 +1471,8 @@ def render_survey_tab(_ROL, _GRUPO):
         # ══════════════════════════════════════════════════════
         # PASO 6 — INFORME DEL CLIENTE  (solo propietario / administrador)
         # ══════════════════════════════════════════════════════
-        if not can_reports(_ROL):
-            st.header(t(":material/description: Client report"))
-            st.caption(t(":material/lock: Report downloads are available to management (owner / administrator)."))
-        else:
+        # v625 · Al campo ni se le nombra: una cabecera entera para decirle que no es para él.
+        if can_reports(_ROL):
             st.header(t(":material/description: Client report"))
             st.caption(t("A professional report to hand to the client (final solution, diagrams and implementation instructions). The internal technical report is emailed to management automatically."))
 
@@ -1491,7 +1523,10 @@ def render_survey_tab(_ROL, _GRUPO):
         # 🛠 Mi grupo → ➕ Nuevo proyecto. Motivo: la obra existe antes que el
         # survey, y atar la creación al survey obligaba a tenerlo hecho para
         # poder dar de alta el proyecto.
-        if _ROL in ("administrator", "owner"):
+        # ⚠️ v625 · El campo también guarda (mide en la obra y su survey se perdía al salir), en
+        # la obra de este cálculo y SIN PISAR uno guardado: `_survey_para_la_oficina`.
+        _es_campo = _ROL == "field"
+        if _ROL in ("administrator", "owner", "field"):
             st.header(t(":material/save: Save to the project"))
             if not st.session_state.get("calc_results"):
                 st.info(t("Calculate first so the survey can be saved to a project."))
@@ -1500,8 +1535,10 @@ def render_survey_tab(_ROL, _GRUPO):
             else:
                 r  = st.session_state.calc_results
                 ap = r["all_params"]
+                _usr = st.session_state.get("auth", {}).get("usuario", "")
                 _proys = (projects_data.list_projects() if _ROL == "owner"
-                          else projects_data.list_projects(_GRUPO))
+                          else projects_data.list_projects_for_field(_usr, grupo=_GRUPO)
+                          if _es_campo else projects_data.list_projects(_GRUPO))
                 # ⚠️ v590 · Solo obras donde un survey tiene sentido (instalaciones abiertas: el
                 # MISMO filtro que el selector del plano, `plan_ui.es_de_herramientas`) más la de
                 # ESTE cálculo, y esa YA ELEGIDA. Antes salían todas sin elegir ninguna, y al
@@ -1509,7 +1546,13 @@ def render_survey_tab(_ROL, _GRUPO):
                 _dest = str(r.get("prj_id", "") or "")
                 _proys = [p for p in _proys
                           if plan_ui.es_de_herramientas(p) or str(p.get("ID", "")) == _dest]
-                if not _proys:
+                # El campo puede haber fichado en una obra a la que no está asignado
+                if _es_campo and _dest and not any(str(p.get("ID", "")) == _dest for p in _proys):
+                    _proys += [p for p in [projects_data.get_project(_dest)] if p]
+                if not _proys and _es_campo:
+                    st.info(t("You have no open installation job to attach this survey to. Ask "
+                              "the office to assign you to the project."))
+                elif not _proys:
                     # v590 · un botón, no una ruta («My company → …», que ya no existe)
                     st.info(t("There are no open installation projects to attach this survey to. "
                               "Create one in Projects and come back here."))
@@ -1523,22 +1566,36 @@ def render_survey_tab(_ROL, _GRUPO):
                     _idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in _proys}
                     _lbl_dest = next((k for k, p in _idmap.items()
                                       if str(p.get("ID", "")) == _dest), None)
-                    # Se ASIGNA (trampa 31) una vez por cálculo, o si el widget es nuevo; si
-                    # quien guarda elige otra, se respeta. Un valor que ya no está, fuera.
-                    if (_lbl_dest and ("sv_prj_sel" not in st.session_state
-                                       or st.session_state.get("_sv_dest_n") != r.get("_n"))):
-                        st.session_state["sv_prj_sel"] = _lbl_dest
-                        st.session_state["_sv_dest_n"] = r.get("_n")
-                    elif st.session_state.get("sv_prj_sel") not in [_VACIO, *_idmap]:
-                        st.session_state["sv_prj_sel"] = _lbl_dest or _VACIO
-                    _sel = st.selectbox(t("Target project"),
-                                        [_VACIO] + list(_idmap.keys()),
-                                        key="sv_prj_sel")
-                    if not _sel or _sel == _VACIO:
-                        st.caption(t("Choose which project to attach this survey to."))
-                        _prj = None
+                    if _es_campo and _lbl_dest:
+                        # v625 · El campo no elige: es la obra donde midió.
+                        _prj = _idmap[_lbl_dest]
+                        st.caption(t(":material/save: It will be saved to **{x}**.",
+                                     x=literal_md(_prj.get("Name"))))
                     else:
-                        _prj = _idmap[_sel]
+                        # Se ASIGNA (trampa 31) una vez por cálculo, o si el widget es nuevo; si
+                        # quien guarda elige otra, se respeta. Un valor que ya no está, fuera.
+                        if (_lbl_dest and ("sv_prj_sel" not in st.session_state
+                                           or st.session_state.get("_sv_dest_n") != r.get("_n"))):
+                            st.session_state["sv_prj_sel"] = _lbl_dest
+                            st.session_state["_sv_dest_n"] = r.get("_n")
+                        elif st.session_state.get("sv_prj_sel") not in [_VACIO, *_idmap]:
+                            st.session_state["sv_prj_sel"] = _lbl_dest or _VACIO
+                        _sel = st.selectbox(t("Target project"),
+                                            [_VACIO] + list(_idmap.keys()),
+                                            key="sv_prj_sel")
+                        if not _sel or _sel == _VACIO:
+                            st.caption(t("Choose which project to attach this survey to."))
+                            _prj = None
+                        else:
+                            _prj = _idmap[_sel]
+
+                    # v625 · Lo que va a pasar, dicho ANTES de tocar el botón
+                    _ya_hay = _es_campo and _prj is not None and projects_data.tiene_survey(_prj)
+                    if _ya_hay:
+                        st.info(t(":material/info: **{x}** already has a saved survey, and this "
+                                  "one will not replace it: it is saved as a new calculation and "
+                                  "the office decides which one stays.",
+                                  x=literal_md(_prj.get("Name"))))
 
                     # NS del plano vs NS del proyecto: avisar, nunca pisar en silencio
                     # (protegido: _prj es None mientras no se elija destino)
@@ -1554,32 +1611,45 @@ def render_survey_tab(_ROL, _GRUPO):
                     except Exception:
                         pass
 
-                    if st.button(t(":material/save: Save the survey to this project"),
+                    if st.button(t(":material/save: Save as a new calculation") if _ya_hay else
+                                 t(":material/save: Save the survey to this project"),
                                  width="stretch", key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
-                        _usr = st.session_state.get("auth", {}).get("usuario", "")
                         _matriz = (r["survey_orig"].to_dict("records")
                                    if hasattr(r.get("survey_orig"), "to_dict") else [])
-                        ok, msg = projects_data.attach_survey(
-                            _pid, params=ap, matriz=_matriz,
-                            interp={"admin": r.get("interpretation"),
-                                    "user":  r.get("interpretation_user")})
-                        if not ok:
+                        _best = (r.get("optimizer_result") or {}).get("best") or {}
+                        _resumen = (f"RL {_best.get('rl', 0):+.1f} · "
+                                    f"FB {_best.get('fb_applied', _best.get('fb', 0)):+.1f} · "
+                                    f"{_best.get('total_off', 0)} out of limit")
+                        # La pregunta de verdad, FRESCA (lo de arriba sale de la caché): otro
+                        # instalador puede haber guardado el suyo hace un momento.
+                        _a_oficina = _es_campo and not projects_data.survey_libre(_pid)
+                        ok, msg = ((_survey_para_la_oficina(_prj, ap, _matriz, _resumen, _usr,
+                                                            _GRUPO), "") if _a_oficina else
+                                   projects_data.attach_survey(
+                                       _pid, params=ap, matriz=_matriz,
+                                       interp={"admin": r.get("interpretation"),
+                                               "user":  r.get("interpretation_user")}))
+                        if _a_oficina:
+                            if ok:
+                                flash.exito(t(":material/check_circle: Saved in **{x}** as a new "
+                                              "calculation ({i}). The office decides whether it "
+                                              "replaces the survey already there.",
+                                              x=literal_md(_prj.get("Name")), i=ok))
+                        elif not ok:
                             st.error(t("It could not be saved: {e}", e=msg))
                         else:
-                            _best = (r.get("optimizer_result") or {}).get("best") or {}
-                            st.session_state["_prj_creado"] = {
-                                "id": _pid, "nombre": str(_prj.get("Name", ""))}
+                            # v625 · Su botón lleva a la ficha de la oficina: el campo no la tiene
+                            if not _es_campo:
+                                st.session_state["_prj_creado"] = {
+                                    "id": _pid, "nombre": str(_prj.get("Name", ""))}
 
                             # Registro en el historial de cálculos del proyecto
                             try:
                                 toolruns.registrar(
                                     pid=_pid, grupo=str(_prj.get("Group", _GRUPO)),
-                                    herramienta="survey",
-                                    resumen=(f"RL {_best.get('rl', 0):+.1f} · "
-                                             f"FB {_best.get('fb_applied', _best.get('fb', 0)):+.1f} · "
-                                             f"{_best.get('total_off', 0)} out of limit"),
+                                    herramienta="survey", resumen=_resumen,
                                     datos={"rl": _best.get("rl"), "fb": _best.get("fb"),
                                            "total_off": _best.get("total_off"),
                                            "ns": ap.get("NS")},
@@ -1645,7 +1715,8 @@ def render_survey_tab(_ROL, _GRUPO):
                                 flash.aviso(t(":material/attach_file: Documents not filed: Drive is not connected."))
 
                             flash.exito(t(":material/check_circle: Survey saved to **{x}**.",
-                                          x=f"{_pid} · {_prj.get('Name')}"))
+                                          x=f"{_pid} · {literal_md(_prj.get('Name'))}"))
+                        if ok:
                             # ⚠️ v542 · Guardado en su proyecto, el survey EMPIEZA DE CERO
                             # (decisión del usuario: no se mezcla información de proyectos):
                             # el siguiente no puede arrastrar nada de este. El selector del

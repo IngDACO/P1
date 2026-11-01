@@ -56,7 +56,7 @@ ROTURAS = [
            "")]),
 
     ("«Rebuild the project in the Survey» no estrena matriz",
-     PRU, [('                            _ev.tabla_nueva("sv")\n', "")]),
+     PRU, [('            _ev.tabla_nueva("sv")\n', "")]),
 
     # ── B. No se mezcla información de proyectos ──
     ("⚠️ de una obra a OTRA el Survey ya no empieza de cero (lo de A pasa a B)",

@@ -56,8 +56,8 @@ ROTURAS = [
      TSU, [('.rstrip("_"), pend.get("obra", ""))', '.rstrip("_"))')]),
 
     ("«Rebuild the project in the Survey» no dice de que proyecto es lo cargado",
-     PRU, [('                    _ev.respetar("sv", pid)\n',
-            '                    _ev.respetar("sv")\n')]),
+     PRU, [('    _ev.respetar("sv", pid)\n',
+            '    _ev.respetar("sv")\n')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

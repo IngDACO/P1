@@ -29,6 +29,23 @@ _FORZAR = "_pl_forzar"
 SIN_PROYECTO = "— no project (load the drawing by hand) —"
 
 
+def obra_del_fichaje(abierta: dict, proys: list):
+    """v625 · La obra de un fichaje abierto, entre `proys`: por su ID (el nombre PUEDE
+    repetirse). Un fichaje sin ID va por el nombre, y solo si ese nombre es de UNA obra.
+
+    ⚠️ Iba por el nombre y se quedaba con la primera que casara: con dos obras «Torre Norte —
+    Lift 1», fichado en PRJ-2, la herramienta usaba el plano de PRJ-1 (demostrado) y lo
+    guardaba allí."""
+    pid = str((abierta or {}).get("proyecto_id", "")).strip()
+    if pid:
+        return next((p for p in proys if str(p.get("ID", "")).strip() == pid), None)
+    nombre = str((abierta or {}).get("proyecto", "")).strip().casefold()
+    if not nombre:
+        return None
+    casan = [p for p in proys if str(p.get("Name", "")).strip().casefold() == nombre]
+    return casan[0] if len(casan) == 1 else None
+
+
 def _proyecto_fichado(auth: dict):
     """Proyecto del clock-in abierto del usuario de campo."""
     try:
@@ -37,16 +54,12 @@ def _proyecto_fichado(auth: dict):
     except Exception:
         return None
     abierta = ses.get(timeclock.TIPO_PROYECTO) or ses.get(timeclock.TIPO_GENERAL)
-    nombre = str((abierta or {}).get("proyecto", "")).strip()
-    if not nombre:
+    if not abierta:
         return None
     # Resolucion del proyecto del clock-in: si esta archivado, que se encuentre
     # igual en vez de dejar la herramienta sin datos del plano y sin explicacion.
-    for p in P.list_projects(grupo=auth.get("grupo", "") or None,
-                             incluir_archivados=True):
-        if str(p.get("Name", "")).strip() == nombre:
-            return p
-    return None
+    return obra_del_fichaje(abierta, P.list_projects(grupo=auth.get("grupo", "") or None,
+                                                     incluir_archivados=True))
 
 
 def selector_proyecto(key: str, ayuda: str = "") -> tuple:
@@ -73,14 +86,37 @@ def _selector_proyecto(key: str, ayuda: str = "") -> tuple:
     auth = st.session_state.get("auth", {}) or {}
     rol = auth.get("rol", "")
 
-    # ── Campo: el proyecto viene del fichaje ──
+    # ── Campo: manda el fichaje; sin fichar, sus obras ──
+    # ⚠️ v625 · Sin fichar no se le cerraba nada, pero la herramienta salía sin obra y sin plano
+    # («Clock in first»): quien mide en una visita, sin jornada abierta, tecleaba el plano a
+    # mano. Con UNA obra asignada se usa sola; con varias elige entre las SUYAS.
     if rol == "field":
         prj = _proyecto_fichado(auth)
-        if not prj:
-            st.info(t(":material/info: **Clock in first at :material/schedule: Time clock**, choosing the project you are working on. That way the tool uses its drawing data and you will not have to upload the PDF."))
+        if prj:
+            datos = plan_data.del_proyecto(str(prj.get("ID", "")))
+            _cabecera(prj, datos, fichado=True)
+            return prj, datos
+        suyas = [p for p in P.list_projects_for_field(auth.get("usuario", ""),
+                                                      grupo=auth.get("grupo", "") or None)
+                 if es_de_herramientas(p)]
+        if not suyas:
+            st.info(t(":material/info: You have no open installation assigned, so there is no "
+                      "drawing to start from. Enter the data by hand, or clock in at "
+                      ":material/schedule: Time clock."))
             return None, {}
+        if len(suyas) == 1:
+            prj = suyas[0]
+        else:
+            idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in suyas}
+            opciones = [SIN_PROYECTO] + list(idmap)
+            prj = idmap.get(st.selectbox(t("Project"), opciones, key=f"pl_prj_{key}",
+                                         help=ayuda or t("Your open installation jobs. The tool "
+                                                         "uses the drawing data stored on the "
+                                                         "project.")))
+            if prj is None:
+                return None, {}
         datos = plan_data.del_proyecto(str(prj.get("ID", "")))
-        _cabecera(prj, datos, fichado=True)
+        _cabecera(prj, datos, fichado=False)
         return prj, datos
 
     # ── Admin y propietario: eligen el proyecto aquí ──
@@ -117,9 +153,14 @@ def es_de_herramientas(prj: dict) -> bool:
 
 
 def _cabecera(prj: dict, datos: dict, fichado: bool):
+    # v625 · El nombre lo teclea la oficina: tal cual, sin que un * o un _ lo deformen. Y la
+    # frase entera por `t()` (el literal concatenado es la forma que las redes no ven).
+    from core.maps import literal_md
+    _n = literal_md(prj.get("Name"))
     if datos:
-        st.caption((":material/schedule: Clocked in at " if fichado else ":material/description: ")
-                   + f"**{prj.get('Name')}** · {plan_data.resumen(datos)}")
+        st.caption(t(":material/schedule: Clocked in at **{x}** · {y}", x=_n,
+                     y=plan_data.resumen(datos)) if fichado else
+                   t(":material/description: **{x}** · {y}", x=_n, y=plan_data.resumen(datos)))
         if datos.get("faltan"):
             st.caption(t(":orange[:material/warning:] The drawing did not give: {x} — enter "
                          "them by hand.")
@@ -131,11 +172,11 @@ def _cabecera(prj: dict, datos: dict, fichado: bool):
         rol = (st.session_state.get("auth") or {}).get("rol", "")
         if rol == "field":
             st.warning(t("**{n}** has no drawing data loaded. Ask the office to load it on the "
-                         "project, or upload the PDF below.", n=prj.get("Name")))
+                         "project, or upload the PDF below.", n=_n))
             return
         st.warning(t("**{n}** has no drawing data loaded. Load it once in the project's "
                      ":material/attach_file: Files and every tool will use it — or upload the PDF "
-                     "below.", n=prj.get("Name")))
+                     "below.", n=_n))
         if rol == "administrator" and st.button(t(":material/attach_file: Open the project's Files"),
                                                 key=f"pl_ir_archivos_{prj.get('ID')}", type="tertiary"):
             st.session_state["_prjsel_pending"] = str(prj.get("ID", ""))

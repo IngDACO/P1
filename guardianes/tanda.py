@@ -16,6 +16,7 @@ roturas puestas.
     py -3.12 tanda.py --sin-suite          # solo baterías y anclas
     py -3.12 tanda.py romper_v440          # además de las afectadas, estas
     py -3.12 tanda.py --salida=CARPETA     # dónde guardar lo que imprime cada una
+    py -3.12 tanda.py --sin=romper_v625    # sin esa (una batería nueva y larga ya pasada)
 """
 import atexit
 import hashlib
@@ -54,7 +55,9 @@ def huella():
     """{fichero: md5} de la app y de los guardianes: las baterías rompen los dos."""
     ficheros = [f for f in APP.rglob("*.py") if "__pycache__" not in f.parts]
     ficheros += [f for f in AQUI.glob("*.py") if not f.name.startswith("_")]
-    return {str(f): hashlib.md5(f.read_bytes()).hexdigest() for f in ficheros}
+    # ⚠️ Sin CRLF: 74 baterías guardan con LF lo que estaba en CRLF, y eso no es tocar el código
+    # (git lo normaliza). v625: romper_v532 paró la tanda con el contenido idéntico.
+    return {str(f): hashlib.md5(f.read_bytes().replace(b"\r\n", b"\n")).hexdigest() for f in ficheros}
 
 
 def distintos(a, b):
@@ -81,7 +84,7 @@ def correr(nombre, salida, env):
 
 def main(argv):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-    base, salida, sin_suite, extra = "HEAD", None, False, []
+    base, salida, sin_suite, extra, sin = "HEAD", None, False, [], set()
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -92,6 +95,8 @@ def main(argv):
             salida = a.split("=", 1)[1]
         elif a == "--sin-suite":
             sin_suite = True
+        elif a.startswith("--sin="):
+            sin.add(a.split("=", 1)[1])
         else:
             extra.append(a)
         i += 1
@@ -118,6 +123,7 @@ def main(argv):
     _nuevas = set(BA.nuevas(base))
     _af = BA.afectadas(base)
     lista = sorted(_nuevas) + sorted(b for b in set(_af) | set(extra) if b not in _nuevas)
+    lista = [b for b in lista if b not in sin]
     print("\n2. Baterías: %d (%d nuevas, sin corte)" % (len(lista), len(_nuevas)))
     malas = []
     h0 = huella()

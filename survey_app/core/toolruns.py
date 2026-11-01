@@ -110,16 +110,73 @@ def entradas_de(fila) -> dict:
     return d.get("entradas") or {} if isinstance(d, dict) else {}
 
 
-def ultimos_por_herramienta(grupo) -> dict:
+def ultimos_por_herramienta(grupo, pids=None) -> dict:
     """v588 · El cálculo MÁS RECIENTE de cada herramienta en el grupo: `{clave: fila}`
     (la clave es la de `HERRAMIENTAS`). Para que la portada de Tools diga cuándo y en qué
-    obra se usó cada una, en vez de solo describirla."""
+    obra se usó cada una, en vez de solo describirla.
+
+    v625 · `pids` = solo esas obras (el campo: las suyas). Sin él, todo el grupo."""
     g = str(grupo or "").strip().lower()
     out = {}
     for r in sorted(_records(), key=lambda r: str(r.get("Date", ""))):
-        if str(r.get("Group", "")).strip().lower() == g:
+        if str(r.get("Group", "")).strip().lower() != g:
+            continue
+        if pids is None or str(r.get("ProjectID", "")) in pids:
             out[str(r.get("Tool", ""))] = r
     return out
+
+
+def datos_de(fila) -> dict:
+    """Lo que guarda `DataJSON`, como dict ({} si no se puede leer)."""
+    try:
+        d = json.loads(str(fila.get("DataJSON", "")) or "{}")
+    except Exception:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def es_survey_a_decidir(fila) -> bool:
+    """v625 · ¿Es un survey del campo guardado en una obra que YA tenía uno? Lo sigue siendo
+    después de decidirlo (`por_decidir` pasa a False): el archivo se queda y se puede cargar."""
+    return str(fila.get("Tool", "")) == "survey" and "por_decidir" in datos_de(fila)
+
+
+def survey_por_decidir(grupo) -> list:
+    """v625 · Los surveys del campo que la oficina aún no ha resuelto (la campana los cuenta)."""
+    g = str(grupo or "").strip().lower()
+    return [r for r in _records()
+            if str(r.get("Group", "")).strip().lower() == g and es_survey_a_decidir(r)
+            and str(r.get("DriveID", "")).strip() and datos_de(r).get("por_decidir")]
+
+
+def decidir_survey(fila, como: str, usuario: str = "") -> bool:
+    """v625 · Cierra la decisión de la oficina: `como` = loaded | kept | deleted."""
+    w = _ws()
+    if w is None:
+        return False
+    try:
+        cel = w.find(str(fila.get("ID", "")), in_column=1)
+        if cel is None:
+            return False
+        d = datos_de(fila)
+        d.update(por_decidir=False, decidido={
+            "como": str(como), "por": str(usuario),
+            "fecha": clock.now().strftime("%Y-%m-%d %H:%M")})
+        w.update_cell(cel.row, HEADERS.index("DataJSON") + 1,
+                      json.dumps(d, ensure_ascii=False, default=str)[:4800])
+        _invalidate()
+        return True
+    except Exception as e:
+        logger.warning("toolruns.decidir_survey: %s", e)
+        return False
+
+
+def decidir_por_drive(did, usuario: str = "") -> None:
+    """v625 · Se borró el archivo de un survey por decidir: la campana no puede seguir
+    pidiendo que se decida algo que ya no está."""
+    for r in _records():
+        if str(r.get("DriveID", "")).strip() == str(did) and datos_de(r).get("por_decidir"):
+            decidir_survey(r, "deleted", usuario)
 
 
 def list_for(pid: str) -> list:
@@ -163,8 +220,11 @@ def _next_id() -> str:
 
 def registrar(pid: str, grupo: str, herramienta: str, resumen: str,
               datos: dict, usuario: str = "", pdf: bytes = None,
-              filename: str = "") -> dict:
-    """Guarda el cálculo contra el proyecto. Devuelve {ok, id, drive_id, error}."""
+              filename: str = "", mime: str = "application/pdf") -> dict:
+    """Guarda el cálculo contra el proyecto. Devuelve {ok, id, drive_id, error}.
+
+    v625 · `pdf` es el archivo que se archiva y `mime` su tipo: el survey que espera a la
+    oficina va en JSON (no cabe en `DataJSON`, que se corta a 4800 caracteres)."""
     res = {"ok": False, "id": "", "drive_id": "", "error": ""}
     if not pid:
         res["error"] = t("The project is missing.")
@@ -176,7 +236,7 @@ def registrar(pid: str, grupo: str, herramienta: str, resumen: str,
         try:
             from core import drive_store, projects
             if drive_store.is_available():
-                drive_id = drive_store.upload(pid, filename, pdf, "application/pdf")
+                drive_id = drive_store.upload(pid, filename, pdf, mime)
                 projects.add_document(pid, filename, "calculo", drive_id, usuario)
         except Exception as e:
             logger.warning("toolruns: archivado en Drive falló: %s", e)

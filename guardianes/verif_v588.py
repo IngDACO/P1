@@ -64,11 +64,11 @@ st.session_state.setdefault("auth", {"usuario": "Admin2", "rol": st.session_stat
                                      "grupo": "cliente1"})
 from core import home_ui as H, toolruns as TR, prestart as PS, projects as P
 if st.session_state.get("_FALLA"):
-    def _f(g):
+    def _f(g, pids=None):
         raise RuntimeError("hoja caída")
     TR.ultimos_por_herramienta = _f
 else:
-    TR.ultimos_por_herramienta = lambda g: {"plomada": {"Date": "2026-10-12 09:00", "ProjectID": "PRJ-1"}}
+    TR.ultimos_por_herramienta = lambda g, pids=None: {"plomada": {"Date": "2026-10-12 09:00", "ProjectID": "PRJ-1"}}
 PS.de_hoy = lambda g: [{}]
 P.get_project = lambda pid: {"ID": pid, "Name": "ZZ Tower — Lift 1"}
 st.session_state.setdefault("adm_herr_sub", st.session_state.get("_SUB", "🧰 Inicio"))

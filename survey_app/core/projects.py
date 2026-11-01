@@ -622,6 +622,31 @@ def attach_survey(pid: str, params: dict = None, matriz=None,
     return update_project(pid, campos)
 
 
+def tiene_survey(fila: dict) -> bool:
+    """v625 · ¿Esta fila de obra lleva un survey guardado? Una obra sin él trae «{}» y «[]»."""
+    return any(str((fila or {}).get(k, "") or "").strip() not in ("", "{}", "[]")
+               for k in ("ParamsJSON", "MatrixJSON"))
+
+
+def survey_libre(pid: str) -> bool:
+    """v625 · True solo si es SEGURO que la obra no tiene survey: el campo adjunta el suyo
+    únicamente entonces, porque `attach_survey` sobrescribe.
+
+    ⚠️ Lee FRESCO (es ruta de escritura, regla de v108): con la caché, dos instaladores en la
+    misma obra se pisarían. Y si no se puede leer responde False: no pisar es lo seguro."""
+    pws, err = _projects_ws()
+    if err:
+        return False
+    try:
+        for r in valores.canonizar(columnas.canonizar(pws.get_all_records(numericise_ignore=["all"])),
+                                   PROJECTS_SHEET):
+            if str(r.get("ID", "")) == str(pid):
+                return not tiene_survey(r)
+    except Exception as e:
+        logger.warning("projects.survey_libre(%s): %s", pid, e)
+    return False
+
+
 def parse_links(text) -> list:
     """Lista de links (uno por línea) desde el texto de InduccionLinks."""
     return [l.strip() for l in str(text or "").splitlines() if l.strip()]

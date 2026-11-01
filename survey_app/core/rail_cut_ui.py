@@ -49,14 +49,19 @@ def _firma(*vals) -> tuple:
 
 
 def _cifras(items, pre):
-    """v593 · Las cifras del resultado, ACTIVAS (eran HTML): cada una lleva al diagrama."""
+    """v593 · Las cifras del resultado, ACTIVAS (eran HTML): cada una lleva al diagrama.
+
+    v625 · Y son el comienzo del resultado: el botón de calcular baja hasta aquí."""
+    from core import projects_ui as _PU
     st.markdown(T.por_fila(f"cpx_{pre}_kpis", len(items)), unsafe_allow_html=True)
-    with st.container(key=f"cpx_{pre}_kpis"):
-        for _col, (_s, _l, _v) in zip(st.columns(len(items)), items):
-            if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_{pre}_{_s}", width="stretch",
-                           help=t("See it on the diagram")):
-                st.session_state["_bajar_cpx_rc_dibujo"] = True
-                st.rerun()
+    with st.container(key="cpx_rc_res"):
+        _PU._bajar_a("cpx_rc_res", "_bajar_cpx_rc_res", bloque="start")
+        with st.container(key=f"cpx_{pre}_kpis"):
+            for _col, (_s, _l, _v) in zip(st.columns(len(items)), items):
+                if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_{pre}_{_s}", width="stretch",
+                               help=t("See it on the diagram")):
+                    st.session_state["_bajar_cpx_rc_dibujo"] = True
+                    st.rerun()
 
 
 def _titulo_diagrama():
@@ -207,6 +212,7 @@ def render_rail_cut_tab():
                     "caso": 1, "res": compute_case1(lfkk, lfgk, n2500, n5000, L_list),
                     "n2500": int(n2500), "n5000": int(n5000), "n": int(n),
                     "lfkk": float(lfkk), "lfgk": float(lfgk), "firma": _ahora}
+                st.session_state["_bajar_cpx_rc_res"] = True  # v625 · al resultado, solo si lo hay
 
         _e = st.session_state.get("rc_res")
         if _e and _e.get("caso") == 1:
@@ -327,6 +333,7 @@ def render_rail_cut_tab():
                     "caso": 2, "res": compute_case2(lfkk, lfgk, rows, subcaso),
                     "subcaso": subcaso, "sub": sub, "n": int(n),
                     "lfkk": float(lfkk), "lfgk": float(lfgk), "firma": _ahora}
+                st.session_state["_bajar_cpx_rc_res"] = True  # v625 · al resultado, solo si lo hay
 
         _e = st.session_state.get("rc_res")
         if _e and _e.get("caso") == 2:

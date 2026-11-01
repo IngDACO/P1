@@ -131,7 +131,7 @@ ROTURAS = [
 
     ("«Rebuild the project in the Survey» no marca lo que carga",
      # v539 · re-anclada: la llamada lleva ahora el proyecto (`pid`).
-     PRU, [('                    _ev.respetar("sv", pid)\n', "")]),
+     PRU, [('    _ev.respetar("sv", pid)\n', "")]),
 
     ("⚠️ Belting vuelve a medir lo que sus columnas (198 con 1 ascensor: titulo cortado)",
      BEL, [("    VW = max(470, ML * 2 + n * colw)", "    VW = ML * 2 + n * colw")]),

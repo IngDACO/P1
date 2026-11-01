@@ -1018,6 +1018,18 @@ def _alertas_items(grupo) -> list:
                 out.append({"texto": _txt, "destino": ("obra", a["id"])})
         except Exception as e:
             logger.warning("campana: no se pudieron leer los urgentes: %s", e)
+        # v625 · Un survey del campo en una obra que ya tenía uno: decide la oficina, y sin
+        # esto nadie sabría que hay algo esperando en Files.
+        try:
+            from core import projects as P, toolruns as TR
+            for r in TR.survey_por_decidir(grupo):
+                _pid = str(r.get("ProjectID", ""))
+                out.append({"texto": t(":orange[:material/rule:] **{p}** — a survey from the "
+                                       "field is waiting for your decision")
+                            .replace("{p}", str((P.get_project(_pid) or {}).get("Name") or _pid)),
+                            "destino": ("archivos", _pid)})
+        except Exception as e:
+            logger.warning("campana: no se pudieron leer los surveys por decidir: %s", e)
     try:
         from core import credentials as C
         if C.is_configured():
@@ -1057,6 +1069,10 @@ def _ir_alerta(destino, grupo):
     st.session_state["_bell_gen"] = st.session_state.get("_bell_gen", 0) + 1
     if destino[0] == "obra":
         st.session_state["_admin_open_proj"] = str(destino[1])
+        navegar("proyectos", "📊 Proyectos")
+    elif destino[0] == "archivos":                # v625 · a los archivos de ESA obra
+        st.session_state["_prjsel_pending"] = str(destino[1])
+        st.session_state["_prj_sec_pending"] = "📎 Archivos"
         navegar("proyectos", "📊 Proyectos")
     elif destino[0] == "ficha":
         _u = str(destino[1])
@@ -1288,12 +1304,20 @@ _CLAVE_HERR = {"📐 Survey": "survey", "🔩 Plomada": "plomada", "✂️ Riele
 def _ultimos_usos(grupo, ids) -> dict:
     """v588 · El pie de cada tarjeta: «Last used DD/MM/YYYY · obra» (su cálculo más reciente
     en el grupo) y, en el Pre-Start, cuántos se han hecho HOY. Lo que falle no tumba la
-    portada: esa tarjeta sale sin pie de uso."""
+    portada: esa tarjeta sale sin pie de uso.
+
+    ⚠️ v625 · Para el CAMPO, solo sus obras: a un instalador le decía dónde había calculado
+    otra persona, en una obra que no es suya."""
     out = {}
+    pids = None
     try:
         from core import toolruns as TR, projects as P
         from core.num import dmy
-        ult = TR.ultimos_por_herramienta(grupo)
+        if _rol() == "field":
+            _usr = str(st.session_state.get("auth", {}).get("usuario", ""))
+            pids = {str(p.get("ID", "")) for p in P.list_projects_for_field(
+                _usr, grupo=grupo, incluir_internos=True)}
+        ult = TR.ultimos_por_herramienta(grupo, pids=pids)
         for _id in ids:
             r = ult.get(_CLAVE_HERR.get(_id, ""))
             if r:
@@ -1304,7 +1328,8 @@ def _ultimos_usos(grupo, ids) -> dict:
     if "🦺 Pre-Start" in ids:
         try:
             from core import prestart as PS
-            n = len(PS.de_hoy(grupo))
+            n = len([r for r in PS.de_hoy(grupo)
+                     if pids is None or str(r.get("ProjectID", "")) in pids])
             out["🦺 Pre-Start"] = (t("None done today") if not n else
                                    t("1 done today") if n == 1 else t("{n} done today", n=n))
         except Exception as e:
