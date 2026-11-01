@@ -47,8 +47,9 @@ ROTURAS = [
             "        pass\n")]),
 
     ("una firma vuelve a escribir sus parametros a mano (dos sitios que divergen)",
-     PRE, [('res = st_canvas(key="ps_firma_tarde", **_LIENZO)',
-            'res = st_canvas(key="ps_firma_tarde", width=600, display_toolbar=True)')]),
+     # (v623 · re-anclada: la clave lleva la obra)
+     PRE, [('res = st_canvas(key=f"ps_firma_tarde_{_pid}", **_LIENZO)',
+            'res = st_canvas(key=f"ps_firma_tarde_{_pid}", width=600, display_toolbar=True)')]),
 
     ("el lienzo pierde el ancho de movil (600 por defecto: media firma fuera de pantalla)",
      PRE, [("height=90, width=300, drawing_mode", "height=90, width=600, drawing_mode")]),

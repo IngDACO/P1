@@ -194,9 +194,11 @@ chk("...y el barrido no corre en vacío", len(sueltos) >= 10, f"{len(sueltos)}")
 # acento ni palabra funcional, así que una etiqueta traducida de vuelta pasa por delante
 # (es lo que dejó escapar una etiqueta de plomada en v438). Chequeos POSITIVOS: el inglés
 # esperado tiene que ESTAR.
+# (v623 · `t("Recorded")` entero: la palabra suelta sale también en «Tap «Recorded»…», y así la rotura
+# que la devuelve al español pasaba por delante — trampa 2. La cazó romper_v439.)
 INGLES = {
     "core/timeclock_ui.py": ["Close the workday", "On a project", "Day you finished"],
-    "core/prestart_ui.py":  ["Who is attending the talk?", "Recorded", "First and last name"],
+    "core/prestart_ui.py":  ["Who is attending the talk?", 't("Recorded")', "First and last name"],
     "core/ausencias_ui.py": ["What do you need?", "Include weekends", "No absences recorded."],
     "core/route_ui.py":     ["Open the route in Google Maps", "Previous day",
                              "You have no active sites assigned."],

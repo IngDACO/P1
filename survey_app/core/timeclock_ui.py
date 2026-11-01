@@ -84,8 +84,11 @@ def _chrono_mini(clock_in_str, label, color, key):
         "</script>", 44, ajustar=False)
 
 
-def _ir_a_prestart():
+def _ir_a_prestart(pid=""):
     """Salta a la pantalla del Pre-Start, que NO está en el mismo sitio según el rol.
+
+    ⚠️ v623 · `pid`: la obra de la que se habla. Sin él, «Do it now» sobre la obra B dejaba elegida
+    la A si ya se estaba en esa pantalla con ella, y el documento se archivaba en la A.
 
     ⚠️ Para el CAMPO es sección propia (`prestart`, v154: es su acción diaria y
     enterrarla un nivel le costaría un toque cada mañana en el móvil); para el
@@ -93,6 +96,8 @@ def _ir_a_prestart():
     propósito: es el IDENTIFICADOR que usa el matching (v232), no un adorno.
     """
     from core import home_ui as _home
+    if pid:
+        st.session_state["_ps_proy_pending"] = str(pid)
     if str(st.session_state.get("auth", {}).get("rol", "")) == "field":
         _home.navegar("prestart")                       # `navegar` ya hace el rerun
     else:
@@ -118,8 +123,9 @@ def _dialogo_prestart(obra: str):
     c1, c2 = st.columns(2)
     if c1.button(t(":material/health_and_safety: Do it now"), type="primary",
                  width="stretch", key="ps_dlg_ir"):
+        _pid = (st.session_state.get("_ps_aviso") or {}).get("pid", "")
         _ps_descartar()
-        _ir_a_prestart()
+        _ir_a_prestart(_pid)
     if c2.button(t("Not now"), width="stretch", key="ps_dlg_no"):
         _ps_descartar()
         st.rerun()
@@ -148,8 +154,9 @@ def _dialogo_firmar(obra: str, quien: str = ""):
     c1, c2 = st.columns(2)
     if c1.button(t(":material/draw: Sign it now"), type="primary",
                  width="stretch", key="ps_dlgf_ir"):
+        _pid = (st.session_state.get("_ps_aviso") or {}).get("pid", "")
         _ps_descartar()
-        _ir_a_prestart()
+        _ir_a_prestart(_pid)
     if c2.button(t("Not now"), width="stretch", key="ps_dlgf_no"):
         _ps_descartar()
         st.rerun()
@@ -214,14 +221,14 @@ def _chip_prestart(pid, nombre_obra, grupo):
             st.warning(t(":material/draw: Sign today's **Pre-Start** for this site."))
             if st.button(t(":material/draw: Sign"), width="stretch",
                          key="sb_ps_firmar"):
-                _ir_a_prestart()
+                _ir_a_prestart(pid)
             return
     except Exception:
         return                       # sin pre-starts configurados: no se estorba
     st.warning(t(":material/warning: Today's **Pre-Start** is missing on this site."))
     if st.button(t(":material/health_and_safety: Do it now"), width="stretch",
                  key="sb_ps_ir"):
-        _ir_a_prestart()
+        _ir_a_prestart(pid)
 
 
 def render_sidebar_chrono():

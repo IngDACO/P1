@@ -200,8 +200,11 @@ def generate_prestart_pdf(data: dict) -> bytes:
     # ── Cabecera (marca = grupo, sin banda de color) ──
     story += [Paragraph(_esc(grupo), st["PSBrand"]),
               Paragraph("Daily Pre-Start", st["PSTitle2"])]
-    if proyecto:
-        story += [Paragraph(d("Project: ") + _esc(proyecto), st["PSProj"])]
+    # v623 · Con su número: el anexo de firmas lo cita y el original no lo decía en ningún sitio
+    _sub = ([d("Project: ") + _esc(proyecto)] if proyecto else []) + (
+        [_esc(data.get("id"))] if data.get("id") else [])
+    if _sub:
+        story += [Paragraph(" · ".join(_sub), st["PSProj"])]
     story += [_sp(8)]
 
     # ── Fila: Date · Time · Location · Facilitated by (bordeada, como el template) ──

@@ -726,7 +726,9 @@ def _banda_prestart():
             return
     except Exception:
         return                      # nunca estorbar por un fallo del aviso
-    _nom = str(prj.get("proyecto", "") or "this job")
+    # v623 · El nombre va dentro de HTML (un «<» se comería la banda), y los textos, traducibles
+    import html as _html
+    _nom = _html.escape(str(prj.get("proyecto", "") or t("this job")))
     if not _falta:
         c1, c2 = st.columns([5, 1])
         with c1:
@@ -734,15 +736,16 @@ def _banda_prestart():
                 '<div style="background:#fff4e5;border-left:5px solid #e67e22;'
                 'border-radius:8px;padding:9px 14px;margin-bottom:10px;">'
                 '<span style="font-weight:700;color:#a35b12;font-size:16px;">'
-                "⚠️ Sign today's Pre-Start</span>"
-                f'<span style="color:#7a5b3a;font-size:13px;"> · the talk for '
-                f'<b>{_nom}</b> is already recorded, but you are not among those '
-                f'who signed it.</span></div>', unsafe_allow_html=True)
+                + "⚠️ " + t("Sign today's Pre-Start") + "</span>"
+                + '<span style="color:#7a5b3a;font-size:13px;"> · '
+                + t("the talk for <b>{o}</b> is already recorded, but you are not among those "
+                    "who signed it.", o=_nom)
+                + "</span></div>", unsafe_allow_html=True)
         with c2:
             if st.button(t(":material/draw: Sign"), key="banda_ps_firmar",
                          type="primary", width="stretch"):
                 from core.timeclock_ui import _ir_a_prestart
-                _ir_a_prestart()
+                _ir_a_prestart(pid)
         return
     c1, c2 = st.columns([5, 1])
     with c1:
@@ -752,15 +755,16 @@ def _banda_prestart():
             # ⚠️ 16px, no 15: la escala tipográfica de v333 tiene 9 pasos y su
             # guardián falla con cualquier tamaño fuera de ellos.
             '<span style="font-weight:700;color:#a35b12;font-size:16px;">'
-            "⚠️ Today's Pre-Start is missing</span>"
-            f'<span style="color:#7a5b3a;font-size:13px;"> · you are clocked in at '
-            f'<b>{_nom}</b> and nobody has recorded the safety talk today.</span></div>',
-            unsafe_allow_html=True)
+            + "⚠️ " + t("Today's Pre-Start is missing") + "</span>"
+            + '<span style="color:#7a5b3a;font-size:13px;"> · '
+            + t("you are clocked in at <b>{o}</b> and nobody has recorded the safety talk today.",
+                o=_nom)
+            + "</span></div>", unsafe_allow_html=True)
     with c2:
         if st.button(t(":material/health_and_safety: Do it"), key="banda_ps_ir",
                      type="primary", width="stretch"):
             from core.timeclock_ui import _ir_a_prestart
-            _ir_a_prestart()
+            _ir_a_prestart(pid)
 
 
 def _norm_busq(s) -> str:

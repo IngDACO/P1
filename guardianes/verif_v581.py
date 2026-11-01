@@ -411,11 +411,11 @@ chk("⚠️ ninguna fila de tarjetas con su propio flex (eran once)", not _flex,
 # ⚠️ v594 · Y para Buffers (`cpxkpi_bc_*`).
 # ⚠️ v595 · Y para Belting (`cpxkpi_belt_*`): su fila HTML de base 96 px ya no existe.
 # ⚠️ v621 · Y para Timeclock (`cpxkpi_tc_*`): su fila HTML de base 132 px ya no existe.
-for _f, _base in (("prestart_ui.py", 110),):
-    _s = _src("core/" + _f)
-    chk("%s: la fila es `cpx-kpis` con la base de sus tarjetas (%d px)" % (_f, _base),
-        'class="cpx-kpis" style="--cpx-min:%dpx;' % _base in _s
-        and "min-width:%dpx" % _base in _s)
+# ⚠️ v623 · Y para el Pre-Start (`cpxkpi_ps_*`): su fila HTML de base 110 px ya no existe.
+_sps = _src("core/prestart_ui.py")
+chk("prestart_ui.py: sus cifras son botones en la rejilla del tema, sin flex propio",
+    'theme.por_fila("cpx_ps_kpis", 4)' in _sps and 'key="cpx_ps_kpis"' in _sps
+    and "cpx-kpis" not in _sps)
 _stc = _src("core/timeclock_ui.py")
 chk("timeclock_ui.py: sus cifras son botones en la rejilla del tema, sin flex propio",
     'theme.por_fila("cpx_tc_kpis", 2)' in _stc and 'key="cpx_tc_kpis"' in _stc

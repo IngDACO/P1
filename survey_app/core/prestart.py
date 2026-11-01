@@ -204,6 +204,15 @@ def hecho_hoy(pid, grupo: str = "") -> bool:
     return False
 
 
+def hoy_de_obra(pid, grupo: str = "") -> dict:
+    """El Pre-Start de HOY de esa obra (el último, si hay varios), leído; o {} si no hay."""
+    pid = str(pid or "").strip()
+    hoy = clock.today(grupo)
+    filas = [r for r in _records() if str(r.get("ProjectID", "")).strip() == pid
+             and _parse_date(r.get("Date")) == hoy]
+    return leer(filas[-1]) if filas else {}
+
+
 def _norm_nombre(s) -> str:
     """Nombre comparable: sin acentos, sin dobles espacios y sin may/min.
 
@@ -285,11 +294,12 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
            firma_png=None, usuario: str = "") -> dict:
     """Añade la firma de quien llegó después AL Pre-Start ya emitido (v403).
 
-    Devuelve {ok, error, pdf, drive_id}. El PDF resultante es el original **más una
-    hoja de anexo**: ver `prestart_pdf.generate_anexo_firmas_pdf` para por qué no se
-    regenera el documento entero.
+    Devuelve {ok, error, pdf, drive_id, archivado}. El PDF resultante es el original **más
+    una hoja de anexo**: ver `prestart_pdf.generate_anexo_firmas_pdf` para por qué no se
+    regenera el documento entero. ⚠️ v623 · `archivado`: la firma consta en la hoja aunque el PDF
+    no se haya podido rehacer, y la pantalla decía «añadida como anexo» en los dos casos.
     """
-    res = {"ok": False, "error": "", "pdf": None, "drive_id": ""}
+    res = {"ok": False, "error": "", "pdf": None, "drive_id": "", "archivado": False}
     ps_id = str(ps_id or "").strip()
     if not ps_id or not str(nombre or "").strip():
         res["error"] = t("The Pre-Start or the signer name is missing.")
@@ -357,8 +367,13 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
         asist = json.loads(fila.get("Attendees", "") or "[]")
     except Exception:
         asist = []
-    asist.append({"name": str(nombre), "initial": str(iniciales or ""),
-                  "firmado": bool(firma_png), "hora": hora, "tarde": True})
+    _nuevo = {"name": str(nombre), "initial": str(iniciales or ""),
+              "firmado": bool(firma_png), "hora": hora, "tarde": True}
+    # ⚠️ v623 · Con su LOGIN, como quien firma en la charla (v418). Sin él, `pendiente_de_firma`
+    # casa por nombre: con dos «Mei Chen», que firme una apaga el aviso de la otra.
+    if str(usuario or "").strip():
+        _nuevo["usuario"] = str(usuario).strip()
+    asist.append(_nuevo)
     try:
         col_a = HEADERS.index("Attendees") + 1
         w.update_cell(idx + 2, col_a, json.dumps(asist, ensure_ascii=False))
@@ -372,13 +387,18 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
     # 4) ya con la fila apuntando al nuevo, el viejo sobra (best-effort)
     if nuevo_id and drive_id and nuevo_id != drive_id:
         try:
+            # ⚠️ v623 · También su línea en Documents: se borraba el archivo y la línea se quedaba,
+            # y en «Files» de la obra salía un documento que ya no se podía abrir.
             from core import drive_store
+            from core import projects
+            projects.delete_document_record(str(fila.get("ProjectID", "")), drive_id)
             drive_store.delete(drive_id)
         except Exception as e:                                    # noqa: BLE001
             logger.warning("prestart.firmar: no se pudo borrar el PDF anterior: %s", e)
 
     res["ok"] = True
     res["drive_id"] = nuevo_id or drive_id
+    res["archivado"] = bool(nuevo_id)
     return res
 
 
@@ -457,11 +477,24 @@ def submit(data: dict) -> dict:
     # duplicado. Mismo patrón que el aviso de proyectos duplicados de v126.
     _pid0 = str(data.get("proyecto_id", "")).strip()
     _g0 = str(data.get("grupo", "")).strip()
+    _hoy = clock.today(_g0)
+    _f0 = data.get("fecha")
+    _dia = _f0 if hasattr(_f0, "year") else _hoy
+    # ⚠️ v623 · Un near miss sin descripción abría una alarma que no decía nada. En el motor, no
+    # solo en la pantalla: es la alarma de seguridad.
+    if str(data.get("near_miss", "")).upper() == "YES" and not str(data.get("near_miss_desc", "")).strip():
+        res["error"] = t("Describe the near miss or hazard: it opens a project alert.")
+        return res
+    # ⚠️ v623 · El campo registra la charla de HOY (decisión del usuario): la fecha se podía cambiar
+    # a un día pasado o futuro, y un registro de seguridad atrasado es lo que no debe existir.
+    if not data.get("gestor", True) and _dia != _hoy:
+        res["error"] = t("The Pre-Start can only be recorded for today.")
+        return res
     if _pid0 and not data.get("forzar"):
-        _hoy = clock.today(_g0)
+        # v623 · El día del documento, no «hoy»: con otra fecha, la oficina se saltaba el aviso
         _ya = [r for r in _records()
                if str(r.get("ProjectID", "")).strip() == _pid0
-               and _parse_date(r.get("Date")) == _hoy]
+               and _parse_date(r.get("Date")) == _dia]
         if _ya:
             _ids = ", ".join(str(r.get("ID", "")) for r in _ya)
             res["ya_hay"] = _ids
@@ -473,6 +506,19 @@ def submit(data: dict) -> dict:
                     "(another shift or crew), tick the box and it is recorded "
                     "anyway."))
             return res
+
+    # 0b) ⚠️ v623 · La hoja y el número ANTES del PDF: el PDF lleva su número (el anexo de firmas ya
+    # lo citaba), y si la hoja no abre no queda un archivo en Drive sin registro.
+    w = _ws()
+    if w is None:
+        res["error"] = t("Could not open the pre-starts sheet.")
+        return res
+    try:
+        aid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
+    except Exception as e:
+        res["error"] = f"{t('Could not record the pre-start')}: {e}"
+        return res
+    data = {**data, "id": aid}
 
     # 1) PDF
     try:
@@ -502,14 +548,9 @@ def submit(data: dict) -> dict:
     res["drive_id"] = drive_id
 
     # 3) Registro en la hoja
-    w = _ws()
-    if w is None:
-        res["error"] = t("Could not open the pre-starts sheet.")
-        return res
     try:
         f = data.get("fecha")
         fecha_s = f.strftime("%Y-%m-%d") if hasattr(f, "strftime") else str(f)
-        aid = _next_id(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])))
         w.append_row([
             aid, pid, grupo, fecha_s, str(data.get("hora", "")),
             str(data.get("location", "")), str(data.get("facilitador", "")),
