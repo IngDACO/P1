@@ -4851,7 +4851,9 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
         _titr = (t(":material/receipt_long: Your receipts ({n})", n=len(items)) if solo_de is not None
                  else t(":material/receipt_long: Receipts ({n})").replace("{n}", str(len(items))))
         with st.expander(_titr, key=f"{key_prefix}_exp_recibos"):
-            st.caption(t("Tap a receipt to see the photo."))
+            # v618 · Solo si hay alguna foto que ver: sin ella, el recibo no se puede tocar
+            if any(str(r.get("DriveID", "")).strip() for r in items):
+                st.caption(t("Tap a receipt to see the photo."))
             for r in items:
                 _rid = str(r.get("ID", ""))
                 _did = str(r.get("DriveID", "")).strip()

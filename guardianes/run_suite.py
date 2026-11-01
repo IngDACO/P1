@@ -88,6 +88,9 @@ def _huella():
             for f in APP.rglob("*.py") if "__pycache__" not in f.parts}
 
 
+SIN_DATOS = 2
+
+
 def _correr(p, carpeta_red):
     """(guardián, código, última línea, segundos, [(host, método)] de lo que salió de verdad a la
     red). Código None = no terminó."""
@@ -97,6 +100,11 @@ def _correr(p, carpeta_red):
         r = subprocess.run([PY, str(p)], capture_output=True, cwd=CWD, env={**ENTORNO, "COPEX_RED": red},
                            text=True, encoding="utf-8", errors="replace", timeout=240)
         cod, cola = r.returncode, ([l for l in (r.stdout or "").splitlines() if l.strip()][-1:] or [""])[0]
+        # ⚠️ Un guardián que MUERE no imprime nada por stdout: sin esto, un rojo sin ninguna pista
+        # (check_ceros, 01/11/2026). Lo último que dijo por stderr.
+        if cod not in (0, SIN_DATOS):
+            cola = (([l for l in (r.stderr or "").splitlines() if l.strip()][-1:] or [""])[0][:70]
+                    + " | " + cola)
     except subprocess.TimeoutExpired:
         cod, cola = None, "timeout 240 s"
     except Exception as e:                                   # noqa: BLE001
@@ -116,7 +124,6 @@ print(f"{len(guardianes)} guardianes · {PROCESOS} a la vez · {_ver}{AVISO_PY}\
 # Sale con código 2 = SIN DATOS y se cuenta aparte: así vaciar la demo no deja rojos
 # permanentes —lo que hace que una suite acabe ignorándose (v385)— pero tampoco
 # esconde que esas afirmaciones dejaron de comprobarse.
-SIN_DATOS = 2
 verde, rojo, roto, sindatos = [], [], [], []
 tiempos, salidas = {}, {}
 t0 = time.time()

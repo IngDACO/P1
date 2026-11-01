@@ -135,6 +135,15 @@ with tempfile.TemporaryDirectory() as _d:
     _c, _o = lanza("verif_zz.py", _L % ("get", _port, "/ok"), **_e)
     chk("…así que quien lee después de escribir ve lo escrito",
         _lleg.count(("GET", "/ok")) == 2 and not _o.startswith("RESP 200 1 "), _o)
+_R = ("import os, requests\n"
+      "def no(*a, **k):\n    raise PermissionError(5, 'Acceso denegado')\n"
+      "os.replace = no\n" + _L)
+with tempfile.TemporaryDirectory() as _d:
+    _e = {"COPEX_CACHE_HOJA": _d, "COPEX_CACHE_HOST": "127.0.0.1"}
+    _c, _o = lanza("verif_zz.py", _R % ("get", _port, "/carrera"), **_e)
+    chk("⚠️ si Windows no deja guardarla, la lectura NO revienta: la respuesta sigue siendo buena",
+        _c == 0 and _o.startswith("RESP 200"), (_c, _o))
+    chk("…y no deja ficheros a medias", not os.listdir(_d), os.listdir(_d))
 _n = len(_lleg)
 with tempfile.TemporaryDirectory() as _d:
     lanza("verif_zz.py", _L % ("get", _port, "/otro"), COPEX_CACHE_HOJA=_d)
@@ -145,6 +154,22 @@ lanza("verif_zz.py", _L % ("get", _port, "/sin"))
 lanza("verif_zz.py", _L % ("get", _port, "/sin"))
 chk("sin `COPEX_CACHE_HOJA`, todo va a la red", _lleg.count(("GET", "/sin")) == 2, _lleg)
 _srv.shutdown()
+
+
+print("\n3b. py_compile, sin escribir")
+with tempfile.TemporaryDirectory() as _d:
+    _bien, _mal = os.path.join(_d, "bien.py"), os.path.join(_d, "mal.py")
+    io.open(_bien, "w", encoding="utf-8").write("x = 1\n")
+    io.open(_mal, "w", encoding="utf-8").write("def (:\n")
+    _P = ("import py_compile, sys\nsys.dont_write_bytecode = True\n"
+          "py_compile.compile(%r, doraise=True)\nprint('COMPILA')\n"
+          "try:\n    py_compile.compile(%r, doraise=True)\n    print('NO AVISA')\n"
+          "except py_compile.PyCompileError:\n    print('AVISA')\n") % (_bien, _mal)
+    _c, _o = lanza("verif_zz.py", _P)
+    chk("compila lo bueno", "COMPILA" in _o, (_c, _o))
+    chk("⚠️ y sigue avisando de un error de sintaxis", "AVISA" in _o and "NO AVISA" not in _o, (_c, _o))
+    chk("⚠️ sin escribir el .pyc: es lo que chocaba entre procesos en Windows",
+        not os.path.exists(os.path.join(_d, "__pycache__")), os.listdir(_d))
 
 
 print("\n4. run_suite.py")
@@ -178,11 +203,11 @@ chk("todo guardián sigue con su tope de 240 s", "timeout=240" in _rs)
 print("\n5. La selección de baterías")
 import baterias_afectadas as BA                                    # noqa: E402
 
-_d = ("--- a/survey_app/core/x.py\n+++ b/survey_app/core/x.py\n@@ -10 +10 @@ def f\n-a\n+b\n"
+_dif = ("--- a/survey_app/core/x.py\n+++ b/survey_app/core/x.py\n@@ -10 +10 @@ def f\n-a\n+b\n"
       "@@ -20,2 +20,3 @@\n-a\n-b\n+c\n+d\n+e\n@@ -30,4 +32,0 @@\n-a\n"
       "--- a/survey_app/core/ya.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n")
 chk("lee las líneas de un diff, borrados incluidos",
-    BA.lineas_de_diff(_d) == {"survey_app/core/x.py": {10, 20, 21, 22, 32, 33}}, BA.lineas_de_diff(_d))
+    BA.lineas_de_diff(_dif) == {"survey_app/core/x.py": {10, 20, 21, 22, 32, 33}}, BA.lineas_de_diff(_dif))
 # Un caso REAL: la línea de un ancla conocida de romper_v573
 _rel = "guardianes/run_suite.py"
 _lin = next(i for i, l in enumerate(_rs.splitlines(), 1) if l == "        _h1 = _huella()")

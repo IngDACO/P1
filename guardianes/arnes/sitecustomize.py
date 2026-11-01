@@ -76,9 +76,19 @@ def _guardar_lecturas(carpeta):
             r = _real(self, request, *a, **k)
             if r.status_code == 200:          # ⚠️ un 429 o un 500 no se guarda como si fuera el dato
                 tmp = "%s.%d.%d" % (f, os.getpid(), threading.get_ident())
-                with open(tmp, "wb") as fh:
-                    fh.write(r.content)
-                os.replace(tmp, f)
+                # ⚠️ Windows rechaza reemplazar un fichero que otro proceso tiene abierto. Dos que
+                # pidan lo mismo a la vez es lo normal al empezar, y sin esto la LECTURA reventaba:
+                # 2 guardianes en rojo después de 3 pasadas limpias, por pura suerte. Si no se
+                # puede guardar da igual: la respuesta ya está aquí y otro la guardó o la guardará.
+                try:
+                    with open(tmp, "wb") as fh:
+                        fh.write(r.content)
+                    os.replace(tmp, f)
+                except OSError:
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
             return r
         r = requests.Response()
         r.status_code, r._content, r._content_consumed = 200, cuerpo, True
@@ -87,6 +97,26 @@ def _guardar_lecturas(carpeta):
         return r
 
     requests.adapters.HTTPAdapter.send = send
+
+
+def _compilar_en_memoria():
+    """`py_compile.compile` SIEMPRE escribe el .pyc y, a diferencia de un `import`, revienta si no
+    puede: con varios procesos a la vez, Windows rechaza reemplazarlo si otro lo tiene abierto
+    (33 guardianes lo usan, y lo que quieren saber es si compila, no el .pyc)."""
+    import py_compile
+
+    def compilar(file, cfile=None, dfile=None, doraise=False, *a, **k):
+        try:
+            with open(file, "rb") as f:
+                compile(f.read(), dfile or file, "exec", dont_inherit=True)
+        except (SyntaxError, ValueError) as e:
+            err = py_compile.PyCompileError(e.__class__, e, dfile or file)
+            if doraise:
+                raise err
+            sys.stderr.write(err.msg + "\n")
+        return None
+
+    py_compile.compile = compilar
 
 
 def _es_fallo(primero):
@@ -112,6 +142,7 @@ def _cortar_en_fallo():
     builtins.print = print_
 
 
+_compilar_en_memoria()
 if os.environ.get("COPEX_RED"):
     _apuntar_red(os.environ["COPEX_RED"])
 if os.environ.get("COPEX_CACHE_HOJA"):
