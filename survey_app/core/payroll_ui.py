@@ -51,6 +51,9 @@ def _est_celda(x) -> str:
     return f"{_EST_PUNTO.get(_estado(x), '')} " + _etq(_estado(x))
 
 
+_MAX_COLILLAS = 10         # las nóminas que se ven de entrada; el resto, con un botón
+
+
 def _periodo(x) -> str:
     return f"{_dmy(x.get('PeriodFrom'))} → {_dmy(x.get('PeriodTo'))}"
 
@@ -480,8 +483,13 @@ def _detalle(grupo, nid):
 
 
 # ── Vista del campo: Mis colillas ────────────────────────────────
+def _pdf_colilla(f, grupo) -> bytes:
+    from core import payslip_pdf
+    return payslip_pdf.generate_payslip_pdf(f, grupo)
+
+
 def render_mis_colillas(usuario, grupo):
-    st.markdown(t("## :material/payments: My payslips"))
+    """⚠️ Sin título propio (v627): `_sub_header` ya pinta «Self-service · My payslips»."""
     if not payroll.is_configured():
         st.info(t(":material/info: Not available yet."))
         return
@@ -489,17 +497,25 @@ def render_mis_colillas(usuario, grupo):
     if not noms:
         st.caption(t("You have no payslips yet."))
         return
-    for f in sorted(noms, key=lambda x: str(x.get("PeriodTo", "")), reverse=True):
+    _orden = sorted(noms, key=lambda x: str(x.get("PeriodTo", "")), reverse=True)
+    _vis = _orden if st.session_state.get("_mis_colillas_todas") else _orden[:_MAX_COLILLAS]
+    for f in _vis:
         with st.container(border=True):
             # v574 · DD/MM/YYYY (iban en ISO)
-            st.markdown(f"**{_periodo(f)}**  ·  "
-                        f"{_num(f.get('Hours')):.1f} h  ·  net **${_num(f.get('Net')):,.2f}**  ·  "
-                        f"{_etq(str(f.get('Status', '')))}")
-            try:
-                from core import payslip_pdf
-                _pdf = payslip_pdf.generate_payslip_pdf(f, grupo)
-                st.download_button(t(":material/download: Download payslip"), data=_pdf,
-                                   file_name=f"Payslip_{f.get('PeriodTo', '')}.pdf",
-                                   mime="application/pdf", key=f"myp_{f.get('ID', '')}")
-            except Exception as e:
-                st.caption(str(e))
+            st.markdown(f"**{_periodo(f)}**")
+            st.markdown(t("Net **${m}** · {h} h", m=f"{_num(f.get('Net')):,.2f}",
+                          h=f"{_num(f.get('Hours')):.1f}"))
+            _est = _estado(f)
+            _pago = str(f.get("PaymentDate", "")).strip()
+            st.caption(f"{_EST_ICONO.get(_est, '')} " + (
+                t("paid on {d}", d=_dmy(_pago)) if _est == "pagada" and _pago else _etq(_est)))
+            # ⚠️ v627 · DIFERIDA (`data` es una función, v623): con los bytes se generaban TODAS en
+            # cada pasada. 411 ms cada una (medido): un año de nómina semanal, 21 s por cada toque.
+            st.download_button(t(":material/download: Download payslip"),
+                               data=lambda f=f: _pdf_colilla(f, grupo),
+                               file_name=f"Payslip_{f.get('PeriodTo', '')}.pdf",
+                               mime="application/pdf", key=f"myp_{f.get('ID', '')}",
+                               on_click="ignore")
+    if len(_vis) < len(_orden) and st.button(t("Show all ({n})", n=len(_orden)), key="myp_todas"):
+        st.session_state["_mis_colillas_todas"] = True
+        st.rerun()

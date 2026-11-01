@@ -198,10 +198,10 @@ _au2 = (RAIZ / "core/ausencias_ui.py").read_text(encoding="utf-8")
 # «approved» aparece también en otros textos del módulo, así que la versión laxa
 # seguía en verde con el chip devuelto al español. Lo destapó la rotura.
 chk("ausencias: los 4 chips de estado en inglés, con la CLAVE intacta",
-    all(x in _au2 for x in ('AU.PENDIENTE: "🟡 pending"',
-                            'AU.APROBADA: "🟢 approved"',
-                            'AU.RECHAZADA: "🔴 rejected"',
-                            'AU.CANCELADA: "⚪ cancelled"')))
+    all(x in _au2 for x in ('AU.PENDIENTE: "🟡 " + t("pending")',      # v627: por `t()`
+                            'AU.APROBADA: "🟢 " + t("approved")',
+                            'AU.RECHAZADA: "🔴 " + t("rejected")',
+                            'AU.CANCELADA: "⚪ " + t("cancelled")')))
 
 # ── 5 ────────────────────────────────────────────────────────────
 sec("5. El clasificador de riesgo sigue sabiendo distinguir")

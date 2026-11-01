@@ -33,8 +33,8 @@ ROTURAS = [
 
     ("la variable del bucle vuelve a llamarse `t` (tapa el motor)",
      "core/ausencias_ui.py",
-     "for _tp, cfg in AU.TIPOS.items():\n        s = AU.saldo(grupo, usuario, _tp)",
-     "for t, cfg in AU.TIPOS.items():\n        s = AU.saldo(grupo, usuario, t)"),
+     "for _tp in AU.TIPOS:\n        s = AU.saldo(grupo, usuario, _tp)",
+     "for t in AU.TIPOS:\n        s = AU.saldo(grupo, usuario, t)"),
 
     ("`t` local en timeclock (el UnboundLocalError de v437)",
      "core/timeclock_ui.py",

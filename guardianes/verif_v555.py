@@ -107,7 +107,7 @@ def _resolver(aid, aprobar, quien, nota=""):
         if r["ID"] == aid:
             r["Status"] = AU.APROBADA if aprobar else AU.RECHAZADA
     return True, ("Absence approved." if aprobar else "Request rejected.")
-def _cancelar(aid, quien):
+def _cancelar(aid, quien, gestor=False):
     LOG.append(("cancelar", aid))
     for r in RECS:
         if r["ID"] == aid:

@@ -37,7 +37,7 @@ import streamlit as st
 from core import clock, timeclock
 from core import columnas
 from core import valores
-from core.num import parse_date as _parse_date
+from core.num import dmy, parse_date as _parse_date
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
@@ -269,8 +269,9 @@ def periodo_saldo(grupo, usuario, ref=None) -> dict:
             "origen": "natural", "ingreso": None}
 
 
-def dias_usados(grupo, usuario, tipo, desde=None, hasta=None) -> float:
+def dias_usados(grupo, usuario, tipo, desde=None, hasta=None, estado=APROBADA) -> float:
     """Días APROBADOS de ese tipo DENTRO del periodo [desde, hasta] (base del saldo).
+    `estado`: los que siguen esperando decisión (v627), para `saldo`.
 
     ⚠️ Cuenta los DÍAS que caen dentro, no las filas cuyo `Desde` cae en el año. Antes
     una ausencia se descontaba ENTERA del año en que empezaba, así que unas vacaciones
@@ -292,7 +293,7 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None) -> float:
         if (str(r.get("Group", "")) != str(grupo)
                 or str(r.get("User", "")) != str(usuario)
                 or str(r.get("Type", "")) != str(tipo)
-                or str(r.get("Status", "")) != APROBADA):
+                or str(r.get("Status", "")) != estado):
             continue
         # los MISMOS días que se pidieron (con o sin fin de semana), recortados al
         # periodo — la misma regla que usa el pago (`horas_pagadas_grupo`)
@@ -303,14 +304,27 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None) -> float:
 
 
 def saldo(grupo, usuario, tipo, ref=None) -> dict:
-    """{asignados, usados, restantes, periodo} — DERIVADO, nunca guardado (ver módulo)."""
+    """{asignados, usados, restantes, pendientes, disponibles, periodo} — DERIVADO, nunca
+    guardado (ver módulo).
+
+    v627 · `restantes` sigue siendo lo que de verdad queda; `disponibles` descuenta además lo
+    que espera decisión: con 20 días se podían pedir 20 y otros 20 en otras fechas, y el saldo
+    seguía diciendo 20 (las pendientes no bajan `restantes`, ver `dias_usados`)."""
     cfg = TIPOS.get(tipo, {})
     asignados = float(cfg.get("dias_anio", 0) or 0)
     p = periodo_saldo(grupo, usuario, ref)
     usados = dias_usados(grupo, usuario, tipo, p["desde"], p["hasta"])
+    pend = dias_usados(grupo, usuario, tipo, p["desde"], p["hasta"], estado=PENDIENTE)
     return {"asignados": asignados, "usados": usados,
-            "restantes": round(asignados - usados, 1),
+            "restantes": round(asignados - usados, 1), "pendientes": pend,
+            "disponibles": round(asignados - usados - pend, 1),
             "ilimitado": asignados <= 0, "periodo": p}
+
+
+def exceso(grupo, usuario, tipo, dias) -> int:
+    """v627 · Cuántos de esos `dias` pasan del saldo disponible (0 si el tipo no tiene tope)."""
+    s = saldo(grupo, usuario, tipo)
+    return 0 if s["ilimitado"] else max(0, int(dias - max(s["disponibles"], 0)))
 
 
 def solapadas(grupo, usuario, desde, hasta, excluir=None) -> list:
@@ -671,9 +685,16 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
         _r = _sol[0]
         return False, (f"{t('There is already an absence overlapping those dates')}: "
                        f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
-                       f"{_r.get('From')} → {_r.get('To')}, {_r.get('Status')}).")
+                       f"{dmy(_r.get('From'))} → {dmy(_r.get('To'))}, {t(str(_r.get('Status')))}).")
 
     cfg = TIPOS[tipo]
+    # ⚠️ v627 · Lo que se PIDE no pasa del saldo, aquí y no solo en la pantalla. La enfermedad no
+    # se pide: se registra siempre —quien está enfermo está enfermo, y el tablero tiene que
+    # decirlo— y lo que pasa del saldo queda escrito para que la oficina decida cómo se paga.
+    _ex = exceso(grupo, usuario, tipo, len(dias))
+    if _ex and cfg["aprobacion"]:
+        return False, t("You are asking for {n} and you have {m} available (what is waiting for "
+                        "approval counts).", n=len(dias), m=f"{max(saldo(grupo, usuario, tipo)['disponibles'], 0):.0f}")
     estado = PENDIENTE if cfg["aprobacion"] else APROBADA
     hoy = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
     fila = [_next_id(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)),
@@ -682,7 +703,8 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
             str(motivo or ""), estado,
             # una que nace aprobada la «resuelve» el propio sistema, y se dice
             (t("(automatic)") if estado == APROBADA else ""),
-            (hoy if estado == APROBADA else ""), "",
+            (hoy if estado == APROBADA else ""),
+            (f"Over the balance by {_ex}" if _ex else ""),
             str(usuario), hoy,
             ("SI" if incluir_findes else "NO")]
     if len(fila) != len(HEADERS):
@@ -738,11 +760,27 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     return True, (t("Absence approved.") if aprobar else t("Request rejected."))
 
 
-def cancelar(aid, quien) -> tuple:
+def cancelable_por_el_campo(r, hoy=None) -> bool:
+    """v627 · ¿Puede su dueño cancelarla? Una pendiente, siempre: nadie ha contado con ella. Una
+    aprobada, solo mientras no haya empezado.
+
+    ⚠️ Decisión del usuario: el botón salía también en las ya disfrutadas, y cancelar una devolvía
+    los días al saldo y quitaba esas horas de la nómina. Lo que ya pasó lo corrige la oficina."""
+    _e = str(r.get("Status", ""))
+    if _e == PENDIENTE:
+        return True
+    d0 = _parse_date(r.get("From"))
+    return _e == APROBADA and bool(d0) and d0 > (hoy or clock.today(r.get("Group")))
+
+
+def cancelar(aid, quien, gestor=False) -> tuple:
     """Cancela una solicitud propia (o ya aprobada: los planes cambian).
 
     ⚠️ Cancelar NO borra la fila: se marca. Así el histórico se conserva y el saldo
     vuelve a subir solo, porque `dias_usados` cuenta únicamente las aprobadas.
+
+    `gestor` = la oficina, que puede con todo lo vigente; su dueño, con
+    `cancelable_por_el_campo`.
     """
     w = _ws()
     if w is None:
@@ -757,6 +795,8 @@ def cancelar(aid, quien) -> tuple:
         return False, t("Request not found.")
     if str(recs[fila - 2].get("Status", "")) not in VIGENTES:
         return False, t("That request is no longer active.")
+    if not gestor and not cancelable_por_el_campo(recs[fila - 2]):
+        return False, t("It has already started: ask the office if it needs changing.")
     from core.num import col_letter as _cl
     try:
         w.batch_update([

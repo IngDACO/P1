@@ -88,8 +88,8 @@ CASOS = [
 
     ("v432: cancelar una aprobada deja de avisar al admin",
      "core/ausencias_ui.py",
-     "                            _avisar_cancelacion(grupo, nombre, r)",
-     "                            pass"),
+     "            _avisar_cancelacion(grupo, nombre, r)",
+     "            pass"),
 
     ("v433: dias_usados vuelve a contar la ausencia entera en su anio de inicio",
      "core/ausencias.py",
@@ -102,7 +102,7 @@ CASOS = [
 
     ("v433: la pantalla deja de decir de que periodo habla",
      "core/ausencias_ui.py",
-     "t(':material/event_available: Your leave year runs from')", "t('Balance')"),  # v575 ·
+     '":material/event_available: Your leave year runs from **{a}** to **{b}** "', '"Balance "'),  # v575 ·
 
     ("v433: mover la fecha de alta deja de auditarse",
      "core/auditoria.py",
@@ -128,7 +128,7 @@ CASOS = [
 
     ("un mensaje de éxito vuelve a perderse en el rerun (v365)",
      "core/ausencias_ui.py",
-     "                        flash.exito(msg)", "                        st.success(msg)"),
+     "        flash.exito(msg)\n        if _estaba:", "        st.success(msg)\n        if _estaba:"),
 
     ("el campo pierde su sección de ausencias",
      "core/home_ui.py",

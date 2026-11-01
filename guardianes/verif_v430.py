@@ -326,9 +326,10 @@ chk("«ausencias» no está en _SUBSECCIONES_CAMPO (sección sin subs)",
 # ⚠️ CADUCADO por v439 (i18n F2): el título pasó al inglés a propósito. Lo que la regla
 # protege es que la vista PONGA un título de página (`## `), porque cuelga de una sección
 # sin sub-pestañas y la shell no pinta ninguna cabecera (regla v320).
-chk("...así que `render_mis_ausencias` pinta su propio título",
-    "## :material/event_busy: Mis ausencias" in s_u
-    or "## :material/event_busy: My absences" in s_u)
+# ⚠️ CADUCADO por v478/v627: desde v478 cuelga de Self-service y `_sub_header` ya pinta el título;
+# con el suyo salía dos veces, con la raya en medio (medido a 375 px). La regla de v320 es la misma.
+chk("...y `render_mis_ausencias` no repite el título que ya pinta `_sub_header`",
+    "## :material/event_busy: My absences" not in s_u)
 # ⚠️ Un TÍTULO de página es `## `; los `#### ` de dentro son sub-cabeceras legítimas
 # y buscar la subcadena las contaba, dando FALLO con el código correcto.
 _tit = [c.value for c in ast.walk(fn(t_u, "render_bandeja"))
@@ -411,7 +412,7 @@ chk("`solicitar` valida que la fila cuadre con la cabecera (v363)",
 _por_id = [f_.name for f_ in ast.walk(arbol("core/ausencias_ui.py"))
            if isinstance(f_, ast.FunctionDef) and "AU.get(" in ast.unparse(f_)]
 chk("las vistas trabajan sobre listas YA filtradas por grupo (sin ID global suelto)",
-    all(n in ("render_mis_ausencias", "_tarjeta_pendiente") for n in _por_id),
+    all(n in ("_pedir", "_tarjeta_pendiente") for n in _por_id),      # v627: `_pedir`, la pieza que era
     str(_por_id))
 
 # ── 10 ───────────────────────────────────────────────────────────
@@ -498,7 +499,7 @@ chk("el detalle del proyecto se las pasa",
     "fechas=(prj.get('StartDate'), prj.get('EndDateEst'))" in ast.unparse(_det))
 _can = fn(arbol("core/ausencias_ui.py"), "_avisar_cancelacion")
 chk("existe el aviso de cancelación", _can is not None)
-_rma = ast.unparse(fn(arbol("core/ausencias_ui.py"), "render_mis_ausencias"))
+_rma = ast.unparse(fn(arbol("core/ausencias_ui.py"), "_accion_mia"))      # v627: acción diferida
 chk("...se llama al cancelar", "_avisar_cancelacion" in _rma)
 chk("...SOLO si estaba aprobada (una pendiente no cambia nada planificado)",
     "_estaba" in _rma and "APROBADA" in _rma)

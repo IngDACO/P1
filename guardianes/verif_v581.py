@@ -442,8 +442,8 @@ chk("projects_ui: Status, el plan acordado y el resumen con la base del tema (15
 chk("projects_ui: Costs con 110 px (v559) y sin su clase propia",
     '<div class="cpx-kpis" style="--cpx-min:110px;margin:0 0 10px">' in _pu
     and "cpx-kpis-cst" not in _pu)
-chk("ausencias_ui: la rejilla del tema",
-    '<div class="cpx-kpis" style="margin:0 0 8px">' in _src("core/ausencias_ui.py"))
+chk("ausencias_ui: sus cifras son botones en la rejilla del tema (`T.por_fila`, v627)",
+    'T.por_fila("cpx_mia_kpis", 3)' in _src("core/ausencias_ui.py"))
 
 print("\n=== %d ok · %d fallo(s) ===" % (n_ok, len(fallos)))
 sys.exit(1 if fallos else 0)

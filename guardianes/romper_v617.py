@@ -39,8 +39,7 @@ ROTURAS = [
      [('with st.form(f"np_form_{key}", enter_to_submit=False):', 'with st.form(f"np_form_{key}"):')]),
     ("el cobro de una factura, con Enter", "core/invoices_ui.py",
      [('with st.form(f"cob_{fid}", enter_to_submit=False):', 'with st.form(f"cob_{fid}"):')]),
-    ("una ausencia, con Enter", "core/ausencias_ui.py",
-     [('with st.form("aus_form", enter_to_submit=False):', 'with st.form("aus_form"):')]),
+    # (v627: la ausencia ya no es un `st.form`: Enter no puede enviarla, va con su botón)
     ("el alta de un usuario de campo, con Enter", "core/auth_ui.py",
      [('with st.form(f"form_campo_{_g}", clear_on_submit=False, enter_to_submit=False):',
        'with st.form(f"form_campo_{_g}", clear_on_submit=False):')]),

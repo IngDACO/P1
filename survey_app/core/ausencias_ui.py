@@ -18,8 +18,11 @@ import streamlit as st
 
 from core import ausencias as AU
 from core import clock, flash
+from core.maps import literal_md
 
 logger = logging.getLogger(__name__)
+
+_MAX_MIAS = 10             # las solicitudes que se ven de entrada; el resto, con un botón
 
 
 def _kpi(label, valor, pie=None, color=None):
@@ -28,8 +31,8 @@ def _kpi(label, valor, pie=None, color=None):
 
 
 def _chip_estado(e: str) -> str:
-    return {AU.PENDIENTE: "🟡 pending", AU.APROBADA: "🟢 approved",
-            AU.RECHAZADA: "🔴 rejected", AU.CANCELADA: "⚪ cancelled"}.get(e, e)
+    return {AU.PENDIENTE: "🟡 " + t("pending"), AU.APROBADA: "🟢 " + t("approved"),
+            AU.RECHAZADA: "🔴 " + t("rejected"), AU.CANCELADA: "⚪ " + t("cancelled")}.get(e, e)
 
 
 def _fdma(x) -> str:
@@ -45,19 +48,23 @@ def _rango(desde, hasta) -> str:
     return a if a == b else f"{a} → {b}"
 
 
+def _dias(n) -> str:
+    """«1 day» · «3 days» (v627: decía «1 day(s)»)."""
+    n = int(float(n or 0))
+    return t("1 day") if n == 1 else t("{n} days", n=n)
+
+
 def _linea(r) -> str:
     return (f"**{AU.nombre_tipo(r.get('Type'))}** · {_rango(r.get('From'), r.get('To'))} · "
-            f"{r.get('Days')} {t('day(s)')} · {_chip_estado(str(r.get('Status')))}")
+            f"{_dias(r.get('Days'))} · {_chip_estado(str(r.get('Status')))}")
 
 
 # ═══════════════════════════════════════════════════════════════════
 # CAMPO — Mis ausencias
 # ═══════════════════════════════════════════════════════════════════
 def render_mis_ausencias():
-    """⚠️ CON título propio: es una sección del campo SIN sub-pestañas, así que la
-    shell no pinta ninguna cabecera (regla v320: solo las que cuelgan de una sección
-    con subs tienen título duplicado)."""
-    st.markdown(t("## :material/event_busy: My absences"))
+    """⚠️ SIN título propio: desde v478 cuelga de Self-service y `_sub_header` ya pinta «Self-service
+    · My absences» (v627: salía dos veces, con la raya en medio)."""
     a = st.session_state.get("auth", {}) or {}
     usuario = str(a.get("usuario", ""))
     nombre = str(a.get("nombre") or usuario)
@@ -65,46 +72,65 @@ def render_mis_ausencias():
     if not AU.is_configured():
         st.warning(t(":material/warning: Absences need Google Sheets configured."))
         return
+    _accion_mia(grupo, usuario, nombre)      # v627 · ACCIÓN DIFERIDA (v555)
+    _saldos(grupo, usuario)
+    _pedir(grupo, usuario, nombre)
+    _mis_solicitudes(grupo, usuario)
 
-    # ── Saldo ──────────────────────────────────────────────────────
-    tarj = []
-    _per = None
+
+def _saldos(grupo, usuario):
+    """El saldo. v627 · ACTIVO (era HTML): cada cifra filtra «My requests» por su tipo y baja
+    hasta allí. La cifra es lo que aún se puede pedir: lo que espera decisión ya está contado."""
+    from core import theme as T
+    _per, _rojo, _items = None, "", []
     # ⚠️ `_tp`, no `t`: la variable del bucle taparía la función de idioma en el
     # ámbito ENTERO de la función (el fallo del glosario de v437).
-    for _tp, cfg in AU.TIPOS.items():
+    for _tp in AU.TIPOS:
         s = AU.saldo(grupo, usuario, _tp)
         _per = _per or s.get("periodo")
         if s["ilimitado"]:
-            tarj.append(_kpi(AU.nombre_tipo(_tp), f"{s['usados']:.0f}",
-                             pie=t("days used in the period")))
+            _v, _pie = f"{s['usados']:.0f}", t("days used in the period")
         else:
-            _col = "#c0392b" if s["restantes"] <= 0 else None
-            tarj.append(_kpi(AU.nombre_tipo(_tp), f"{s['restantes']:.0f}",
-                             pie=f"{t('of')} {s['asignados']:.0f} · {t('used')} {s['usados']:.0f}",
-                             color=_col))
-    st.markdown('<div class="cpx-kpis" style="margin:0 0 8px">'       # v581 · rejilla
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+            _v = f"{s['disponibles']:.0f}"
+            _pie = t("of {a} · used {b}", a=f"{s['asignados']:.0f}", b=f"{s['usados']:.0f}")
+            if s["pendientes"]:
+                _pie += " · " + t("{n} pending", n=f"{s['pendientes']:.0f}")
+            if s["disponibles"] <= 0:
+                _rojo += f".st-key-cpxkpi_mia_{_tp} button{{border-left-color:#c0392b!important}}"
+        _items.append((_tp, AU.nombre_tipo(_tp), _v, _pie))
+    st.markdown(T.por_fila("cpx_mia_kpis", 3)
+                + (f"<style>{_rojo}</style>" if _rojo else ""), unsafe_allow_html=True)
+    _f = st.session_state.get("_aus_mia_filtro", "")
+    with st.container(key="cpx_mia_kpis"):
+        for _col, (_tp, _l, _v, _pie) in zip(st.columns(len(_items)), _items):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_mia_{_tp}", width="stretch",
+                           help=t("See my requests of this type")):
+                st.session_state["_aus_mia_filtro"] = "" if _f == _tp else _tp
+                st.session_state["_bajar_cpx_aus_lista"] = True
+                st.rerun()
     # ⚠️ v433: DE QUÉ periodo habla el saldo. Sin esto, «te quedan 14» no dice hasta
     # cuándo, y con el año por aniversario cada persona tiene el suyo. Y si falta la
     # fecha de alta, se avisa de que es una estimación en vez de dar un número que
     # parece exacto.
-    if _per:
-        if _per["origen"] == "aniversario":
-            st.caption(f"{t(':material/event_available: Your leave year runs from')} "
-                       f"**{_per['desde']}** to **{_per['hasta']}** "
-                       f"({t('since you started, on')} {_per['ingreso']}).")
-        else:
-            st.caption(f"{t(':material/help: We are counting by calendar year')} "
-                       f"(**{_per['desde']}** → **{_per['hasta']}**) because your start date "
-                       "is not on record. Ask your manager to enter it and the "
-                       "balance will count from your anniversary.")
+    if _per and _per["origen"] == "aniversario":
+        st.caption(t(":material/event_available: Your leave year runs from **{a}** to **{b}** "
+                     "(since you started, on {c}).", a=_fdma(_per["desde"]), b=_fdma(_per["hasta"]),
+                     c=_fdma(_per["ingreso"])))
+    elif _per:
+        st.caption(t(":material/help: We are counting by calendar year (**{a}** → **{b}**) because "
+                     "your start date is not on record. Ask your manager to enter it and the "
+                     "balance will count from your anniversary.", a=_fdma(_per["desde"]),
+                     b=_fdma(_per["hasta"])))
 
-    # ── Pedir ──────────────────────────────────────────────────────
+
+def _pedir(grupo, usuario, nombre):
+    """Pedir o avisar. ⚠️ v627 · Sin `st.form`: dentro de un formulario nada reacciona hasta
+    enviar, y lo primero que hace falta saber —cuántos días gasta esto— no se veía. Y los campos
+    llevan generación: `pop` de una clave no le llega al navegador (trampa 31), así que el motivo
+    y las fechas se quedaban y se colaban en la solicitud siguiente."""
+    from core import theme as T
     with st.expander(t("Request a day off or annual leave, or report sick leave"),
                      icon=":material/add_circle:", expanded=True, key="exp_aus_pedir"):
-        # ⚠️ El tipo va FUERA del form: el formulario tiene que poder reaccionar a él
-        # (la enfermedad no se «pide», se avisa) y dentro de un form los widgets no
-        # escriben hasta el submit — la razón de v127, v189 y v306.
         _tipos = list(AU.TIPOS)
         tipo = st.selectbox(
             t("What do you need?"), _tipos, key="aus_tipo",
@@ -112,91 +138,170 @@ def render_mis_ausencias():
             # sale como texto literal (medido en el Cloud). En `st.radio` sí funciona.
             format_func=lambda _k: f"{AU.TIPOS[_k]['emoji']} {AU.nombre_tipo(_k)}")
         cfg = AU.TIPOS[tipo]
-        if not cfg["aprobacion"]:
-            st.info(t(":material/info: Sick leave **is recorded straight away**: you do not have to wait for anyone to approve it. Your manager will see it as soon as you send it."))
+        _nom = AU.nombre_tipo(tipo).lower()
         _s = AU.saldo(grupo, usuario, tipo)
-        if not _s["ilimitado"]:
-            if _s["restantes"] <= 0:
-                st.error(f":material/block: You have no days left of {cfg['nombre'].lower()} "
-                         f"this year (used {_s['usados']:.0f} of {_s['asignados']:.0f}). "
-                         "Talk to your manager.")
-            elif _s["restantes"] <= 3:
-                st.warning(f":material/warning: You have only **{_s['restantes']:.0f} "
-                           f"day(s)** of {cfg['nombre'].lower()} this year.")
+        if not cfg["aprobacion"]:
+            st.info(t(":material/info: Sick leave **is recorded straight away**: you do not have to wait for anyone to approve it. If you can, send the medical certificate to your manager."))
+        elif not _s["ilimitado"] and _s["disponibles"] <= 0:
+            st.error(t(":material/block: You have no days left of {x} this year (used {a} of {b}). "
+                       "Talk to your manager.", x=_nom, a=f"{_s['usados']:.0f}",
+                       b=f"{_s['asignados']:.0f}"))
+        elif not _s["ilimitado"] and _s["disponibles"] <= 3:
+            st.warning(t(":material/warning: You have only **{n}** left of {x} this year.",
+                         n=_dias(_s["disponibles"]), x=_nom))
 
-        with st.form("aus_form", enter_to_submit=False):
+        _g = st.session_state.get("_aus_gen", 0)
+        hoy = clock.today(grupo)
+        st.markdown(T.por_fila("cpx_aus_fechas", 2), unsafe_allow_html=True)
+        with st.container(key="cpx_aus_fechas"):
             c1, c2 = st.columns(2)
-            hoy = clock.today(grupo)
-            desde = c1.date_input(t("From"), value=hoy, key="aus_desde", format="DD/MM/YYYY")
-            hasta = c2.date_input(t("To"), value=hoy, key="aus_hasta", format="DD/MM/YYYY")
-            findes = st.checkbox(t("Include weekends"), key="aus_findes",
-                                 help=t("Tick this only if those days are worked. Otherwise they are not taken off your balance."))
-            motivo = st.text_input(t("Reason (optional)"), key="aus_motivo",
-                                   placeholder=t("Family trip, medical appointment…"))
-            _enviar = st.form_submit_button(
-                (t(":material/send: Send request") if cfg["aprobacion"]
-                 else t(":material/send: Record the sick leave")),
-                type="primary", width="stretch")
-        if _enviar:
-            _d = AU.dias_del_rango(desde, hasta, findes)
-            if not _s["ilimitado"] and len(_d) > _s["restantes"]:
-                st.error(f":material/block: You are asking for **{len(_d)} {t('day(s)')}** and you have "
-                         f"**{_s['restantes']:.0f}**.")
-            else:
-                ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta,
-                                       motivo, incluir_findes=findes)
-                if not ok:
-                    st.error(res)
-                else:
-                    # La enfermedad nace aprobada → al tablero YA. Las demás, al aprobar.
-                    if not cfg["aprobacion"]:
-                        _ok2, _n = AU.aplicar_al_roster(AU.get(res) or {})
-                        if not _ok2:
-                            logger.warning("ausencias_ui: roster: %s", _n)
-                    _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg)
-                    for k in ("aus_motivo", "aus_findes"):
-                        st.session_state.pop(k, None)
-                    flash.exito(
-                        f"{cfg['nombre']} recorded ({res})." if not cfg["aprobacion"]
-                        else f"{t('Request sent')} ({res}). {t('We will let you know when it is resolved.')}")
-                    st.rerun()
+            desde = c1.date_input(t("From"), value=hoy, key=f"aus_desde_{_g}", format="DD/MM/YYYY")
+            hasta = c2.date_input(t("To"), value=hoy, key=f"aus_hasta_{_g}", format="DD/MM/YYYY")
+        findes = st.checkbox(t("Include weekends"), key=f"aus_findes_{_g}",
+                             help=t("Tick this only if those days are worked. Otherwise they are not taken off your balance."))
+        motivo = st.text_input(t("Reason (optional)"), key=f"aus_motivo_{_g}",
+                               placeholder=t("Family trip, medical appointment…"))
 
-    # ── Lo mío ─────────────────────────────────────────────────────
-    st.markdown(t("#### :material/history: My requests"))
+        _n = len(AU.dias_del_rango(desde, hasta, findes))
+        _ex = AU.exceso(grupo, usuario, tipo, _n)
+        _no = ""
+        if hasta < desde:
+            _no = t("The end date cannot be earlier than the start date.")
+        elif not _n:
+            _no = t("That range only covers the weekend. If those days are worked, tick "
+                    "«include weekends».")
+        elif _ex and cfg["aprobacion"]:
+            _no = t(":material/block: You are asking for **{a}** and you have **{b}** available.",
+                    a=_dias(_n), b=f"{max(_s['disponibles'], 0):.0f}")
+        if _no:
+            st.warning(_no)
+        elif _ex:
+            st.warning(t(":material/warning: This goes **{n}** over your sick leave balance. It is "
+                         "recorded anyway: the office decides how those days are paid.", n=_dias(_ex)))
+        else:
+            _txt = t(":material/event: This takes **{n}**", n=_dias(_n))
+            if not _s["ilimitado"]:
+                _txt += " · " + t("{n} left after this", n=f"{_s['disponibles'] - _n:.0f}")
+            st.caption(_txt)
+
+        if st.button(t(":material/send: Send request") if cfg["aprobacion"]
+                     else t(":material/send: Record the sick leave"),
+                     type="primary", width="stretch", key="aus_enviar", disabled=bool(_no)):
+            ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta,
+                                   motivo, incluir_findes=findes)
+            if not ok:
+                st.error(res)
+            else:
+                # La enfermedad nace aprobada → al tablero YA. Las demás, al aprobar.
+                if not cfg["aprobacion"]:
+                    _ok2, _nd = AU.aplicar_al_roster(AU.get(res) or {})
+                    if not _ok2:
+                        logger.warning("ausencias_ui: roster: %s", _nd)
+                        flash.aviso(t("It is recorded, but the planner could not be updated: "
+                                      "tell the office."))
+                _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, _ex)
+                st.session_state["_aus_gen"] = _g + 1
+                flash.exito(t("{x} recorded ({i}).", x=AU.nombre_tipo(tipo), i=res)
+                            if not cfg["aprobacion"] else
+                            t("Request sent ({i}). We will let you know when it is resolved.", i=res))
+                st.rerun()
+
+
+def _accion_mia(grupo, usuario, nombre):
+    """⚠️ v627 · ACCIÓN DIFERIDA, la de la bandeja (v555): el botón solo apunta y relanza, y aquí
+    se ejecuta antes de pintar la lista. Solo lo suyo: una acción apuntada en la sesión no toca la
+    ausencia de otra persona."""
+    aid = st.session_state.pop("_aus_mia_accion", None)
+    if not aid:
+        return
+    r = _de_grupo(grupo, aid)
+    if str(r.get("User", "")) != str(usuario):
+        flash.error(t("Request not found."))
+        st.rerun()
+    _estaba = str(r.get("Status")) == AU.APROBADA
+    ok, msg = AU.cancelar(aid, usuario)
+    if ok:
+        flash.exito(msg)
+        if _estaba:
+            # si ya estaba en el tablero, hay que quitarla de ahí
+            AU.aplicar_al_roster(r, quitar=True)
+            # ⚠️ v432: cancelar una APROBADA devuelve esos días al tablero, y quien la aprobó pudo
+            # haber reorganizado la cuadrilla contando con la ausencia. Solo para las aprobadas:
+            # retirar una pendiente no cambia nada que nadie hubiera planificado.
+            _avisar_cancelacion(grupo, nombre, r)
+    else:
+        flash.error(msg)
+    st.rerun()
+
+
+def _tarjeta_mia(r, usuario):
+    aid = str(r.get("ID"))
+    with st.container(border=True):
+        st.markdown(_linea(r))
+        _pie = []
+        if str(r.get("Reason", "")).strip():
+            _pie.append(literal_md(r.get("Reason")))
+        if str(r.get("AdminNote", "")).strip():
+            _pie.append(t("Note: {x}", x=literal_md(r.get("AdminNote"))))
+        # v627 · Su nombre, no su login. Lo automático y lo que cancela uno mismo no tienen «quién».
+        _por = str(r.get("ResolvedBy", "")).strip()
+        if _por and _por != str(usuario) and not _por.startswith("("):
+            from core.projects_ui import _etq_us
+            _pie.append(t("resolved by {x}", x=literal_md(_etq_us([_por]).get(_por, _por))))
+        if _pie:
+            st.caption(" · ".join(_pie))
+        if str(r.get("Status")) not in AU.VIGENTES:
+            return
+        if not AU.cancelable_por_el_campo(r):
+            st.caption(t(":material/lock: It has already started: ask the office if it needs "
+                         "changing."))
+            return
+        # ⚠️ v627 · Con confirmación, como la oficina (v555): unas vacaciones aprobadas se iban de
+        # un toque, con correo a todos los administradores.
+        if st.session_state.get("_aus_mia_cancelar") != aid:
+            if st.button(t(":material/undo: Cancel"), key=f"auscan_{aid}"):
+                st.session_state["_aus_mia_cancelar"] = aid
+                st.rerun()
+            return
+        st.warning(t("Cancel this absence? Its days go back to your balance and the office is "
+                     "told.") if str(r.get("Status")) == AU.APROBADA else
+                   t("Withdraw this request?"))
+        b1, b2 = st.columns(2)
+        if b1.button(t(":material/undo: Yes, cancel it"), key=f"auscanok_{aid}", type="primary",
+                     width="stretch"):
+            st.session_state.pop("_aus_mia_cancelar", None)
+            st.session_state["_aus_mia_accion"] = aid
+            st.rerun()
+        if b2.button(t("Keep it"), key=f"auscanno_{aid}", width="stretch"):
+            st.session_state.pop("_aus_mia_cancelar", None)
+            st.rerun()
+
+
+def _mis_solicitudes(grupo, usuario):
+    from core import projects_ui as _PU
+    with st.container(key="cpx_aus_lista"):      # v627 · destino de las cifras
+        _PU._bajar_a("cpx_aus_lista", "_bajar_cpx_aus_lista", bloque="start")
+        st.markdown(t("#### :material/history: My requests"))
     mias = AU.list_group(grupo, usuario=usuario)
     if not mias:
         st.caption(t("You have not requested any absence yet."))
         return
-    for r in mias[:15]:
-        with st.container(border=True):
-            st.markdown(_linea(r))
-            _pie = []
-            if str(r.get("Reason", "")).strip():
-                _pie.append(str(r.get("Reason")))
-            if str(r.get("AdminNote", "")).strip():
-                _pie.append(f"nota: {r.get('AdminNote')}")
-            if str(r.get("ResolvedBy", "")).strip():
-                _pie.append(f"{t('resolved by')} {r.get('ResolvedBy')}")
-            if _pie:
-                st.caption(" · ".join(_pie))
-            if str(r.get("Status")) in AU.VIGENTES:
-                if st.button(t(":material/undo: Cancel"), key=f"auscan_{r['ID']}"):
-                    _estaba = str(r.get("Status")) == AU.APROBADA
-                    ok, msg = AU.cancelar(r["ID"], usuario)
-                    if ok:
-                        # si ya estaba en el tablero, hay que quitarla de ahí
-                        AU.aplicar_al_roster(r, quitar=True)
-                        # ⚠️ v432: cancelar una APROBADA devuelve esos días al tablero,
-                        # y quien la aprobó pudo haber reorganizado la cuadrilla
-                        # contando con la ausencia. La solicitud le llegaba; la
-                        # cancelación no. Solo para las aprobadas: retirar una
-                        # pendiente no cambia nada que nadie hubiera planificado.
-                        if _estaba:
-                            _avisar_cancelacion(grupo, nombre, r)
-                        flash.exito(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
+    _f = st.session_state.get("_aus_mia_filtro", "")
+    _lista = [r for r in mias if not _f or str(r.get("Type")) == _f]
+    if _f:
+        st.caption(t("Showing only: {x}", x=AU.nombre_tipo(_f)))
+        if st.button(t("Show all types"), key="aus_filtro_fuera", type="tertiary"):
+            st.session_state.pop("_aus_mia_filtro", None)
+            st.rerun()
+        if not _lista:
+            st.caption(t("None of this type."))
+    # v627 · Se cortaba en 15 sin decirlo.
+    _vis = _lista if st.session_state.get("_aus_mia_todas") else _lista[:_MAX_MIAS]
+    for r in _vis:
+        _tarjeta_mia(r, usuario)
+    if len(_vis) < len(_lista) and st.button(t("Show all ({n})", n=len(_lista)), key="aus_ver_todas"):
+        st.session_state["_aus_mia_todas"] = True
+        st.rerun()
 
 
 def _avisar_cancelacion(grupo, nombre, r):
@@ -210,10 +315,10 @@ def _avisar_cancelacion(grupo, nombre, r):
         from core.alerts import _admins_and_owners
         cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
         _subj = (f"CANCELLED — {cfg.get('nombre', r.get('Type'))}: {nombre} "
-                 f"({r.get('From')} → {r.get('To')})")
+                 f"({_rango(r.get('From'), r.get('To'))})")
         _lines = [f"<b>{nombre}</b> has CANCELLED their "
                   f"<b>{cfg.get('nombre', r.get('Type'))}</b> "
-                  f"from {r.get('From')} to {r.get('To')}.",
+                  f"from {_fdma(r.get('From'))} to {_fdma(r.get('To'))}.",
                   "Those days are free again in the planner: if you had reorganised "
                   "the crew, review it."]
         for d in _admins_and_owners(grupo):
@@ -225,18 +330,23 @@ def _avisar_cancelacion(grupo, nombre, r):
         logger.warning("ausencias_ui._avisar_cancelacion: %s", e)
 
 
-def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg):
+def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, exceso=0):
     """Avisa a quien decide. ⚠️ Best-effort: que falle un correo no puede impedir
-    registrar la ausencia — la solicitud ya está guardada cuando se llega aquí."""
+    registrar la ausencia — la solicitud ya está guardada cuando se llega aquí.
+
+    v627 · `exceso` = días de baja que pasan del saldo: se registran igual y decide la oficina."""
     try:
         from core import notify
         from core.alerts import _admins_and_owners
-        _subj = (f"{cfg['nombre']}: {nombre} ({desde} → {hasta})")
+        _subj = (f"{cfg['nombre']}: {nombre} ({_rango(desde, hasta)})")
         _lines = [f"<b>{nombre}</b> has recorded: <b>{cfg['nombre']}</b>",
-                  f"From {desde} to {hasta}.",
+                  f"From {_fdma(desde)} to {_fdma(hasta)}.",
                   ("It was recorded automatically (no approval needed)."
                    if not cfg["aprobacion"] else
                    "It is PENDING your approval → Planning · Absences.")]
+        if exceso:
+            _lines.append(f"<b>It goes {exceso} day(s) over the balance</b>: decide how those "
+                          "days are paid → Planning · Absences.")
         for d in _admins_and_owners(grupo):
             try:
                 notify.notify_user(d, _subj, _lines)
@@ -372,6 +482,8 @@ def _fila_con_cancelar(r, donde):
     aid = str(r.get("ID"))
     c1, c2 = st.columns([5, 1])
     c1.markdown(f"`{aid}` · **{r.get('Name')}** — " + _linea(r))
+    if str(r.get("AdminNote", "")).strip():       # v627 · p. ej. una baja por encima del saldo
+        c1.caption(literal_md(r.get("AdminNote")))
     if str(r.get("Status")) != AU.APROBADA:
         return
     _conf = st.session_state.get("_aus_cancelar") == (donde, aid)
@@ -404,7 +516,7 @@ def _ejecutar(acc, quien, grupo):
     usuario = str(r.get("User", ""))
     if acc.get("cancelar"):
         _estaba = str(r.get("Status")) == AU.APROBADA
-        ok, msg = AU.cancelar(aid, quien)
+        ok, msg = AU.cancelar(aid, quien, gestor=True)
         if not ok:
             flash.error(msg)
             return

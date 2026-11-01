@@ -9,12 +9,13 @@ import time
 from datetime import date
 import streamlit as st
 
-from core.num import num as _num
+from core.num import dmy as _dmy, num as _num
 import pandas as pd
 
 from core import auth
 from core import ui_common as ui
 from core import clock
+from core.maps import literal_md as _lit
 from core import flash          # v365: mensajes que sobreviven al st.rerun()
 from core import tabla
 
@@ -124,47 +125,106 @@ def _fecha_input(col, label, valor_actual="", *, key):
     return d.isoformat() if d else ""
 
 
+def _estado_cred(C, vence) -> str:
+    """v627 · El estado de una credencial, dicho con su fecha: «expiring» no decía cuándo, y es lo
+    primero que se pregunta en una obra."""
+    _s, _n, _f = C.status(vence), C.dias_para(vence), _dmy(vence)
+    if _s == "vencido":
+        return t(":red[:material/cancel:] **Expired** on {f}", f=_f)
+    if _s == "por_vencer":
+        return (t(":orange[:material/schedule:] **Expires today**") if _n == 0 else
+                t(":orange[:material/schedule:] **Expires tomorrow**") if _n == 1 else
+                t(":orange[:material/schedule:] **Expires in {n} days** · {f}", n=_n, f=_f))
+    if _s == "vigente":
+        return t(":green[:material/check_circle:] Valid until {f}", f=_f)
+    return t(":material/all_inclusive: No expiry")
+
+
+def _boton_doc(r, clave, etiqueta):
+    """El documento de una credencial. ⚠️ v627 · DIFERIDO (`data` es una función, v623): con los
+    bytes se bajaban de Drive TODOS en cada pasada, y el que fallaba desaparecía sin decir nada."""
+    from core import drive_store
+    _did = str(r.get("DriveID", "")).strip()
+    st.download_button(etiqueta, data=lambda: drive_store.download(_did),
+                       file_name=r.get("File") or f"{r.get('ID')}", mime="application/octet-stream",
+                       key=clave, on_click="ignore")
+
+
+def _tarjetas_cred(C, creds, key_prefix):
+    """v627 · El campo, una tarjeta por credencial con lo vencido primero: es lo que se enseña en
+    una obra, y en la tabla a 375 px el número salía cortado."""
+    _orden = {"vencido": 0, "por_vencer": 1, "vigente": 2}
+    for r in sorted(creds, key=lambda x: (_orden.get(C.status(x.get("ExpiryDate")), 3),
+                                          C.dias_para(x.get("ExpiryDate")) or 0)):
+        with st.container(border=True):
+            st.markdown(f"**{_lit(r.get('Type'))}**")
+            st.markdown(_estado_cred(C, r.get("ExpiryDate")))
+            _d = []
+            if str(r.get("Number", "")).strip():
+                _d.append(t("No. {x}", x=_lit(r.get("Number"))))
+            if str(r.get("Class", "")).strip():
+                _d.append(t("Class {x}", x=_lit(r.get("Class"))))
+            if str(r.get("IssueDate", "")).strip():
+                _d.append(t("Issued {f}", f=_dmy(r.get("IssueDate"))))
+            if _d:
+                st.caption(" · ".join(_d))
+            if str(r.get("DriveID", "")).strip():
+                _boton_doc(r, f"{key_prefix}_dl_{r.get('ID')}",
+                           t(":material/download: Download the document"))
+
+
 def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     """Tickets/credenciales de un usuario. editable=True → admin gestiona (agregar/editar/
     eliminar, subir foto/documento); editable=False → solo lectura (el propio usuario)."""
     from core import credentials as C
+    from core import theme as T
     if not C.is_configured():
         st.info(t("Credentials need Google Sheets configured."))
         return
     creds = C.list_for(usuario)
     if creds:
-        # KPIs de un vistazo (v186): vigentes / por vencer / vencidas
+        # KPIs de un vistazo (v186): vigentes / por vencer / vencidas.
+        # v627 · ACTIVAS, y de 2 en 2 en el móvil: las cuatro apiladas empujaban la tabla a 834 px.
         _sts = [C.status(r.get("ExpiryDate")) for r in creds]
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric(t("Credentials"), len(creds))
-        k2.metric(t(":material/check_circle: Valid"), sum(1 for s in _sts if s == "vigente"))
-        k3.metric(t(":material/schedule: Expiring"), sum(1 for s in _sts if s == "por_vencer"))
-        k4.metric(t(":material/cancel: Expired"), sum(1 for s in _sts if s == "vencido"))
-        # ⚠️ v478 · ORDEN pensado para el móvil: lo que se mira primero, primero
-        # (Tipo · Estado · Vence), y lo de contexto detrás. No se oculta ninguna: es
-        # priorizar, no encoger — a 375 px encoger recorta el texto SIN avisar (v408).
-        st.dataframe(pd.DataFrame([{
-            "Tipo": r.get("Type"), "Estado": C.status_label(r.get("ExpiryDate")),
-            "Vence": r.get("ExpiryDate") or "—", "Number": r.get("Number"),
-            "Clase": r.get("Class"), "Issued": r.get("IssueDate") or "—",
-        } for r in creds]), hide_index=True, width="stretch",
-            # ⚠️ `Tipo` ANCLADA: es la identidad, y sin anclar se escapa por la
-            # izquierda justo cuando alguien se desplaza a mirar la fecha.
-            column_config=tabla.cfg(extra={"Tipo": st.column_config.TextColumn(
-                t("Type"), pinned=True)}))
+        _kf = f"_cred_filtro_{usuario}"
+        _f = st.session_state.get(_kf, "")
+        _kp = [("", t("Credentials"), len(creds)),
+               ("vigente", t(":material/check_circle: Valid"), _sts.count("vigente")),
+               ("por_vencer", t(":material/schedule: Expiring"), _sts.count("por_vencer")),
+               ("vencido", t(":material/cancel: Expired"), _sts.count("vencido"))]
+        st.markdown(T.por_fila("cpx_cred_kpis", 4), unsafe_allow_html=True)
+        with st.container(key="cpx_cred_kpis"):
+            for _col, (_s, _l, _v) in zip(st.columns(len(_kp)), _kp):
+                if _col.button(f"{_l}\n\n{_v}", key=f"cpxkpi_cred_{_s or 'todas'}", width="stretch"):
+                    st.session_state[_kf] = "" if _f == _s else _s
+                    st.rerun()
+        _vis = [r for r in creds if not _f or C.status(r.get("ExpiryDate")) == _f]
+        if _f and not _vis:
+            st.caption(t("None in this state."))
+        if not editable:
+            _tarjetas_cred(C, _vis, key_prefix)
+        elif _vis:
+            # ⚠️ v478 · ORDEN pensado para el móvil: lo que se mira primero, primero
+            # (Tipo · Estado · Vence), y lo de contexto detrás. No se oculta ninguna: es
+            # priorizar, no encoger — a 375 px encoger recorta el texto SIN avisar (v408).
+            st.dataframe(pd.DataFrame([{
+                "Tipo": r.get("Type"),
+                "Estado": C.status_label(r.get("ExpiryDate")) if r.get("ExpiryDate") else t("No expiry"),
+                "Vence": _dmy(r.get("ExpiryDate")), "Number": r.get("Number"),
+                "Clase": r.get("Class"), "Issued": _dmy(r.get("IssueDate")),
+            } for r in _vis]), hide_index=True, width="stretch",
+                # ⚠️ `Tipo` ANCLADA: es la identidad, y sin anclar se escapa por la
+                # izquierda justo cuando alguien se desplaza a mirar la fecha.
+                column_config=tabla.cfg(extra={"Tipo": st.column_config.TextColumn(
+                    t("Type"), pinned=True)}))
         # Documentos adjuntos agrupados (antes: botones sueltos apilados bajo la tabla)
         _docs = [r for r in creds if str(r.get("DriveID", "")).strip()]
-        if _docs:
-            with st.expander(f":material/download: Documents ({len(_docs)})", key=f"{key_prefix}_exp_docs"):
-                from core import drive_store
+        if _docs and editable:
+            with st.expander(t(":material/download: Documents ({n})", n=len(_docs)),
+                             key=f"{key_prefix}_exp_docs"):
                 for r in _docs:
-                    try:
-                        st.download_button(f":material/download: {r.get('Type')} — {r.get('File', 'archivo')}",
-                                           data=drive_store.download(str(r.get("DriveID", "")).strip()),
-                                           file_name=r.get("File", "credencial"),
-                                           key=f"{key_prefix}_dl_{r.get('ID')}")
-                    except Exception:
-                        pass
+                    _boton_doc(r, f"{key_prefix}_dl_{r.get('ID')}",
+                               f":material/download: {_lit(r.get('Type'))} — {_lit(r.get('File'))}")
     else:
         st.caption(t("No credentials recorded."))
 
@@ -246,9 +306,9 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
 
 
 def render_my_credentials():
-    """Vista de solo lectura de las credenciales del usuario logueado."""
+    """Vista de solo lectura de las credenciales del usuario logueado.
+    ⚠️ Sin título propio (v627): `_sub_header` ya pinta «Self-service · My credentials»."""
     a = st.session_state.get("auth", {})
-    st.markdown(t("### :material/badge: My credentials"))
     st.caption(t("Your tickets and credentials as recorded by your administrator. Show them on site if you are asked for them."))
     # ⚠️ v478 · Quien ve «vence en 8 días» no puede hacer NADA desde aquí —las carga el
     # administrador— y la pantalla no decía si alguien más lo sabía. Sí lo sabe:
