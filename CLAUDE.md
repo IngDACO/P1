@@ -471,7 +471,10 @@ Estas cinco mordieron en una sola tanda:
     valor cuando el código lo ASIGNA (`proto.set_value`): con `del`/`pop` se queda con el
     viejo y lo devuelve en el clic siguiente. Mordió DOS veces —la caja del parte (v529) y el
     cambio de obra sin salir de la herramienta (v535, visto en v540 con el admin)— y las dos
-    con AppTest en verde, porque AppTest lee el SERVIDOR. Un `data_editor` con clave y filas
+    con AppTest en verde, porque AppTest lee el SERVIDOR. ⚠️ Una tercera en v620: borrar el valor del
+    control al restaurar la sesión, con su guardián en verde porque preparaba a mano una clave que en
+    una sesión recién nacida ni existe. → Lo que depende del navegador se mide en el navegador; para
+    limpiarlo de verdad, recargar (v622, `auth_ui._RECARGAR_SI_VIEJA`). Un `data_editor` con clave y filas
     fijas, además, conserva sus ediciones mientras la forma de los datos no cambie: para
     vaciarlo hace falta OTRA clave. → Para «vaciar», ASIGNAR; y el guardián mira
     `proto.set_value`, no solo `.value`.
@@ -1262,6 +1265,9 @@ Nombre|PIN|Proyecto|Ubicacion|Clock In|Clock Out|Horas|Estado|**Grupo**.
 - ⚠️ Textos como RAW + `get_all_records(numericise_ignore=['all'])` (conserva ceros).
 - ⚠️ Conexión cacheada (`@st.cache_resource`); `is_configured()` solo revisa secrets (no API).
 - Migración: `_cached_ws` agrega la columna Grupo al final si falta (resize + update_cell).
+- ⚠️ **Un olvido de un día anterior** (v621): `clock_out` sin hora y `clock_in` se NIEGAN en el motor, no
+  solo en la pantalla (`olvidos`): cerrarlo «ahora» apuntaba la noche como trabajada (33,39 h medidas).
+  Solo se cierra con la hora real, en `timeclock_ui._aviso_olvido`.
 
 ---
 
@@ -1279,7 +1285,8 @@ Login con **usuario+contraseña**, contraseñas **PBKDF2-SHA256** (nunca texto p
 - Gate en app.py: `if not render_login(): st.stop()`. `_ROL`, `_GRUPO` de `session_state.auth`.
 - Sesión en `session_state`. ⚠️ Sin conexión (un móvil bloqueado), Streamlit la conserva 30 min (v619,
   `config.toml`; por defecto eran 120 s) y después la restaura la cookie de «Keep me signed in»,
-  marcada por defecto. `session_cookie.py`: 7 días.
+  marcada por defecto. `session_cookie.py`: 7 días. Si se restaura sobre una página vieja (más de
+  20 s), esta se recarga una vez (v622); abrir la app no recarga nada.
 - **Sesión ÚNICA por cuenta (v75, licencias, "primero gana"):** `start_session` guarda un token +
   timestamp; un 2do login se BLOQUEA mientras la sesión activa siga viva (`_session_active`:
   token no vacío y heartbeat < `SESSION_TIMEOUT`=180s). `heartbeat(usuario, token)` (throttled 50s en
