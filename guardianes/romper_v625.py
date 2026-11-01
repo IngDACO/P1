@@ -189,7 +189,7 @@ ROTURAS = [
     ("⚠️ la campana no avisa", HU,
      [('            for r in TR.survey_por_decidir(grupo):\n', "            for r in []:\n")]),
     ("⚠️ la campana lleva a la ficha, no a los archivos", HU,
-     [('                            "destino": ("archivos", _pid)})\n', '                            "destino": ("obra", _pid)})\n')]),
+     [('out.append({"texto": _txt, "destino": ("archivos", _pid)})\n', 'out.append({"texto": _txt, "destino": ("obra", _pid)})\n')]),
     ("⚠️ tocar la campana no abre Files", HU,
      [('        st.session_state["_prj_sec_pending"] = "📎 Archivos"\n        navegar("proyectos", "📊 Proyectos")\n',
        '        navegar("proyectos", "📊 Proyectos")\n')]),

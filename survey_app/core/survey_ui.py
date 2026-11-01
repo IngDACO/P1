@@ -1562,7 +1562,10 @@ def render_survey_tab(_ROL, _GRUPO):
                             else ("proyectos", "📊 Proyectos"))
                         st.rerun()
                 else:
-                    st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
+                    # v626 · Al campo no: nombra el informe que no ve, y con un survey ya guardado
+                    # es falso (lo suyo NO se adjunta). Abajo se le dice lo que va a pasar.
+                    if not _es_campo:
+                        st.caption(t("The parameters, the matrix and the interpretations are attached to the project, and the drawing, the matrix and the client report are filed. The project's schedule and progress are NOT touched."))
                     _idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in _proys}
                     _lbl_dest = next((k for k, p in _idmap.items()
                                       if str(p.get("ID", "")) == _dest), None)

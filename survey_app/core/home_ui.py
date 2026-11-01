@@ -1022,12 +1022,19 @@ def _alertas_items(grupo) -> list:
         # esto nadie sabría que hay algo esperando en Files.
         try:
             from core import projects as P, toolruns as TR
+            # v626 · Una línea por OBRA: dos en la misma salían como dos líneas idénticas.
+            _esperan = {}
             for r in TR.survey_por_decidir(grupo):
                 _pid = str(r.get("ProjectID", ""))
-                out.append({"texto": t(":orange[:material/rule:] **{p}** — a survey from the "
-                                       "field is waiting for your decision")
-                            .replace("{p}", str((P.get_project(_pid) or {}).get("Name") or _pid)),
-                            "destino": ("archivos", _pid)})
+                _esperan[_pid] = _esperan.get(_pid, 0) + 1
+            for _pid, _n in _esperan.items():
+                _nom = str((P.get_project(_pid) or {}).get("Name") or _pid)
+                _txt = (t(":orange[:material/rule:] **{p}** — a survey from the field is waiting "
+                          "for your decision").replace("{p}", _nom)
+                        if _n == 1 else
+                        t(":orange[:material/rule:] **{p}** — {n} surveys from the field are "
+                          "waiting for your decision").replace("{n}", str(_n)).replace("{p}", _nom))
+                out.append({"texto": _txt, "destino": ("archivos", _pid)})
         except Exception as e:
             logger.warning("campana: no se pudieron leer los surveys por decidir: %s", e)
     try:

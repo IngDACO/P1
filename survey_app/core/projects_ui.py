@@ -929,6 +929,13 @@ def _archivos_section(pid: str):
         _subir_documento(pid, es_campo, sube_tipos, usuario)
         return
 
+    # v626 · La campana trae aquí: que la lista diga cuál es, no solo que hay algo
+    _esperan = [maps.literal_md(r.get("File")) for r in runs
+                if toolruns.datos_de(r).get("por_decidir") and str(r.get("DriveID", "")).strip()]
+    if puede_borrar and _esperan:
+        st.info(t(":material/rule: Waiting for your decision: **{x}**. Tap its row below.",
+                  x=", ".join(_esperan)))
+
     # ── Barra para acotar: buscar + tipo (con contadores) + orden ──
     cuenta = Counter(e["tipo"] for e in entries)
     tipos = ["Todos"] + [t for t in _TIPO_ORDER if t in cuenta] \
@@ -5693,6 +5700,10 @@ def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
     v590 · `bloque="start"` para ir al COMIENZO de una sección larga (las cifras de los
     resultados del Survey): con `nearest`, una sección más alta que la vista se quedaba con
     su final abajo y su título fuera de la pantalla. El bloque envuelve el TÍTULO.
+
+    ⚠️ v626 · El margen de arriba es el de `stHeader`: mide 60 px, va encima de la página y es
+    transparente. Sin él, lo que se quería ver quedaba DEBAJO (medido en producción a 375 px:
+    las cifras de Belting a 0 px, con «Fork» encima de «HGP»).
     """
     if not st.session_state.pop(marca, False):
         return
@@ -5715,7 +5726,8 @@ def _bajar_a(clave: str, marca: str, bloque: str = "nearest"):
             "function ir(){var c=D.querySelector('.st-key-" + clave + "'),"
             "a=D.querySelector('[data-testid=\"stApp\"]'),"
             "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
-            "if(c&&s!=='running'){c.scrollIntoView({behavior:'smooth',"
+            "if(c&&s!=='running'){c.style.scrollMarginTop='68px';"
+            "c.scrollIntoView({behavior:'smooth',"
             "block:'" + bloque + "'});return;}"
             "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();"
             "</script>")
