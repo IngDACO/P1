@@ -410,11 +410,16 @@ chk("⚠️ ninguna fila de tarjetas con su propio flex (eran once)", not _flex,
 # ⚠️ v593 · Ídem para Rails: sus cifras también son botones (`cpxkpi_rc_*` / `cpxkpi_rc2_*`).
 # ⚠️ v594 · Y para Buffers (`cpxkpi_bc_*`).
 # ⚠️ v595 · Y para Belting (`cpxkpi_belt_*`): su fila HTML de base 96 px ya no existe.
-for _f, _base in (("prestart_ui.py", 110), ("timeclock_ui.py", 132)):
+# ⚠️ v621 · Y para Timeclock (`cpxkpi_tc_*`): su fila HTML de base 132 px ya no existe.
+for _f, _base in (("prestart_ui.py", 110),):
     _s = _src("core/" + _f)
     chk("%s: la fila es `cpx-kpis` con la base de sus tarjetas (%d px)" % (_f, _base),
         'class="cpx-kpis" style="--cpx-min:%dpx;' % _base in _s
         and "min-width:%dpx" % _base in _s)
+_stc = _src("core/timeclock_ui.py")
+chk("timeclock_ui.py: sus cifras son botones en la rejilla del tema, sin flex propio",
+    'theme.por_fila("cpx_tc_kpis", 2)' in _stc and 'key="cpx_tc_kpis"' in _stc
+    and "display:flex;gap:10px" not in _stc)
 _spl = _src("core/plumb_ui.py")
 chk("plumb_ui.py: sus cifras son botones en la rejilla del tema (`T.por_fila`), sin flex propio",
     'T.por_fila("cpx_plb_kpis", 5)' in _spl and 'key="cpx_plb_kpis"' in _spl

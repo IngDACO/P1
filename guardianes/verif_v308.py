@@ -165,8 +165,8 @@ check("las tarjetas son 4 y ninguna es 'Estado'",
 check("hay franja de estado", 'border-left:4px solid {_col}' in _src)
 # ⚠️ CADUCADO por v439 (i18n F2): la etiqueta pasó al inglés vía t(). Lo que la
 # regla protege es que la tarjeta de la SEMANA exista (resumen_semana, v308).
-check("y tarjeta de la semana",
-      '_tarjeta(t("This week")' in _src or '_tarjeta("Esta semana"' in _src)
+# (v621 · ídem: las tarjetas son botones activos, `cpxkpi_tc_*`)
+check("y tarjeta de la semana", '("sem", t("This week")' in _src)
 
 print("\n== 6) nombres libres + compila + importa ==")
 import builtins

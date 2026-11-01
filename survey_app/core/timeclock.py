@@ -551,6 +551,25 @@ def _msg_choque(r, tipo) -> str:
             .replace("{what}", etq).replace("{a}", _a).replace("{b}", _b))
 
 
+def _de_otro_dia(clock_in_str) -> bool:
+    """¿Esta entrada empezó antes de hoy? Una hora ilegible no bloquea a nadie."""
+    try:
+        return datetime.strptime(str(clock_in_str).strip(), FMT).date() \
+            < datetime.strptime(_now(), FMT).date()
+    except ValueError:
+        return False
+
+
+def olvidos(sess) -> dict:
+    """Las sesiones de `open_sessions` que siguen abiertas desde un día anterior: {tipo: sesión}."""
+    return {k: s for k, s in (sess or {}).items() if s and _de_otro_dia(s.get("clock_in"))}
+
+
+def _msg_olvido() -> str:
+    return t("You have an entry from a previous day still open. Close it stating what time you "
+             "finished, in Timeclock.")
+
+
 def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
              tipo: str = TIPO_PROYECTO, usuario: str = "",
              proyecto_id: str = "", in_ts=None) -> tuple:
@@ -575,6 +594,13 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
         records = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
     except Exception as e:
         return False, f"{t('Error reading the sheet')}: {e}"
+
+    # ⚠️ v621 · Con una entrada de un día anterior abierta no se ficha: una obra de hoy colgada de
+    # la jornada de ayer se queda sin jornada al cerrar el olvido, y esas horas no se pagan.
+    if any(_matches(r, usuario, nombre, grupo)
+           and str(r.get("Status", "")).strip().upper() == "ABIERTO"
+           and _de_otro_dia(r.get("Clock In")) for r in records):
+        return False, _msg_olvido()
 
     # ¿Ya hay una sesión abierta del MISMO tipo para este usuario+grupo?
     for r in records:
@@ -606,8 +632,16 @@ def clock_in(nombre: str, proyecto: str, ubicacion: str, grupo: str = "",
     except Exception as e:
         return False, f"{t('Error writing the timeclock entry')}: {e}"
     _invalidate_records()
-    etq = t("Workday (general)") if tipo == TIPO_GENERAL else t("Project")
-    return True, f"✅ Clock IN {etq} {t('at')} {_ts_legible(in_ts)}."
+    # v621 · Dice DÓNDE: «Clock IN Project at 16:18» no decía a qué obra.
+    if tipo == TIPO_GENERAL:
+        return True, "✅ " + t("Workday opened at {h}.", h=_ts_legible(in_ts))
+    return True, "✅ " + t("Clocked in to {p} at {h}.", p=_nombre_md(proyecto), h=_ts_legible(in_ts))
+
+
+def _nombre_md(proyecto) -> str:
+    """El nombre de la obra para un aviso: es markdown, y un «*» lo pondría en cursiva."""
+    from core.maps import literal_md
+    return literal_md(proyecto) or t("the project")
 
 
 def _ts_legible(ts) -> str:
@@ -650,17 +684,25 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
     # Buscar la sesión abierta más reciente del tipo (de abajo hacia arriba)
     target_row = None
     target_in  = None
+    target_prj = ""
     for idx, r in enumerate(records):
         if (_matches(r, usuario, nombre, grupo)
                 and str(r.get("Status", "")).strip().upper() == "ABIERTO"
                 and _tipo_of(r) == tipo):
             target_row = idx + 2   # +2: fila 1 = cabecera, records 0-indexado
             target_in  = str(r.get("Clock In", ""))
+            target_prj = str(r.get("Project", ""))
 
     if target_row is None:
         etq = t("workday") if tipo == TIPO_GENERAL else t("project")
         return False, f"{t('You have no open clock in for')} {etq}."
 
+    # ⚠️ v621 · Cerrar «ahora» una entrada de ayer registra la noche como trabajada. Medido en
+    # producción: «Close workday and project» sobre una jornada de ayer a las 07:00 apuntó 33,39 h
+    # sin avisar. La pantalla pedía la hora real (v164), pero el botón de al lado no. Aquí, y no
+    # solo en la pantalla: el menú lateral, cambiar de obra y lo que venga pasan por esta función.
+    if out_ts is None and _de_otro_dia(target_in):
+        return False, _msg_olvido()
     if out_ts is None:
         out_ts = _now()
     elif hasattr(out_ts, "strftime"):
@@ -686,8 +728,11 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
         return False, f"{t('Error updating the timeclock entry')}: {e}"
 
     _invalidate_records()
-    return True, (f"✅ Clock OUT {t('at')} {_ts_legible(out_ts)}. "
-                  f"{t('Hours worked')}: {horas}.")
+    # v621 · «Clock OUT at 16:18» salía igual al dejar una obra que al cerrar el día.
+    if tipo == TIPO_GENERAL:
+        return True, "✅ " + t("Workday closed at {h} · {n} h.", h=_ts_legible(out_ts), n=horas)
+    return True, "✅ " + t("Left {p} at {h} · {n} h.", p=_nombre_md(target_prj),
+                          h=_ts_legible(out_ts), n=horas)
 
 
 def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
@@ -910,7 +955,11 @@ def cerrar_jornada(nombre: str, grupo: str = "", usuario: str = "") -> tuple:
     """Cierra la jornada general y, de paso, el segmento de proyecto si sigue abierto."""
     abiertas = open_sessions(nombre, grupo, usuario)
     if abiertas.get(TIPO_PROYECTO):
-        clock_out(nombre, grupo, tipo=TIPO_PROYECTO, usuario=usuario)
+        # ⚠️ v621 · Si no se pudo cerrar la obra, tampoco la jornada: seguiría sumando horas sola,
+        # sin jornada, y el aviso diría que todo se cerró.
+        ok, msg = clock_out(nombre, grupo, tipo=TIPO_PROYECTO, usuario=usuario)
+        if not ok:
+            return False, msg
     return clock_out(nombre, grupo, tipo=TIPO_GENERAL, usuario=usuario)
 
 

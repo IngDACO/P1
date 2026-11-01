@@ -70,9 +70,9 @@ ROTURAS = [
     ("vuelve «— cambiar a… —»",
      TU, [("vacio=t(\"— switch to… —\"))", "vacio=\"— cambiar a… —\")")]),
 
+    # (v621 · re-anclada: el día va en su propia columna, en `_fila_hist`)
     ("el historial vuelve a mes/día",
-     TU, [("f\"{f['entrada'][8:10]}/{f['entrada'][5:7]} {f['entrada'][11:16]}\"",
-           "f[\"entrada\"][5:16].replace(\"-\", \"/\")")]),
+     TU, [("f\"{_e[8:10]}/{_e[5:7]}\"", "f\"{_e[5:7]}/{_e[8:10]}\"")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

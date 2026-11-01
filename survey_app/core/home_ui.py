@@ -251,7 +251,8 @@ def _chip_fichaje(grupo):
         return                                  # la barra nunca puede tumbar la pantalla
     _prj = _ses.get(timeclock.TIPO_PROYECTO)
     _gen = _ses.get(timeclock.TIPO_GENERAL)
-    _txt = (t("On a project") if _prj else
+    # v621 · Una entrada de otro día abierta no es «estar en una obra»: la barra lleva a cerrarla
+    _txt = (t("Entry left open") if timeclock.olvidos(_ses) else t("On a project") if _prj else
             (t("Workday open, no project") if _gen else t("Not clocked in")))
     if st.button(_txt, key="cpxtop_fichaje", width="stretch",
                  help=t(":material/schedule: Time clock")):
@@ -708,8 +709,8 @@ def _banda_prestart():
         ses = timeclock.open_sessions(a.get("nombre") or a.get("usuario", ""),
                                       a.get("grupo", ""), a.get("usuario", ""))
         prj = ses.get(timeclock.TIPO_PROYECTO)
-        if not prj:
-            return                  # sin obra fichada no hay Pre-Start que reclamar
+        if not prj or timeclock.olvidos(ses):
+            return                  # sin obra fichada HOY no hay Pre-Start que reclamar (v621)
         pid = str(prj.get("proyecto_id", "") or "")
         if not pid:
             return

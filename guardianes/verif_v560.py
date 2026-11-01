@@ -341,9 +341,10 @@ try:
 finally:
     timeclock._now = _n0
 _tcs = fuente(os.path.join("core", "timeclock.py"))
+# v621 · Al día con su razón: los avisos dicen dónde («Left Bondi at 16:18 · 0.01 h»); los dos de
+# entrada y los dos de salida siguen con la hora legible.
 chk("los avisos de entrada y salida usan la hora legible",
-    "Clock IN {etq} {t('at')} {_ts_legible(in_ts)}" in _tcs
-    and "Clock OUT {t('at')} {_ts_legible(out_ts)}" in _tcs)
+    _tcs.count("h=_ts_legible(in_ts)") == 2 and _tcs.count("h=_ts_legible(out_ts)") == 2)
 
 print("")
 print("=== %d comprobaciones · %d fallos ===" % (n_ok + len(fallos), len(fallos)))

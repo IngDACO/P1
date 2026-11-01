@@ -70,12 +70,15 @@ def funcion(src, nombre):
 # ── 1 ────────────────────────────────────────────────────────────────────────
 print("1. Fichaje: la ACCION antes del resumen (medido: 618 -> arriba del pliegue)")
 i_acc = SRC_T.index("col_jor, col_prj = st.columns")
-i_kpi = SRC_T.index("tarj = [_tarjeta")
+# v621 · Al día con su razón: las cuatro cifras ya son BOTONES activos (`cpxkpi_tc_*`), no
+# `_tarjeta` en HTML. El principio es el mismo: la acción, delante, y ninguna cifra menos.
+i_kpi = SRC_T.index('_K = [("jorn", t("Today\'s workday")')
 (ok if i_acc < i_kpi else fallo)("las dos acciones van antes que las tarjetas")
 # ⚠️ Y no se quito NI UNA cifra: esto es priorizar, no encoger (v408). Si alguien
 # «arregla» el alto borrando tarjetas, salta aqui.
-(ok if SRC_T.count("_tarjeta(t(") == 4 else fallo)(
-    "siguen estando las 4 tarjetas", SRC_T.count("_tarjeta(t("))
+_cuatro = ['("jorn", t(', '("proy", t(', '("sina", t(', '("sem", t(']
+(ok if all(SRC_T.count(x) == 1 for x in _cuatro) else fallo)(
+    "siguen estando las 4 tarjetas", [SRC_T.count(x) for x in _cuatro])
 (ok if "resumen_semana" in SRC_T else fallo)("y el resumen de la semana sigue")
 # `_hechos` tiene que existir aunque el roster falle: dentro del try quedaba
 # indefinido y el bloque nuevo daria NameError (la clase de fallo de v370/v423).

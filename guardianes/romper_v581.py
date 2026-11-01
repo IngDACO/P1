@@ -91,9 +91,9 @@ ROTURAS = [
        "  display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px;\n")]),
     ("…o la rejilla sin la base de la tarjeta", "core/theme.py",
      [("minmax(min(100%, var(--cpx-min, 150px)), 1fr)", "minmax(min(100%, var(--cpx-min, 104px)), 1fr)")]),
-    ("⚠️ Timeclock vuelve a su flex propio", "core/timeclock_ui.py",
-     [("""    st.markdown('<div class="cpx-kpis" style="--cpx-min:132px;margin:0 0 12px">'\n""",
-       """    st.markdown('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'\n""")]),
+    # ⚠️ v621 · Re-anclada con su razón: las cifras de Timeclock ya son botones en la rejilla del tema
+    ("⚠️ Timeclock pierde la rejilla del tema", "core/timeclock_ui.py",
+     [("""    st.markdown(theme.por_fila("cpx_tc_kpis", 2), unsafe_allow_html=True)\n""", "")]),
     # ⚠️ v595 · Re-anclada con su razón: la fila HTML de Belting (`_kpi_row`, base 96 px) ya no
     # existe — sus tres cifras son BOTONES activos en la rejilla del tema (`T.por_fila`), como
     # la plomada, Rails y Buffers desde v592-v594. La rotura rompe lo que ahora la sostiene.

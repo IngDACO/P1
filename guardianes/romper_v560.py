@@ -117,7 +117,8 @@ ROTURAS = [
      [("    return d.strftime(\"%H:%M\") if d.date() == hoy else d.strftime(\"%d/%m/%Y %H:%M\")\n",
        "    return str(ts)\n")]),
     ("el aviso de salida vuelve a la marca de la hoja", TC,
-     [("Clock OUT {t('at')} {_ts_legible(out_ts)}", "Clock OUT {t('at')} {out_ts}")]),
+     [('t("Workday closed at {h} · {n} h.", h=_ts_legible(out_ts), n=horas)',
+       't("Workday closed at {h} · {n} h.", h=out_ts, n=horas)')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

@@ -234,9 +234,13 @@ _MIOS = [{"tipo": "general", "proyecto": "", "entrada": "2026-10-08 16:20:05",
           "salida": "2026-09-07 17:06:30", "horas": 0.0, "abierto": False}]
 at = pantalla(_fk_mios=_MIOS)
 _df = at.dataframe[0].value
-_col = next(c for c in _df.columns if str(c) == "In")
-chk("⚠️ 8 de octubre a las 16:20 → «08/10 16:20» (decía «10/08»)",
-    list(_df[_col]) == ["08/10 16:20", "07/09 17:06"], list(_df[_col]))
+# v621 · Al día con su razón: el día va en su propia columna (para que quepa en el móvil) y la
+# hora en la siguiente. Lo que esto protege sigue igual: día/mes, no mes/día.
+_col = next(c for c in _df.columns if str(c) == "Day")
+chk("⚠️ 8 de octubre → «08/10» (decía «10/08»)",
+    list(_df[_col]) == ["08/10", "07/09"], list(_df[_col]))
+_colh = next(c for c in _df.columns if str(c) == "Time")
+chk("…y su hora, en la columna de al lado", list(_df[_colh])[0] == "16:20 → 16:21", list(_df[_colh]))
 
 # ─────────────────────────────────────────────────────────────────────────────
 sec("4. Los desplegables con controles llevan clave (no se cierran solos)")

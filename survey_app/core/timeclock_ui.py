@@ -10,6 +10,7 @@ Hasta v149 solo el conductor tenía los dos y el resto un único reloj de
 proyecto, lo que producía datos incoherentes (gente con horas de proyecto y 0
 de jornada). Ahora hay UNA función en vez de dos que divergían.
 """
+import html
 from datetime import datetime
 
 from core.i18n import t
@@ -33,6 +34,8 @@ logger = logging.getLogger(__name__)
 from core import prestart
 from core import tabla
 from core import incrustar
+from core import theme
+from core.maps import literal_md
 
 _AZUL, _VERDE, _GRIS, _ROJO = "#1a3a5c", "#1e8449", "#6b7280", "#c0392b"
 
@@ -109,8 +112,8 @@ def _ps_descartar():
            on_dismiss=_ps_descartar)
 def _dialogo_prestart(obra: str):
     """Pop-up tras fichar cuando la obra no tiene Pre-Start del día (v374/v375)."""
-    st.markdown(f"You have just clocked in to **{obra}** and there is still "
-                "**no Pre-Start** recorded on that site today.")
+    st.markdown(t("You have just clocked in to **{o}** and there is still **no Pre-Start** "
+                  "recorded on that site today.", o=literal_md(obra)))
     st.caption(t("It is the safety talk before starting: one per site per day. If you have already held it, record it so the signed PDF exists."))
     c1, c2 = st.columns(2)
     if c1.button(t(":material/health_and_safety: Do it now"), type="primary",
@@ -136,8 +139,8 @@ def _pend_firma_de(pid, grupo) -> dict:
            on_dismiss=_ps_descartar)
 def _dialogo_firmar(obra: str, quien: str = ""):
     """Pop-up cuando la charla YA está hecha pero tú no la has firmado (v403)."""
-    st.markdown(f"You have just clocked in to **{obra}**. Today's safety talk is already "
-                "recorded, but **you are not among those who signed it**.")
+    st.markdown(t("You have just clocked in to **{o}**. Today's safety talk is already recorded, "
+                  "but **you are not among those who signed it**.", o=literal_md(obra)))
     st.caption(t("The attendee list is the record of who received the talk. Your "
                  "signature is added to that same Pre-Start, on an annex sheet with "
                  "its time.")
@@ -250,11 +253,24 @@ def render_sidebar_chrono():
     gen = sess.get(timeclock.TIPO_GENERAL)
     prj = sess.get(timeclock.TIPO_PROYECTO)
 
-    if gen or prj:
+    if timeclock.olvidos(sess):
+        _sidebar_olvido()
+    elif gen or prj:
         _sidebar_fichado(nombre, usuario, grupo, gen, prj)
     else:
         _sidebar_sin_fichar(nombre, usuario, grupo, rol)
     st.markdown("---")
+
+
+def _sidebar_olvido():
+    """v621 · Una entrada de un día anterior abierta: ni cronómetro de 33 horas ni botones de
+    cerrar «ahora». Lleva a Timeclock, que pide la hora real (`_aviso_olvido`)."""
+    st.markdown(t("###### :material/schedule: TIME CLOCK"))
+    st.warning(t(":material/warning: You have an entry from a previous day still open."))
+    if st.button(t(":material/schedule: Close it now"), width="stretch", type="primary",
+                 key="sb_tc_olvido"):
+        from core.home_ui import navegar          # perezoso: evita el ciclo
+        navegar("fichaje")
 
 
 def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
@@ -339,6 +355,15 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
     if _hechos:
         st.caption(t("Your assignment for today. A different site?"))
 
+    # v621 · Con UNA sola obra propia, un toque: como en la pantalla (v480), que aquí seguía
+    # pidiendo elegir de una lista de uno.
+    if _propios and len(idmap) == 1 and not _hechos:
+        _lbl1, _p1 = next(iter(idmap.items()))
+        if st.button(f"{t(':material/check_circle: Clock in to')} {literal_md(_lbl1)}",
+                     width="stretch", type="primary", key="sb_tc_solo"):
+            _fichar(nombre, nom_de.get(_p1, ""), grupo, usuario, _p1)
+        return
+
     _pid = ui.elegir(t("Project"), idmap, key="sb_tc_prj_sel", vacio=t("— pick the site —"))
     if st.button(t(":material/check_circle: Clock in"), width="stretch",
                  type=("secondary" if _hechos else "primary"),
@@ -379,20 +404,6 @@ def _armar_aviso_prestart(pid, nom_obra, grupo):
         pass                          # sin pre-starts configurados: no se estorba
 
 
-def _tarjeta(titulo, valor, pie="", color=None, activo=False):
-    """Tarjeta de estado, mismo lenguaje visual que los KPI de los proyectos."""
-    borde = f"border-left:4px solid {color};" if (activo and color) else ""
-    col = f"color:{color};" if color else ""
-    return (
-        '<div style="background:#ffffff;border:1px solid #e6e9ef;border-radius:12px;'
-        f'padding:12px 14px;flex:1;min-width:132px;{borde}">'
-        f'<div style="font-size:12px;color:#6b7280;line-height:1.2;">{titulo}</div>'
-        f'<div style="font-size:26px;font-weight:700;margin-top:2px;{col}">{valor}</div>'
-        + (f'<div style="font-size:11px;color:#667080;margin-top:2px;">{pie}</div>'
-           if pie else "")
-        + "</div>")
-
-
 def _es_hoy(clock_in_str) -> bool:
     try:
         return (datetime.strptime(str(clock_in_str), timeclock.FMT).date()
@@ -401,49 +412,64 @@ def _es_hoy(clock_in_str) -> bool:
         return True
 
 
-def _aviso_olvido(nombre, grupo, usuario, sess):
-    """Sesión abierta de un día anterior: la cierra a la hora que el usuario indique.
+def _privacidad():
+    """⚠️ v621 · Decía que la oficina solo veía el resumen del grupo, y era falso: ve las horas de
+    cada persona, en qué obra está y cuánto lleva fichada en vivo. Es un compromiso escrito hacia
+    quien ficha."""
+    st.caption(t(":material/lock: Other workers cannot see your time entries. The office sees "
+                 "your hours and the sites you clock in to."))
+
+
+def _aviso_olvido(nombre, grupo, usuario, sess) -> bool:
+    """Sesión abierta de un día anterior: la cierra a la hora que el usuario indique. True si hay.
 
     Cerrarla «ahora» registraría como trabajadas todas las horas de la noche que
     nadie hizo. Por eso se pide la hora REAL de fin (v164) y se cierra con ella.
     """
     from datetime import datetime as _dt, timedelta as _td
-    stale = {tipo: s for tipo, s in sess.items()
-             if s and not _es_hoy(s["clock_in"])}
+    stale = timeclock.olvidos(sess)
     if not stale:
-        return
-    lineas, ci_min = [], None
+        return False
+    lineas, ci_min, ci_max = [], None, None
     for tipo, s in stale.items():
         etq = (t("general workday") if tipo == timeclock.TIPO_GENERAL
-               else f"{t('project')} «{s['proyecto'] or '—'}»")
-        lineas.append(f"- **{etq}** {t('open since')} **{s['clock_in']}**")
+               else f"{t('project')} «{literal_md(s['proyecto'] or '—')}»")
+        # v621 · la fecha DD/MM/YYYY, como en toda la app: salía tal cual se guarda
+        lineas.append(f"- **{etq}** {t('open since')} **{timeclock._ts_legible(s['clock_in'])}**")
         try:
             # ⚠️ NO llamar `t` a esta variable: taparía la función de idioma en el
             # ámbito ENTERO de la función y las etiquetas de arriba darían
             # UnboundLocalError (el fallo del glosario de v437).
             _ci = _dt.strptime(s["clock_in"], timeclock.FMT)
             ci_min = _ci if ci_min is None or _ci < ci_min else ci_min
+            ci_max = _ci if ci_max is None or _ci > ci_max else ci_max
         except Exception:
             pass
     st.warning(t(":material/warning: You have time entries from a previous day **still open**:\n")
                + "\n".join(lineas)
                + t("\n\nClose them stating **what time you actually finished** — "
                    "otherwise the overnight hours would count as worked."))
-    sugerido = min(ci_min + _td(hours=8), clock.now()) if ci_min else clock.now()
+    sugerido = (min(max(ci_min + _td(hours=8), ci_max + _td(minutes=1)), clock.now())
+                if ci_min else clock.now())
     c1, c2 = st.columns(2)
     d_fin = c1.date_input(t("Day you finished"), value=sugerido.date(), key="olv_d", format="DD/MM/YYYY")
     t_fin = c2.time_input(t("Time"), value=sugerido.time().replace(second=0, microsecond=0),
                           key="olv_t")
     fin = datetime.combine(d_fin, t_fin)
-    ok_rango = ci_min is not None and ci_min < fin <= clock.now()
+    # ⚠️ v621 · Después de la ÚLTIMA entrada: la jornada y la obra se cierran a la misma hora, y
+    # antes de la de la obra (que empieza después) esta quedaría con horas negativas.
+    ok_rango = ci_max is not None and ci_max < fin <= clock.now()
     if not ok_rango:
         st.caption(t(":orange[:material/warning:] The finish time must be between the clock-in and now."))
     if st.button(t(":material/cancel: Close forgotten session"), key="olv_btn", width="stretch",
                  disabled=not ok_rango):
+        _mal = []
         for tipo in stale:
             _s = stale[tipo]
-            _ok, _ = timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario,
-                                         out_ts=fin)
+            _ok, _m = timeclock.clock_out(nombre, grupo, tipo=tipo, usuario=usuario,
+                                          out_ts=fin)
+            if not _ok:
+                _mal.append(_m)
             # ⚠️ Se anota DESPUÉS de cerrar y su fallo no deshace el cierre: la
             # sesión ya estaba sangrando horas contra el reloj y pararla es lo
             # urgente. Si el apunte falla, queda en el log (criterio de v342).
@@ -455,8 +481,13 @@ def _aviso_olvido(nombre, grupo, usuario, sess):
                         motivo=t("Forgotten clock out (session left open)"))
                 except Exception as _e:
                     logger.warning("no se pudo anotar la corrección: %s", _e)
-        flash.exito(t("Session closed at the time given. Your supervisor will review it."))
+        # ⚠️ v621 · El «cerrado» se decía aunque el cierre hubiera fallado.
+        if _mal:
+            flash.error(_mal[0])
+        else:
+            flash.exito(t("Session closed at the time given. Your supervisor will review it."))
         st.rerun()
+    return True
 
 
 def _sesiones_de_hoy(nombre, grupo, usuario) -> list:
@@ -543,8 +574,9 @@ def _corregir_horas(nombre, grupo, usuario, sess):
         # salida se pone al cerrar, y ofrecer las dos invitaría a inventarse una.
         _campos = [correcciones.CAMPO_IN] + ([correcciones.CAMPO_OUT]
                                              if _r.get("salida") else [])
-        _cual = st.radio(t("What was wrong?"), _campos, horizontal=True,
-                         key="cor_campo")
+        # v621 · Con una sola opción no hay nada que preguntar; con dos, el segmentado de la app.
+        _cual = (st.radio(t("What was wrong?"), _campos, horizontal=True, key="cpxseg_cor_campo",
+                          format_func=lambda c: t(c)) if len(_campos) > 1 else _campos[0])
         _act = str(_r.get("entrada") if _cual == correcciones.CAMPO_IN
                    else _r.get("salida"))
         try:
@@ -665,6 +697,18 @@ def _mezclar(a, b) -> list:
     return out
 
 
+def _fila_hist(f) -> dict:
+    """Un fichaje en una fila que quepa en el móvil (v621): antes salían Tipo y Obra delante, y la
+    entrada, la salida y las horas se quedaban fuera de la pantalla a 375 px. La obra va la
+    última, y la salida lleva su día si no es el de la entrada (decía solo «16:23» del día siguiente)."""
+    _e, _s = f["entrada"], f["salida"]
+    _h = _s[11:16] if _s[:10] == _e[:10] else f"{_s[8:10]}/{_s[5:7]} {_s[11:16]}"
+    return {t("Day"): f"{_e[8:10]}/{_e[5:7]}",
+            t("Time"): f"{_e[11:16]} → {_h if _s else t('in progress')}",
+            t("Hours"): f"{f['horas']:.2f}" if _s else "—",
+            t("Entry"): f["proyecto"] or t("Workday")}
+
+
 def render_timeclock_tab():
     st.markdown(t("### :material/schedule: Time clock"))
     if not timeclock.is_configured():
@@ -682,9 +726,12 @@ def render_timeclock_tab():
     prj  = sess.get(timeclock.TIPO_PROYECTO)
     hoy  = timeclock.resumen_hoy(nombre, grupo, usuario)
 
-    st.caption(f"**{nombre}**" + (f"  ·  {t('group')} **{grupo}**" if grupo else "")
-               + t("  ·  your time entries are private."))
-    _aviso_olvido(nombre, grupo, usuario, sess)
+    st.caption(f"**{literal_md(nombre)}**" + (f"  ·  {t('group')} **{literal_md(grupo)}**" if grupo else ""))
+    # ⚠️ v621 · Con una entrada de otro día abierta, lo ÚNICO que hay es cerrarla: los botones de
+    # siempre la cerrarían «ahora» y las tarjetas enseñarían 16 h de hoy que nadie trabajó.
+    if _aviso_olvido(nombre, grupo, usuario, sess):
+        _privacidad()
+        return
     _corregir_horas(nombre, grupo, usuario, sess)
 
     # ── Estado: una FRANJA, no una tarjeta KPI (v308) ──
@@ -694,7 +741,8 @@ def render_timeclock_tab():
     _est = (t("On a project") if prj else
             (t("Workday open, no project") if gen else t("Not clocked in")))
     _col = _VERDE if prj else (_AZUL if gen else _GRIS)
-    _det = (f"{prj['proyecto'] or '—'} · {t('since')} {prj['clock_in'][11:16]}" if prj else
+    # v621 · el nombre va dentro de HTML: un «<» se comería el resto de la franja
+    _det = (f"{html.escape(prj['proyecto'] or '—')} · {t('since')} {prj['clock_in'][11:16]}" if prj else
             (f"{t('since')} {gen['clock_in'][11:16]}" if gen else
              t("open the workday or clock straight in to a project")))
     st.markdown(
@@ -712,7 +760,8 @@ def render_timeclock_tab():
     # persona abre esa misma mañana.
     # ⚠️ Solo si NO esta fichado: quien ya ficho no va a avisar de una baja, y el
     # boton solo seria ruido en la pantalla que mas se usa.
-    if rol == "field" and not gen and not prj:
+    # ⚠️ v621 · Ni quien ya ha trabajado hoy: tras cerrar la jornada seguía saliendo.
+    if rol == "field" and not gen and not prj and hoy["general"] <= 0 and hoy["proyecto"] <= 0:
         if st.button(t(":material/sick: I cannot make it today — report sick leave"),
                      key="tc_baja", width="stretch"):
             from core.home_ui import navegar          # perezoso: evita el ciclo
@@ -772,7 +821,7 @@ def render_timeclock_tab():
         _nom_de = {str(p.get("ID", "")): str(p.get("Name", "")) for p in proys}
 
         if prj:
-            st.markdown(f"You are on **{prj['proyecto'] or '—'}**")
+            st.markdown(t("You are on **{p}**", p=literal_md(prj['proyecto'] or '—')))
             _chronometer(prj["clock_in"], t("On this project"), _VERDE, "chrono_prj")
             c1, c2 = st.columns(2)
             if c1.button(t(":material/cancel: Leave the project"), width="stretch", key="tc_prj_out"):
@@ -842,7 +891,7 @@ def render_timeclock_tab():
             if propios and len(idmap) == 1 and not _hechos:
                 _lbl1 = next(iter(idmap))
                 _pid1 = idmap[_lbl1]
-                if st.button(f"{t(':material/check_circle: Clock in to')} {_lbl1}",
+                if st.button(f"{t(':material/check_circle: Clock in to')} {literal_md(_lbl1)}",
                              width="stretch", type="primary", key="tc_prj_solo"):
                     _fichar(nombre, _nom_de.get(_pid1, ""), grupo, usuario, _pid1)   # v546
             else:
@@ -868,47 +917,57 @@ def render_timeclock_tab():
         sem = timeclock.resumen_semana(nombre, grupo, usuario)
     except Exception:
         sem = {"general": 0.0, "proyecto": 0.0, "dias": 0}
-    tarj = [_tarjeta(t("Today's workday"), f"{hoy['general']:.2f} h",
-                     t("the paid time"), _AZUL, bool(gen)),
-            _tarjeta(t("Charged to projects"), f"{hoy['proyecto']:.2f} h",
-                     f"{len(hoy['por_proyecto'])} {t('project(s)')}", _VERDE, bool(prj)),
-            _tarjeta(t("Unassigned"), f"{hoy['sin_asignar']:.2f} h",
-                     t("travel, waiting or a project not clocked in"),
-                     _ROJO if hoy["sin_asignar"] > 2 else None),
-            _tarjeta(t("This week"), f"{sem['general']:.2f} h",
-                     f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}", _AZUL)]
-    # v581 · rejilla: a 846 px con el menú la 4ª tarjeta caía sola a 472 px de ancho
-    st.markdown('<div class="cpx-kpis" style="--cpx-min:132px;margin:0 0 12px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    # v621 · ACTIVAS (eran HTML): cada una baja a lo que cuenta. Dos por fila a cualquier ancho: a
+    # 800 px con el menú eran 3 + 1 (v581), y con cuatro cifras 2 + 2 no deja ninguna suelta.
+    _K = [("jorn", t("Today's workday"), f"{hoy['general']:.2f} h", t("the paid time")),
+          ("proy", t("Charged to projects"), f"{hoy['proyecto']:.2f} h",
+           f"{len(hoy['por_proyecto'])} {t('project(s)')}"),
+          ("sina", t("Unassigned"), f"{hoy['sin_asignar']:.2f} h",
+           t("travel, waiting or a project not clocked in")),
+          ("sem", t("This week"), f"{sem['general']:.2f} h",
+           f"{t('Monday to today')} · {sem['dias']} {t('day(s)')}")]
+    if hoy["sin_asignar"] > 2:
+        st.markdown("<style>.st-key-cpxkpi_tc_sina button p:nth-child(2):not(:last-child)"
+                    "{color:#c0392b!important}</style>", unsafe_allow_html=True)
+    st.markdown(theme.por_fila("cpx_tc_kpis", 2), unsafe_allow_html=True)
+    with st.container(key="cpx_tc_kpis"):
+        for _col, (_s, _l, _v, _pie) in zip(st.columns(len(_K)), _K):
+            if _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_tc_{_s}", width="stretch"):
+                st.session_state["_tc_hist_gen"] = int(st.session_state.get("_tc_hist_gen", 0)) + 1
+                st.session_state["_tc_bajar"] = True
 
-    # ── Lo de hoy, por proyecto ──
-    if hoy["por_proyecto"]:
-        st.markdown("---")
-        st.markdown(t("**Charged today**"))
-        _tot = sum(hoy["por_proyecto"].values()) or 1
-        for nom, h in sorted(hoy["por_proyecto"].items(), key=lambda x: -x[1]):
-            st.markdown(
-                '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">'
-                f'<div style="width:170px;flex:none;font-size:13px;color:#374151;'
-                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
-                '<div style="flex:1;height:8px;background:#eef1f5;border-radius:20px;">'
-                f'<div style="height:8px;width:{100*h/_tot:.0f}%;background:{_VERDE};'
-                'border-radius:20px;"></div></div>'
-                f'<div style="width:58px;flex:none;text-align:right;font-size:13px;'
-                f'font-weight:600;color:#1f2937;">{h:.2f} h</div></div>',
-                unsafe_allow_html=True)
+    with st.container(key="cpx_tc_detalle"):
+        from core import projects_ui as _PU
+        _PU._bajar_a("cpx_tc_detalle", "_tc_bajar", bloque="start")
+        # ── Lo de hoy, por proyecto ──
+        if hoy["por_proyecto"]:
+            st.markdown("---")
+            st.markdown(t("**Charged today**"))
+            _tot = sum(hoy["por_proyecto"].values()) or 1
+            for nom, h in sorted(hoy["por_proyecto"].items(), key=lambda x: -x[1]):
+                st.markdown(
+                    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">'
+                    f'<div style="width:170px;flex:none;font-size:13px;color:#374151;'
+                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{html.escape(nom)}</div>'
+                    '<div style="flex:1;height:8px;background:#eef1f5;border-radius:20px;">'
+                    f'<div style="height:8px;width:{100*h/_tot:.0f}%;background:{_VERDE};'
+                    'border-radius:20px;"></div></div>'
+                    f'<div style="width:58px;flex:none;text-align:right;font-size:13px;'
+                    f'font-weight:600;color:#1f2937;">{h:.2f} h</div></div>',
+                    unsafe_allow_html=True)
 
-    # ── Historial propio ──
-    _mios = timeclock.mis_fichajes(nombre, grupo, usuario, 8)
-    if _mios:
-        with st.expander(t(":material/account_tree: Your latest time entries")):
-            st.dataframe(pd.DataFrame([{
-                "": t("Workday") if f["tipo"] == timeclock.TIPO_GENERAL else t("Project"),
-                t("Project"): f["proyecto"] or "—",
-                # v546 · día/mes: `[5:16]` daba «10/08 16:20» (mes/día) por el 8 de octubre
-                t("In"): f"{f['entrada'][8:10]}/{f['entrada'][5:7]} {f['entrada'][11:16]}",
-                t("Out"): (f["salida"][11:16] if f["salida"] else t("in progress")),
-                t("Hours"): f["horas"],
-            } for f in _mios]), hide_index=True, width="stretch", column_config=tabla.cfg())
+        # ── Historial propio ──
+        _mios = timeclock.mis_fichajes(nombre, grupo, usuario, 14)
+        if _mios:
+            # La clave lleva generación: una tarjeta lo vuelve a abrir aunque se haya cerrado a mano
+            _g = int(st.session_state.get("_tc_hist_gen", 0))
+            _abrir = _g > 0
+            with st.expander(t(":material/account_tree: Your latest time entries"), expanded=_abrir,
+                             key=f"tc_exp_hist_{_g}_{_abrir}"):
+                st.dataframe(pd.DataFrame([_fila_hist(f) for f in _mios]), hide_index=True,
+                             width="stretch", column_config=tabla.cfg(extra={
+                                 t("Day"): st.column_config.TextColumn(width=56),
+                                 t("Time"): st.column_config.TextColumn(width=112),
+                                 t("Hours"): st.column_config.TextColumn(width=56)}))
 
-    st.caption(t(":material/lock: Your time entries are private. Management sees the group's hours summary, not each person's detail."))
+    _privacidad()

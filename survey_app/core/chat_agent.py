@@ -343,7 +343,7 @@ así que al indicar dónde está algo, ten en cuenta con quién hablas:
   también el proyecto. El proyecto SIEMPRE se elige de una lista (nunca se escribe a mano, porque
   entonces las horas no se atribuirían a ningún elevador). La pestaña muestra el resumen del día
   (jornada, imputado a proyectos y **sin asignar** = traslados y espera) y los últimos fichajes.
-  Los fichajes son privados; solo el admin ve el reporte de horas del grupo.
+  Los demás trabajadores no ven los fichajes; la oficina ve las horas de cada persona y sus obras.
 - **Ubicaciones:** cada dirección enlaza a Google Maps.
 - **Documentos:** cada proyecto tiene su carpeta en Drive (plano, informes, fotos, certificados),
   con permisos por rol: el campo solo sube fotos.

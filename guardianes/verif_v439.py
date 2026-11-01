@@ -52,8 +52,10 @@ sec("1. Las CLAVES de dato siguen en español (traducirlas rompe en silencio)")
 # aprueba — y una traducción PARCIAL es justo la más insidiosa (unos sitios leen la
 # clave vieja y otros la nueva). Es un mínimo, no una igualdad: añadir usos legítimos
 # sube la cuenta y sigue pasando; renombrar la baja y salta.
+# (v621 · `"clock_in"` baja de 6 a 5: la lista de olvidos salió a `timeclock.olvidos`, que usa la
+# misma clave; no es un renombrado)
 CLAVES = {
-    "core/timeclock_ui.py": {'"usuario"': 5, '"proyecto"': 5, '"clock_in"': 6, '"tipo"': 1},
+    "core/timeclock_ui.py": {'"usuario"': 5, '"proyecto"': 5, '"clock_in"': 5, '"tipo"': 1},
     "core/prestart_ui.py":  {'"usuario"': 10, '"User"': 2, '"fecha"': 2, '"nombre"': 5},
     "core/ausencias_ui.py": {"'From'": 5, "'To'": 5, "'Type'": 3, '"User"': 1},
     "core/route_ui.py":     {'"User"': 1, '"Location"': 4},
