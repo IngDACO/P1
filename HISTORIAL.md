@@ -10,6 +10,39 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO VISTO VERIFICANDO v625: LA BARRA, LA CAMPANA Y FILES (v626)
+
+- ⚠️ **Bajar dejaba lo buscado debajo de la barra de Streamlit** (`stHeader`: 60 px, encima de la página y
+  transparente). Medido a 375 px: las cifras de Belting a 0 px con «Fork» encima → `_bajar_a` pone 68 px de margen;
+  cura TODAS las bajadas de la app.
+- Dos surveys por decidir en la misma obra salían como dos líneas idénticas → una por obra, con el número.
+- La campana llevaba a Files y Files no decía qué fila tocar → lo dice, con el nombre del archivo.
+- Al campo le salía el texto de la oficina: nombra el informe que no ve y, con un survey ya guardado, es falso.
+
+medido en producción a 375 px: las cifras de Belting a 68 px con la barra de 60 (estaban a 0); la campana agrupada, el aviso de Files y el texto del campo, solo por el guardián · verif_v626 28/28 · romper_v626 12/12, romper_v625 63/63 y 3 baterías afectadas en verde · suite 252/252
+
+## RECORRIDO DEL CAMPO: TOOLS (v625)
+
+Decisión del usuario («Dale con todo incluido lo recomendado»), con su permiso para un cálculo real de prueba:
+
+- ⚠️ **El fichaje iba por el NOMBRE:** con dos obras iguales, fichado en PRJ-2, la herramienta usaba el plano de
+  PRJ-1 y guardaba allí (demostrado) → `plan_ui.obra_del_fichaje`: por ID; el nombre, solo si es de UNA obra. El
+  guardado usa la misma función.
+- ⚠️ **El campo no podía guardar su Survey** (se perdía al salir) → lo guarda en la obra donde midió. **Sin pisar:**
+  si la obra ya tiene survey, `attach_survey` no se llama; va como cálculo nuevo y **la oficina decide**. La pregunta
+  es FRESCA (`projects.survey_libre`, ruta de escritura), y si no se puede leer responde «ocupada».
+- **Cómo decide la oficina:** el survey no cabe en `DataJSON` (se corta a 4800), así que va en un JSON en Drive
+  (sin Drive no se guarda: una fila sin archivo pediría decidir sobre la nada). La fila lleva `por_decidir`; la
+  campana lo cuenta y lleva a Files de esa obra; ahí, «Load it into the Survey» (no sustituye nada: lo sustituye
+  guardarlo desde el Survey, ya calculado) o «Keep the project's survey». Borrar el archivo también cierra.
+- Sin fichar: una obra asignada se usa sola, con varias elige entre las suyas (era «Clock in first») · calcular
+  baja al resultado, solo si se calculó · la portada solo enseña sus obras, también el Pre-Start de hoy · «It will be
+  saved» ya no sale bajo «Saved as…» · «Clocked in at» traducible y nombres escapados · «Client report» fuera.
+- `tanda.py`: `--sin=<batería>`, y la huella no cuenta los finales de línea (74 baterías guardan con LF lo que estaba
+  en CRLF: romper_v532 paró la tanda con el contenido idéntico).
+
+medido en producción: Survey real del campo en PRJ-0027 (28 s, 8 filas, interpretaciones reales), bajada en Belting a 375 px de 199 a 982 px, guardar sin fichar y la portada; el segundo guardado y la decisión de la oficina, ensayados contra la hoja y el Drive reales con IA y correo sustituidos (2 → 1 → 0 en la campana) · verif_v625 132/132 · romper_v625 63/63 y 10 baterías afectadas en verde · suite 251/251
+
 ## LO VISTO VERIFICANDO v623: LA FIRMA CORTADA (v624)
 
 A 859 px con el menú abierto, la columna de la firma medía 283 px y el lienzo 300: se cortaban 17 px de la
@@ -15307,7 +15340,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v624 = actual)
+## Versiones desplegadas (v626 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15315,6 +15348,8 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v626 | **Lo visto verificando v625.** ⚠️ Bajar dejaba lo buscado bajo la barra de Streamlit (60 px) → margen, en toda la app. Campana una línea por obra; Files dice qué fila tocar; fuera el texto de oficina del campo. medido en producción a 375 px: las cifras de Belting a 68 px con la barra de 60 (estaban a 0); la campana agrupada, el aviso de Files y el texto del campo, solo por el guardián · verif_v626 28/28 · romper_v626 12/12, romper_v625 63/63 y 3 baterías afectadas en verde · suite 252/252 |
+| v625 | **Recorrido del campo: Tools.** ⚠️ El fichaje iba por el nombre: con dos obras iguales usaba y guardaba en la otra → por ID. ⚠️ El campo guarda su Survey sin pisar uno guardado: cálculo nuevo y la oficina decide (campana → Files → cargarlo o quedarse el suyo). Sin fichar usa su obra; calcular baja al resultado; la portada solo sus obras. medido en producción: Survey real del campo en PRJ-0027 (28 s, 8 filas, interpretaciones reales), bajada en Belting a 375 px de 199 a 982 px, guardar sin fichar y la portada; el segundo guardado y la decisión de la oficina, ensayados contra la hoja y el Drive reales con IA y correo sustituidos (2 → 1 → 0 en la campana) · verif_v625 132/132 · romper_v625 63/63 y 10 baterías afectadas en verde · suite 251/251 |
 | v624 | **La firma ya no se corta** a 859 px con el menú. PRODUCCIÓN (01/11/2026, v624 en la etiqueta): a 859 px con el menú, la columna de la firma mide 315 px (283 en v623) para un lienzo de 300 · verif_v623 64/64 (una afirmación más) · romper_v623 30/30 + control · check_anclas_roturas: 2378 vivas, 0 muertas · tanda 6:54 en verde: suite 250 verde con Python 3.12.10 (281 s) |
 | v623 | **Recorrido del campo: Pre-Start.** ⚠️ Respuestas, ubicación y firmas pasaban de una obra a otra → formulario por obra y generación; near miss obligatorio y alarma que no falla en silencio; fecha fija para el campo; firma tardía completa; historial sin bajar los PDF. PRODUCCIÓN (01/11/2026, v623 en la etiqueta, sesión de CAMPO de installer CI 1 en PRJ-0027, Pre-Start de prueba con permiso del usuario, todo en YES y sin near miss): fecha bloqueada; lo pendiente en dos líneas («section 1: 4 to answer · …»); firmado y PS-0003 guardado, «Filed in the project documents.», el formulario oculto y el PDF a un toque; el resultado sigue tras tocar otras cosas; «With near miss» → «Showing 0 of 1»; en una pestaña nueva, arriba «This site already has today's Pre-Start and you are already on it.», PS-0003, quién, hora y PDF, y la pantalla mide 878 px (casi 2700 con el formulario); la segunda charla nace vacía. Leído en memoria el PDF de Drive: lleva PS-0003, la firma como imagen y la nota; en la hoja el asistente con su login. Borrados después la fila, el documento y el PDF. Sin probar en producción: el clic de descarga del historial (no se descargan archivos sin permiso), firmar tarde, un near miss real (avisaría a personas): verif_v623. ⚠️ Visto verificando (arreglado en v624): 17 px de la firma cortados a 859 px con el menú · verif_v623 63/63 (la 1ª vuelta, 1 rojo de la SONDA: al volver a una obra el formulario también nace vacío, y es lo que se quiere) · romper_v623 29/29 + control · ⚠️ la 1ª vuelta dio dos cosas: ESCAPÓ «el formulario no se vacía» (al ocultarse Streamlit ya lo vacía; la generación solo se nota con la oficina registrando otro día: prueba añadida) y romper_v439 vio una CIEGA (verif_v439 buscaba «Recorded» suelto y lo contiene «Tap «Recorded»…», trampa 2: ahora `t("Recorded")`) · re-corridas: romper_v439 8/8, v535 18/18, v537 8/8, v581 29/29 · check_anclas_roturas: 2377 vivas, 0 muertas · tanda 12:10 + 7:27 de baterías: suite 250 verde con Python 3.12.10 (288 s, 29 lecturas reales de la hoja); la 1ª pasada, solo los esperados: verif_v581 (las cifras HTML ya son botones) y un ancla de romper_v537 |
 | v622 | **Lo que v620 no arregló:** una página vieja se recarga una vez al restaurar la sesión; una recién abierta, no, y sin bucles. PRODUCCIÓN (01/11/2026, v622 en la etiqueta): abrir la app con la cookie NO recarga (página de 6 s, sin marca, navegación normal). Con 32 min sin conexión desde el panel y al tocar «To-do»: la página se recargó sola una vez (`reload`, marca puesta), sesión restaurada, menú en «Progress» y contenido de «Progress», y sigue quieta 40 s después: sin bucle · verif_v622 19/19 · romper_v622 8/8 + control · re-corridas: romper_v532 7/7, v533 7/7 · check_anclas_roturas: 2347 vivas, 0 muertas · tanda 7:05 en verde: suite 249 verde con Python 3.12.10 (288 s); la vuelta anterior, 1 rojo: verif_v532 cuenta los scripts de página, y este es uno nuevo a propósito (al día con su razón) |
