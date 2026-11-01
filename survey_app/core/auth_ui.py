@@ -271,6 +271,17 @@ def render_my_credentials():
 _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
 
+def _olvidar_pagina_anterior() -> None:
+    """v620 · Al restaurar desde la cookie la sesión es NUEVA, pero el toque que destapó que la
+    anterior ya no existía llega con el valor de su control. Medido en producción: se tocó «To-do»
+    y, ya restaurada, el menú marcaba «Progress» —el navegador había quitado ese selector— con el
+    contenido de «To-do», que era lo que tenía el servidor. En una sesión recién nacida no hay
+    nada más que eso: se tira todo menos lo del propio login y el gestor de cookies."""
+    for k in list(st.session_state.keys()):
+        if not str(k).startswith(("_", "login_", "copex_")):
+            del st.session_state[k]
+
+
 def render_login() -> bool:
     """True si hay sesión iniciada. Si no, muestra el login y devuelve False."""
     if st.session_state.get("auth"):
@@ -301,6 +312,7 @@ def render_login() -> bool:
                 # v533 · La sesión se acaba de validar contra la hoja: un veredicto del
                 # heartbeat guardado de antes es más viejo y no puede expulsarla.
                 auth.heartbeat_olvidar(_a.get("usuario", ""), _a.get("token", ""))
+                _olvidar_pagina_anterior()
                 st.session_state["auth"] = _a
                 st.session_state["_hb_last"] = time.time()
                 st.session_state["_remember_session"] = True   # v222: había cookie → recordar
