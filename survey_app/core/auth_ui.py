@@ -367,9 +367,12 @@ def render_login() -> bool:
             # tildar (por defecto) la sesión dura solo esta pestaña; al tildar se guarda
             # la cookie de 7 días y no hay que volver a escribir usuario/contraseña en
             # este dispositivo. Déjalo sin marcar en equipos compartidos.
+            # ⚠️ v619 · MARCADA por defecto (decisión del usuario): el campo trabaja con el móvil,
+            # y sin la cookie cada pausa larga obligaba a escribir la contraseña. El coste es
+            # que en un equipo compartido hay que desmarcarla o cerrar sesión.
             st.checkbox(t("Keep me signed in on this device"),
-                        value=False, key="login_remember",
-                        help=t("If you turn this on, this device will remember your session for about 7 days and you will not have to type your username and password again. Leave it unticked on a shared or public computer."))
+                        value=True, key="login_remember",
+                        help=t("This device will remember your session for about 7 days, so you will not have to type your username and password again. Untick it on a shared or public computer."))
 
             def _do_login(force=False):
                 res = auth.verify_login(u, p)

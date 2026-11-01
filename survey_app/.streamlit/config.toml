@@ -1,5 +1,9 @@
 [server]
 enableStaticServing = true
+# v619 · Streamlit borra la sesión de quien lleva 120 s sin conexión, y un móvil que se bloquea o
+# cambia de app la pierde: al volver, el primer toque salía en «Sign in» (medido en producción:
+# 20 s sobrevive, 150 s no). Solo se lee al arrancar: tras cambiarlo hace falta un Reboot.
+disconnectedSessionTTL = 1800
 
 # v537 · Las herramientas fijan sus entradas por `st.session_state` (plano del proyecto,
 # reabrir un cálculo, conservarlas al cambiar de sección: `core/estado_vivo`) y algunas
