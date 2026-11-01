@@ -66,7 +66,7 @@ ROTURAS = [
     ("⚠️ puede dar cifras que no tiene", C,
      [("dile en qué pantalla verlos, sin dar ninguna cifra.", "dile en qué pantalla verlos.")]),
     ("⚠️ a LFKK le ponen una definición sin glosario", C,
-     [("- **Rails:** lee LFKK/LFGK del plano;", "- **Rails:** LFKK es la longitud del riel de cabina; lee LFKK/LFGK del plano;")]),
+     [("- **Rails:** el corte de riel de cada elevador, con LFKK y LFGK del plano.", "- **Rails:** LFKK es la longitud del riel de cabina; el corte de riel de cada elevador.")]),
     # ── Lo que llega al modelo ──
     ("⚠️ la persona del campo vuelve a lo de antes", C,
      [("""marcar el avance, escribir el parte del día, la lista de pendientes, reportar "\n""", """actualizar el % de avance, reportar "\n""")]),

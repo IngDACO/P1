@@ -25,6 +25,7 @@ from core.prestart import CHECKS_S1, CHECKS_S3
 logger = logging.getLogger(__name__)
 from core import maps
 from core import clock
+from core.num import dmy
 
 C_BLACK = colors.black
 C_BAND  = colors.HexColor("#d9d9d9")     # banda gris de sección (como el template)
@@ -149,10 +150,12 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
                   "signed on arrival.")),
           _sp(4)]
 
+    # ⚠️ v631 · `fecha` llega de la hoja, en ISO, y «Proyecto» iba en español: el documento original
+    # va en inglés y con la fecha DD/MM/YYYY, y esta hoja se le pega detrás.
     ref = [[Paragraph("<b>Pre-Start</b><br/>" + _esc(info.get("ps_id", "")), st["PSInfo"]),
-            Paragraph(f"<b>{d('Date')}</b><br/>" + _esc(info.get("fecha", "")), st["PSInfo"]),
-            Paragraph("<b>Proyecto</b><br/>" + _esc(info.get("proyecto", "")), st["PSInfo"]),
-            Paragraph("<b>Location</b><br/>" + _esc(info.get("location", "")), st["PSInfo"])]]
+            Paragraph(f"<b>{d('Date')}</b><br/>" + _esc(dmy(info.get("fecha", ""))), st["PSInfo"]),
+            Paragraph(f"<b>{d('Project')}</b><br/>" + _esc(info.get("proyecto", "")), st["PSInfo"]),
+            Paragraph(f"<b>{d('Location')}</b><br/>" + _esc(info.get("location", "")), st["PSInfo"])]]
     t = Table(ref, colWidths=[W * 0.18, W * 0.18, W * 0.32, W * 0.32])
     t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, C_BLACK),
                            ("VALIGN", (0, 0), (-1, -1), "TOP"),

@@ -830,8 +830,7 @@ def render_timeclock_tab():
         if prj:
             st.markdown(t("You are on **{p}**", p=literal_md(prj['proyecto'] or '—')))
             _chronometer(prj["clock_in"], t("On this project"), _VERDE, "chrono_prj")
-            c1, c2 = st.columns(2)
-            if c1.button(t(":material/cancel: Leave the project"), width="stretch", key="tc_prj_out"):
+            if st.button(t(":material/cancel: Leave the project"), width="stretch", key="tc_prj_out"):
                 ok, msg = timeclock.clock_out(nombre, grupo,
                                               tipo=timeclock.TIPO_PROYECTO, usuario=usuario)
                 (flash.exito if ok else st.error)(msg)
@@ -846,19 +845,21 @@ def render_timeclock_tab():
             _otros = {k: v for k, v in idmap.items()
                       if (v != _pid_actual if _pid_actual else k != prj["proyecto"])}
             if _otros:
-                with c2:
-                    # v546 · decía «— cambiar a… —», en español y sin `t()`
-                    _nuevo = ui.elegir(t("Switch project"), _otros, key="tc_switch",
-                                       vacio=t("— switch to… —"))
-                    if st.button(t(":material/sync: Switch"), width="stretch", key="tc_switch_btn",
-                                 disabled=(_nuevo is None)):
-                        _nom = _nom_de.get(_nuevo, "")
-                        ok, msg = timeclock.switch_project(nombre, grupo, _nom,
-                                                           usuario=usuario, new_pid=_nuevo)
-                        (flash.exito if ok else st.error)(msg)
-                        if ok:
-                            _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla
-                            st.rerun()
+                # ⚠️ v631 · En su propia fila. Iba en la mitad derecha de esta columna, que ya es media
+                # pantalla: con el menú abierto a 859 px el selector medía 64 y cortaba los nombres de
+                # las obras. En el móvil no se veía, porque ahí las columnas se apilan.
+                # v546 · decía «— cambiar a… —», en español y sin `t()`
+                _nuevo = ui.elegir(t("Switch project"), _otros, key="tc_switch",
+                                   vacio=t("— switch to… —"))
+                if st.button(t(":material/sync: Switch"), width="stretch", key="tc_switch_btn",
+                             disabled=(_nuevo is None)):
+                    _nom = _nom_de.get(_nuevo, "")
+                    ok, msg = timeclock.switch_project(nombre, grupo, _nom,
+                                                       usuario=usuario, new_pid=_nuevo)
+                    (flash.exito if ok else st.error)(msg)
+                    if ok:
+                        _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla
+                        st.rerun()
         elif not idmap:
             st.info(t("No projects available to clock in to. Ask your administrator to assign you one."))
         else:

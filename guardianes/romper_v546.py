@@ -59,7 +59,7 @@ ROTURAS = [
            "                    st.rerun()\n")]),
 
     ("«Switch» no avisa del Pre-Start de la obra nueva",
-     TU, [("                            _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla\n", "")]),
+     TU, [("                        _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla\n", "")]),
 
     ("volver a fichar no re-arma un aviso descartado",
      TU, [("            st.session_state.pop(f\"_ps_visto_{pid}\", None)\n    except Exception:\n"
