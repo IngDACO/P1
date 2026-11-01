@@ -306,7 +306,7 @@ def _detalle_factura(grupo, fid):
                       help=t("Collected {c} of {t}").replace("{c}", _T.dinero(cob))
                       .replace("{t}", _T.dinero(total)))
         if not _anulada and cob < total:
-            with st.form(f"cob_{fid}"):
+            with st.form(f"cob_{fid}", enter_to_submit=False):
                 _m = st.number_input(t("Record payment ($)"), min_value=0.0,
                                      max_value=float(round(total - cob, 2)),
                                      value=float(round(total - cob, 2)), step=50.0)

@@ -104,8 +104,9 @@ ROTURAS = [
      [("{_fmt_fecha(r.get('Date'))} · \"", "{r.get('Date')} · \"")]),
     ("el proveedor sin escapar", PU,
      [('_ex = " · ".join(maps.literal_md(x) for x in', '_ex = " · ".join(x for x in')]),
+    # v617 · re-anclada: el importe sale ahora de `theme.dinero` (la rotura es la MISMA: sin escapar)
     ("el «$» del importe sin escapar", PU,
-     [("f\"\\\\${E._num(r.get('Amount')):,.0f}\")", "f\"${E._num(r.get('Amount')):,.0f}\")")]),
+     [('f"{theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")', 'f"${_amt:,.0f}")')]),
     # ── archivos ──
     ("⚠️ el campo sube cualquier archivo", PU,
      [('type=_FOTO_EXT if es_campo else None)', 'type=None)')]),

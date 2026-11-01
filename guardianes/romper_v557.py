@@ -44,8 +44,9 @@ ROTURAS = [
      [('    if len(str(pw)) < MIN_PW:                 # v557\n'
        '        return False, t("The password must have at least {n} characters.", n=MIN_PW)\n', '')]),
     ("⚠️ el alta vuelve a borrar lo escrito al dar error", AUI,
-     [('with st.form(f"form_campo_{_g}", clear_on_submit=False):',
-       'with st.form(f"form_campo_{_g}", clear_on_submit=True):')]),
+     # v617 · re-anclada: el formulario lleva ahora `enter_to_submit=False` (la rotura es la MISMA)
+     [('with st.form(f"form_campo_{_g}", clear_on_submit=False, enter_to_submit=False):',
+       'with st.form(f"form_campo_{_g}", clear_on_submit=True, enter_to_submit=False):')]),
     ("el alta deja de preguntar por la errata", AUI,
      [('    if _rv["sugerencia"] and not confirmado:\n', '    if False:\n')]),
     ("⚠️ cambiar la contraseña deja de pedir repetirla", AUI,

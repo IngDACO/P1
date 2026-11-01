@@ -73,7 +73,7 @@ def _retencion(pid, grupo, prj, d, key_prefix):
     st.caption("%s · %s" % (t("{x} held", x=_dinero(d["retenido_pendiente"])), _motivo))
     if not _puede:
         return
-    with st.form(f"{key_prefix}_ret_{pid}"):
+    with st.form(f"{key_prefix}_ret_{pid}", enter_to_submit=False):
         r1, r2 = st.columns([1, 2])
         _imp = r1.number_input(
             t("Amount to release"), min_value=0.0,
@@ -140,7 +140,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
               rp=("%.1f" % d["retencion_pct"]), n=_dinero(d["neto"])))
 
         if editable:
-            with st.form(f"{key_prefix}_new_{pid}"):
+            with st.form(f"{key_prefix}_new_{pid}", enter_to_submit=False):
                 k1, k2 = st.columns(2)
                 _pct = k1.number_input(t("Progress to claim (%)"), min_value=0.0,
                                        max_value=100.0, value=float(d["pct"]), step=1.0,
@@ -222,7 +222,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                         st.rerun()
 
         if editable:
-            with st.form(f"{key_prefix}_var_{pid}"):
+            with st.form(f"{key_prefix}_var_{pid}", enter_to_submit=False):
                 st.markdown(t("**New variation**"))
                 v1, v2 = st.columns([3, 1])
                 _desc = v1.text_input(t("Description"),

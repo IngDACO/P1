@@ -1265,7 +1265,7 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
 
         _dupde = st.session_state.get(f"_np_dupde_{key}") or {}
 
-        with st.form(f"np_form_{key}"):
+        with st.form(f"np_form_{key}", enter_to_submit=False):
             nom = st.text_input(t("Project name *"), key=f"np_nom_{key}")
             if _dupde:
                 st.warning(t(":material/warning: A project with that name already exists: {x}. "
@@ -2906,7 +2906,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                       key=f"ed_clinew_{pid}")
 
         # ── Editar datos ──
-        with st.form(f"edit_{pid}"):
+        with st.form(f"edit_{pid}", enter_to_submit=False):
             st.markdown(t("**Project data**"))
             nombre   = st.text_input(t("Name"), value=prj.get("Name", ""))
             e1, e2 = st.columns(2)
@@ -3231,7 +3231,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             # ⚠️ v560 · conserva días y peso si falta el nombre (antes los devolvía a 2 y
             # 10); se vacía al añadir, con otra generación del formulario.
             _ag = st.session_state.get(f"_addact_gen_{pid}", 0)
-            with st.form(f"addact_{pid}" + (f"_{_ag}" if _ag else ""), clear_on_submit=False):
+            with st.form(f"addact_{pid}" + (f"_{_ag}" if _ag else ""), clear_on_submit=False, enter_to_submit=False):
                 st.markdown(t("**:material/add: Add activity**"))
                 an = st.text_input(t("Name"))
                 ac1, ac2 = st.columns(2)
@@ -4321,7 +4321,7 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
             st.caption(t("No orders recorded on this project yet."))
 
         if editable:
-            with st.form(f"{key_prefix}_ordnew_{pid}"):
+            with st.form(f"{key_prefix}_ordnew_{pid}", enter_to_submit=False):
                 st.markdown(t("**New order**"))
                 _c1, _c2 = st.columns(2)
                 _prov = _c1.text_input(t("Supplier"))
@@ -4793,6 +4793,7 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
     arriba del todo.
     """
     from core import expenses as E
+    from core import theme
     if not E.is_configured():
         return
 
@@ -4810,7 +4811,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
         # Con la generación 0 las claves son las de siempre.
         _rg = st.session_state.get(f"_rec_gen_{key_prefix}_{pid}", 0)
         _sf = f"_{_rg}" if _rg else ""
-        with st.form(f"{key_prefix}_add_{pid}{_sf}", clear_on_submit=False):
+        # ⚠️ v617 · SIN Enter: visto en producción, un Enter en el importe GUARDÓ el recibo a medias
+        # (sin proveedor ni foto); el «Ir» del teclado del móvil hace lo mismo. Barrido a toda la app:
+        # todo formulario de 2 campos o más (`verif_v617`); los de UNO conservan el Enter.
+        with st.form(f"{key_prefix}_add_{pid}{_sf}", clear_on_submit=False, enter_to_submit=False):
             c1, c2 = st.columns(2)
             cat = c1.selectbox(t("Category"), E.CATEGORIAS, key=f"{key_prefix}_cat{_sf}")
             val = c2.number_input(t("Total value of the receipt"), min_value=0.0, step=1.0,
@@ -4854,9 +4858,12 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                 # v616 · la fecha DD/MM/YYYY (salía en ISO), la categoría por su etiqueta, el
                 # «$» escapado (dos «$» en la etiqueta abren una fórmula) y el texto de la
                 # persona, tal cual (v603).
+                # v617 · con sus CÉNTIMOS si los tiene («$12.50», no «$12»: el formato los
+                # redondeaba); `theme.dinero` ya escapa el «$».
+                _amt = E._num(r.get('Amount'))
                 _lbl = (f":material/receipt_long: {_fmt_fecha(r.get('Date'))} · "
                         f"{maps.literal_md(_etq(str(r.get('Category') or '')))} · "
-                        f"\\${E._num(r.get('Amount')):,.0f}")
+                        f"{theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")
                 _ex = " · ".join(maps.literal_md(x) for x in [str(r.get('Supplier') or ''),
                                                              str(r.get('Description') or '')] if x)
                 if _ex:
@@ -6472,7 +6479,7 @@ def _nueva_localizacion_form(grupo: str, abierto: bool = False):
         if asg:
             _avisar_asignados(asg, grupo)
 
-        with st.form(f"nloc_form{_sf}"):
+        with st.form(f"nloc_form{_sf}", enter_to_submit=False):
             nom = st.text_input(t("Name *"), key=f"nloc_nom{_sf}",
                                 placeholder=t("Sydney office, Chullora store…"))
             c1, c2 = st.columns(2)
@@ -6699,7 +6706,7 @@ def _editar_localizacion(pid, grupo, prj):
     _ubic = (str(st.session_state.get(f"elocloc_{pid}_addr") or "").strip()
              or str(prj.get("Location", "") or ""))
 
-    with st.form(f"eloc_form_{pid}"):
+    with st.form(f"eloc_form_{pid}", enter_to_submit=False):
         nom = st.text_input(t("Name *"), value=str(prj.get("Name", "")),
                             key=f"eloc_nom_{pid}")
         c1, c2 = st.columns(2)

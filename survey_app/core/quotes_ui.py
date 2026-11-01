@@ -680,7 +680,7 @@ def _crear_proyecto(grupo, c, _tot):
     _kalta = f"cot_{_k}"
     _pend = _PU._pregunta_etapas(tipo, _kalta)
     _con_plan = P.genera_cronograma(tipo)
-    with st.form("cot_prj_" + _k):
+    with st.form("cot_prj_" + _k, enter_to_submit=False):
         # v580 · «No.», no «Nº»: el nombre se GUARDA en la obra
         nombre = st.text_input(t("Project name"),
                                value=str(c.get("ClientName", "")) + " — No. "

@@ -554,7 +554,7 @@ def delete(gid) -> tuple:
     try:
         recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(gid):
             did = str(r.get("DriveID", "")).strip()

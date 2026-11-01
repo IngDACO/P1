@@ -198,7 +198,7 @@ def _alta(grupo, vacio=False):
         # toque en «Save item» creó otro idéntico (visto en producción: CAT-00001 y 00002)
         _g = st.session_state.get("_cat_new_gen", 0)
         _dupde = st.session_state.get("_cat_dupde") or {}
-        with st.form(f"cat_new_{_g}"):
+        with st.form(f"cat_new_{_g}", enter_to_submit=False):
             c1, c2 = st.columns(2)
             nombre = c1.text_input(t("Name"), placeholder=t("e.g. Rail T75-3/B"),
                                    key=f"cat_new_nom_{_g}")
@@ -322,7 +322,7 @@ def _detalle(grupo, cid):
                     help=t("Changing it does not alter quotes already issued: each line "
                            "keeps its own copy of the agreed price."))
     es_serv = tipo == CAT.SERVICIO
-    with st.form(f"cat_edit_{cid}"):
+    with st.form(f"cat_edit_{cid}", enter_to_submit=False):
         c1, c2 = st.columns(2)
         nombre = c1.text_input(t("Name"), value=str(it.get("Name", "")))
         # ⚠️ v487: conserva la categoria/unidad guardada aunque ya no este en la lista.

@@ -112,7 +112,8 @@ KEYS = {
     # v582 · la clave lleva una GENERACIÓN: tras crear, otra (el formulario se quedaba lleno y
     # un segundo toque creaba un artículo idéntico). Lo que esto protege —que la clave NO se
     # traduzca— sigue igual: «cat_new_» es el literal.
-    "core/catalogo_ui.py": ['st.form(f"cat_new_{_g}")'],
+    # (v617 · lleva `enter_to_submit=False`: el literal ya no exige el paréntesis de cierre)
+    "core/catalogo_ui.py": ['st.form(f"cat_new_{_g}"'],
     "core/auth_ui.py": ['confirmar_borrado("del_g_ok"', 'confirmar_borrado("man_del_ok"',
                         '_delok"'],
 }

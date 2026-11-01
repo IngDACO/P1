@@ -430,7 +430,7 @@ def add_group(nombre: str, descripcion: str = "", zona: str = "") -> tuple:
     try:
         gws.append_row([nombre, descripcion, "SI", zona], value_input_option="RAW")
     except Exception as e:
-        return False, f"Error creando grupo: {e}"
+        return False, t("Error creating the group: {e}", e=e)
     _invalidate_groups()
     return True, f"Grupo '{nombre}' creado."
 
@@ -1088,7 +1088,7 @@ def set_group_sheet_id(grupo: str, sheet_id) -> tuple:
     try:
         recs = valores.canonizar(columnas.canonizar(gws.get_all_records(numericise_ignore=["all"])), LOGIN_SHEET)
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     for i, g in enumerate(recs):
         if str(g.get("Group", "")).strip().casefold() == str(grupo).strip().casefold():
             try:

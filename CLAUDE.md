@@ -589,6 +589,12 @@ Estas cinco mordieron en una sola tanda:
     una hoja desde fuera hay que esperar hasta 10 min (o que la app escriba en ella: `get_sheet` rehace
     el índice) antes de concluir que «no sale». Es la nº 11 (lo local no es lo del Cloud) en el tiempo.
 
+46. ⚠️ **`st.form` envía con Enter por defecto, y en un formulario de varios campos eso guarda a
+    medias.** (v617) Un Enter en el importe guardó un recibo sin proveedor ni foto; el «Ir» del teclado
+    del móvil hace lo mismo. → Todo formulario de 2 campos o más lleva `enter_to_submit=False`
+    (lo vigila `verif_v617`); los de UN campo (la caja de «To-do») lo conservan. ⚠️ Y al teclear desde
+    el panel en un `number_input` DENTRO de un formulario: sin Enter, o se envía el formulario.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen

@@ -187,7 +187,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
         # también cuando `C.add` fallaba. Se conserva, y se vacía solo al guardar
         # (formulario por generación).
         _cg = st.session_state.get(f"_crgen_{key_prefix}", 0)
-        with st.form(f"{key_prefix}_add_{usuario}_{_cg}", clear_on_submit=False):
+        with st.form(f"{key_prefix}_add_{usuario}_{_cg}", clear_on_submit=False, enter_to_submit=False):
             if _es_lic:
                 c1, c2 = st.columns(2)
                 num   = c1.text_input(t("Number"), key=f"{key_prefix}_num_{_cg}")
@@ -471,7 +471,7 @@ def _owner_grupos():
     # también al dar un error. Conserva lo tecleado y se VACÍA solo al crear, con otra
     # generación de claves (un control no se vacía soltando su clave, trampa 31).
     _fg = st.session_state.get("_form_grupo_gen", 0)
-    with st.form(f"form_grupo_{_fg}", clear_on_submit=False):
+    with st.form(f"form_grupo_{_fg}", clear_on_submit=False, enter_to_submit=False):
         gn = st.text_input(t("Company name (client company)"), key=f"fg_n_{_fg}")
         gd = st.text_input(t("Description (optional)"), key=f"fg_d_{_fg}")
         if st.form_submit_button(t(":material/add: Create company")):
@@ -725,7 +725,7 @@ def _owner_usuarios():
         # faltaba se llevaba también usuario, nombre y contraseña). Ahora se conserva y
         # solo se vacía al crear, con un formulario nuevo (`_fo_gen`).
         _g = st.session_state.get("_fo_gen", 0)
-        with st.form(f"form_user_{_g}", clear_on_submit=False):
+        with st.form(f"form_user_{_g}", clear_on_submit=False, enter_to_submit=False):
             u  = st.text_input(t("Username"), key=f"fo_u_{_g}")
             nm = st.text_input(t("Name"), key=f"fo_n_{_g}")
             rl = st.selectbox(t("Role"), auth.ROLES, key=f"fo_r_{_g}")
@@ -1103,7 +1103,7 @@ def _owner_rieles():
     with st.expander(t("Add rail"), icon=":material/add_circle:", expanded=not data, key=f"exp_own_addrail_{not data}"):
         # ⚠️ v560 · conserva lo escrito al dar un error; se vacía al añadir (generación).
         _fr = st.session_state.get("_form_riel_gen", 0)
-        with st.form(f"form_riel_{_fr}", clear_on_submit=False):
+        with st.form(f"form_riel_{_fr}", clear_on_submit=False, enter_to_submit=False):
             ref = st.text_input(t("Reference (e.g. T75-3/B)"), key=f"fr_ref_{_fr}")
             rc1, rc2 = st.columns(2)
             alt = rc1.number_input(t("Tooth height from the back (RAIL) mm"),
@@ -1407,7 +1407,7 @@ def _crear_usuario_form(grupo):
     sin correo, se iban también usuario, nombre y contraseña). Ahora se conserva lo
     escrito y solo se vacía al crear, con un formulario nuevo (`_fc_gen`)."""
     _g = st.session_state.get("_fc_gen", 0)
-    with st.form(f"form_campo_{_g}", clear_on_submit=False):
+    with st.form(f"form_campo_{_g}", clear_on_submit=False, enter_to_submit=False):
         u  = st.text_input(t("Username"), key=f"fc_u_{_g}")
         nm = st.text_input(t("Name"), key=f"fc_n_{_g}")
         pw = st.text_input(t("Password"), type="password", key=f"fc_p_{_g}",

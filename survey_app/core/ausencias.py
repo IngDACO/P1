@@ -712,7 +712,7 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
     try:
         recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)   # FRESCO: es escritura
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:
@@ -750,7 +750,7 @@ def cancelar(aid, quien) -> tuple:
     try:
         recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     fila = next((i + 2 for i, r in enumerate(recs)
                  if str(r.get("ID", "")) == str(aid)), None)
     if fila is None:

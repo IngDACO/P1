@@ -208,7 +208,7 @@ def registrar(grupo, usuario, nombre, tipo, proyecto, campo,
     # ⚠️ La fila es POSICIONAL: si no casa con HEADERS, cada dato cae en la columna
     # de al lado y en silencio. Es lo que mató a `create_project` 3 versiones (v363).
     if len(fila) != len(HEADERS):
-        return False, f"internal: {len(fila)} valores para {len(HEADERS)} columnas"
+        return False, f"internal: {len(fila)} values for {len(HEADERS)} columns"
     try:
         ws.append_row(fila, value_input_option="RAW")
     except Exception as e:

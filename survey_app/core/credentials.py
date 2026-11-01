@@ -257,7 +257,7 @@ def update(cred_id, fields: dict) -> tuple:
     try:
         recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(cred_id):
             row = i + 2
@@ -280,7 +280,7 @@ def delete(cred_id) -> tuple:
     try:
         recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
     except Exception as e:
-        return False, f"Error leyendo: {e}"
+        return False, t("Error reading: {e}", e=e)
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(cred_id):
             did = str(r.get("DriveID", "")).strip()

@@ -161,7 +161,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="ho"):
         _faltan = [f for f in filas if f["fuente"] == H.TERCERO and f["estado"] != H.OK]
         if editable and _faltan:
             st.markdown(t("**Attach a third-party document**"))
-            with st.form(f"{key_prefix}_up_{pid}"):
+            with st.form(f"{key_prefix}_up_{pid}", enter_to_submit=False):
                 _op = {f["nombre"]: f["clave"] for f in _faltan}
                 _sel = st.selectbox(t("Which item does it evidence?"), list(_op.keys()))
                 _fh = st.file_uploader(t("File"), key=f"{key_prefix}_file_{pid}")

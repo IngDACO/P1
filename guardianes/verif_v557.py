@@ -103,9 +103,11 @@ print("\n2. Estático")
 chk("la fecha de alta en DD/MM/YYYY", '_fi, f"{k}_fing_{_fi or \'\'}", format="DD/MM/YYYY"' in SRC)
 chk("…y las de las credenciales también", 'd = col.date_input(label, value=ini, key=key, format="DD/MM/YYYY"' in SRC)
 chk("el selector de la ficha es segmentado (`cpxseg_`)", 'key=f"cpxseg_{k}_sec"' in SRC)
-for _form in ('st.form(f"form_campo_{_g}", clear_on_submit=False)',
-              'st.form(f"form_user_{_g}", clear_on_submit=False)',
-              'st.form(f"{key_prefix}_add_{usuario}_{_cg}", clear_on_submit=False)'):
+# (v617 · estos formularios llevan además `enter_to_submit=False`: la afirmación es
+# `clear_on_submit=False`, así que el literal ya no exige el paréntesis de cierre)
+for _form in ('st.form(f"form_campo_{_g}", clear_on_submit=False',
+              'st.form(f"form_user_{_g}", clear_on_submit=False',
+              'st.form(f"{key_prefix}_add_{usuario}_{_cg}", clear_on_submit=False'):
     chk("⚠️ el formulario conserva lo escrito al dar error: %s" % _form.split('"')[1], _form in SRC)
 chk("ya no queda la cabecera «ContactName» en las tablas de usuarios",
     '"ContactName": t(' not in SRC and '"ContactName": _cont' not in SRC)
