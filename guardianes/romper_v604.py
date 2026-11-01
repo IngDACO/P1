@@ -73,9 +73,9 @@ ROTURAS = [
      [('                        format_func=lambda s: "%s · %d" % (t(s), _n.get(s, 0))) or ""\n',
        '                        format_func=lambda s: t(s)) or ""\n')]),
     ("⚠️ la búsqueda vuelve a perderse al abrir una pieza", LU,
-     [('    q = c1.text_input(t("Search"), key="lib_q", label_visibility="collapsed",\n'
-       '                      persist_state="session",\n',
-       '    q = c1.text_input(t("Search"), key="lib_q", label_visibility="collapsed",\n')]),
+     [('        q = cols[0].text_input(t("Search"), key="lib_q", label_visibility="collapsed",\n'
+       '                               persist_state="session",\n',
+       '        q = cols[0].text_input(t("Search"), key="lib_q", label_visibility="collapsed",\n')]),
     # (sin roturas para «un valor recordado que ya no vale»: lo suelta Streamlit solo — la 1ª
     # tanda las vio ESCAPAR y las guardas propias, de más, se quitaron)
     ("⚠️ otra búsqueda deja la galería en la página de antes", LU,

@@ -470,11 +470,24 @@ def subir_si_cambia_la_vista():
         _PU._subir_arriba(solo_si_aviso_oculto=True)
 
 
+def _foto_abierta() -> bool:
+    """v629 · ¿Hay una pieza de Library abierta EN PANTALLA? Fuera de Library puede seguir
+    apuntada, pero ahí «←» tiene que hacer lo de siempre: gastaría el toque en algo invisible."""
+    return bool(st.session_state.get("_lib_open")
+                and st.session_state.get("_admin_sec") == "biblioteca")
+
+
 def puede_atras() -> bool:
-    return bool(st.session_state.get("_nav_hist"))
+    return bool(st.session_state.get("_nav_hist")) or _foto_abierta()
 
 
 def ir_atras():
+    # ⚠️ v629 · Con una foto abierta, atrás es la lista. Salía de Library a la pantalla anterior (y
+    # el gesto de atrás del móvil pasa por este mismo botón, `_mobile_back_trap`).
+    if _foto_abierta():
+        from core import library_ui
+        library_ui._volver()
+        st.rerun()
     hist = st.session_state.get("_nav_hist") or []
     if hist:
         st.session_state["_nav_back"] = True       # que _track_history no lo re-apile
@@ -567,6 +580,11 @@ def sidebar_menu() -> str:
                 st.rerun()
             else:
                 st.session_state["_admin_expanded"] = _k    # sin hijas → navega directo
+                # v629 · Tocar Library vuelve a su lista (como las sub-pestañas, v563): con una
+                # foto abierta, el menú no hacía nada.
+                if _k == "biblioteca" and st.session_state.get("_lib_open"):
+                    from core import library_ui
+                    library_ui._volver()
                 navegar(_k)
         if _open:                              # acordeón: solo la DESPLEGADA muestra sus hijas
             _sk, _subs = _SUBS[_k]

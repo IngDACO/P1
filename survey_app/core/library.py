@@ -382,8 +382,26 @@ def _norm(s) -> str:
     return s
 
 
+def _palabras(qn) -> list:
+    """v629 · Las palabras de una búsqueda ya normalizada, en singular: lo que se compara es
+    «contiene», así que `buffer` encuentra también «buffers», pero `buffers` no encontraba
+    «buffer» (medido: 10 de 25, y «sills» 0 de 17)."""
+    out = []
+    for w in qn.split():
+        if len(w) > 4 and w.endswith(("ches", "shes", "xes", "sses")):
+            w = w[:-2]
+        elif len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            w = w[:-1]
+        out.append(w)
+    return out
+
+
 def buscar(q, marca="", modelo="", seccion="", tipo="") -> list:
     """Busca en título, notas, marca, modelo, sección y nombre de archivo.
+
+    ⚠️ v629 · Todas las palabras, en cualquier orden y con singular o plural. Iba por la frase
+    EXACTA: «buffer pit» daba 0 de 24, «lock door» 0 de 4 y «rail bracket» 1 de 8 (medido con
+    las 750 piezas reales). Nadie busca con el orden de un título que no ha visto.
 
     ⚠️ NO es un motor nuevo: `manuals.search` sigue siendo el que busca DENTRO del PDF
     (BM25) y alimenta al asistente. Esto solo filtra la ficha. Dos verbos distintos con
@@ -393,11 +411,12 @@ def buscar(q, marca="", modelo="", seccion="", tipo="") -> list:
     qn = _norm(q).strip()
     if len(qn) < 2:                       # con una letra todo coincide y no informa
         return base
+    _ws = _palabras(qn)
     out = []
     for r in base:
         heno = _norm(" ".join(str(r.get(c, "")) for c in
                              ("Title", "Notes", "Brand", "Model", "Section", "FileName")))
-        if qn in heno:
+        if all(w in heno for w in _ws):
             out.append(r)
     return out
 

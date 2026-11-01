@@ -243,8 +243,10 @@ chk("el singular de verdad: «1 item. Tap it to open it.» (salía «1 item(s)»
 # (lo hace Streamlit: un valor recordado que ya no está entre las opciones vuelve al de por
 # defecto — v604 llevaba cuatro guardas propias y la batería las vio de más: escapaban)
 at = _app(lib_marca="Schindler", lib_modelo="ZZ-no-existe", lib_seccion="Sección vieja")
-chk("un modelo o una sección RECORDADOS que ya no valen se sueltan (no rompen la pantalla)",
-    not at.exception and _ss(at, "lib_modelo") == "" and _ss(at, "lib_seccion") is None,
+# v629: una marca sin modelos ya no pinta su desplegable: el modelo recordado no se «suelta», se
+# ignora, y es verif_v629 quien comprueba que no se queda filtrando.
+chk("una sección RECORDADA que ya no vale se suelta, y un modelo que ya no vale no rompe la pantalla",
+    not at.exception and _ss(at, "lib_seccion") is None,
     ([e.value for e in at.exception][:1], _ss(at, "lib_modelo"), _ss(at, "lib_seccion")))
 at = _app(lib_marca="Otis", lib_tipo="tipo-viejo")
 chk("…y lo mismo una marca desactivada o un tipo que ya no existe",
@@ -314,7 +316,7 @@ chk("⚠️ «Download» ANTES de la imagen (una foto vertical lo dejaba bajo la
     "DownloadButton" in _ord and _ord.index("DownloadButton") < max(i for i, x in enumerate(_ord) if x == "Image"), _ord)
 chk("el título con su página y «3 of 30» para leer el manual seguido",
     any("manual page \\(3/30\\)" in str(m.value) for m in at.markdown) and _caps(at, " of 30") == ["3 of 30"])
-at = _app(_lib_open="LIB-0027", _lib_nav=["LIB-0027"])
+at = _app(_ROL="owner", _lib_open="LIB-0027", _lib_nav=["LIB-0027"])    # v629: «Filed by», solo a quien gestiona
 chk("⚠️ la nota TAL CUAL («*gate 2*» no se vuelve cursiva) y la fecha en DD/MM/YYYY",
     any("Ver \\*gate 2\\* y\\_b" in str(m.value) for m in at.markdown)
     and _caps(at, "Filed by") == ["Filed by COPEX library import on 28/09/2026 17:56"], _caps(at, "Filed by"))

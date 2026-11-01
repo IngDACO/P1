@@ -76,6 +76,35 @@ _CSS_SECCIONES = (
     ".st-key-lib_secs [data-testid='stButtonGroup'] button[aria-checked='true']{order:-1}}</style>")
 
 
+# v629 · En estrecho, la búsqueda ocupa su fila y Type y Brand comparten la siguiente: la primera
+# foto caía a 812 px en una pantalla de 812 (medido) y al entrar no se veía ninguna.
+_CSS_FILTROS = (
+    "<style>.st-key-lib_filtros{container-type:inline-size}"
+    "@container (max-width:700px){"
+    ".st-key-lib_filtros [data-testid='stHorizontalBlock']{flex-wrap:wrap!important;gap:0.5rem!important}"
+    ".st-key-lib_filtros [data-testid='stColumn']{flex:1 1 calc(50% - 0.25rem)!important;"
+    "min-width:calc(50% - 0.25rem)!important;width:calc(50% - 0.25rem)!important}"
+    ".st-key-lib_filtros [data-testid='stColumn']:first-child{flex:1 1 100%!important;"
+    "min-width:100%!important;width:100%!important}}</style>")
+
+# v629 · Y las cifras, sin el pie: en estrecho salía cortado («photos, manuals and dat…»)
+_CSS_CIFRAS = (
+    "<style>.st-key-cpx_lib_kpis{container-type:inline-size}"
+    "@container (max-width:700px){.st-key-cpx_lib_kpis button "
+    "[data-testid='stMarkdownContainer'] p:last-child:not(:first-child){display:none!important}}"
+    "</style>")
+
+# v629 · «Previous · 14 of 532 · Next» en UNA fila: apilados eran 130 px encima de la foto
+_CSS_NAV = (
+    "<style>.st-key-lib_nav [data-testid='stHorizontalBlock']{flex-wrap:nowrap!important;"
+    "align-items:center;gap:0.5rem!important}"
+    ".st-key-lib_nav [data-testid='stColumn']{min-width:0!important;flex:1 1 0!important;"
+    "width:auto!important}"
+    ".st-key-lib_nav [data-testid='stCaptionContainer']{text-align:center}</style>")
+
+_ZOOMS = ["1×", "2×", "3×"]
+
+
 def _rol() -> str:
     try:
         return str(st.session_state.get("auth", {}).get("rol", "")).strip().lower()
@@ -169,6 +198,7 @@ def _volver():
     """A la biblioteca, en la página de la galería donde está la foto que se miraba (con
     «Next» se puede haber ido más allá de la que se abrió) y bajando a ella."""
     lid = st.session_state.pop("_lib_open", None)
+    st.session_state.pop("_lib_foto_mem", None)
     nav = st.session_state.get("_lib_nav") or []
     if lid in nav and st.session_state.get("_lib_nav_de") == "fotos":
         st.session_state["_lib_pag"] = nav.index(lid) // _POR_PAGINA
@@ -265,7 +295,7 @@ def _cifras(r):
           ("fot", t("Photos"), _n_fot, t("taken on site")),
           ("doc", t("Documents"), r["total"] - _n_fot, t("manuals, diagrams and other")),
           ("sec", t("Sections"), len(r["por_seccion"]), t("of the lift covered"))]
-    st.markdown(T.dos_por_fila("cpx_lib_kpis"), unsafe_allow_html=True)
+    st.markdown(T.dos_por_fila("cpx_lib_kpis") + _CSS_CIFRAS, unsafe_allow_html=True)
     with st.container(key="cpx_lib_kpis"):
         for _col, (_s, _l, _v, _pie) in zip(st.columns(4), _K):
             _col.button(f"{_l}\n\n{_v}\n\n{_pie}", key=f"cpxkpi_lib_{_s}", width="stretch",
@@ -277,28 +307,33 @@ def _barra():
     de la marca elegida, así que no se puede pedir un par que no existe.
     ⚠️ v604 · RECORDADOS (`persist_state`): al abrir una pieza y volver se perdían («governor»
     → las 750)."""
-    c1, c2 = st.columns([3, 2])
-    q = c1.text_input(t("Search"), key="lib_q", label_visibility="collapsed",
-                      persist_state="session",
-                      placeholder=t("title, notes, brand, model, file name…"))
-    tipo = c2.selectbox(t("Type"), _TIPOS_FILTRO, key="lib_tipo",
-                        label_visibility="collapsed", persist_state="session",
-                        format_func=lambda x: (t("All types") if not x else
-                                               t("All documents") if x == LIB.DOCUMENTOS else
-                                               _tipo(x)))
-
-    c3, c4 = st.columns(2)
-    _marcas = LIB.marcas()
-    marca = c3.selectbox(t("Brand"), [""] + _marcas, key="lib_marca", persist_state="session",
-                         format_func=lambda x: t(LIB.SIN_MARCA) if not x else x)
     # ⚠️ Sin marca no se ofrecen modelos: un modelo suelto no identifica nada (hay
     # códigos que se repiten entre fabricantes) y la lista sería inmanejable.
-    _modelos = LIB.modelos_de(marca) if marca else []
-    modelo = c4.selectbox(t("Model"), [""] + _modelos, key="lib_modelo",
-                          disabled=not marca, persist_state="session",
-                          format_func=lambda x: t(LIB.SIN_MODELO) if not x else x,
-                          help=None if marca else t("Pick a brand first."))
-    return q, marca, (modelo if marca else ""), tipo
+    # v629 · Y sin modelos que ofrecer, ni el desplegable: las 750 piezas reales no tienen
+    # ninguno, y salía siempre apagado, ocupando sitio. La marca se lee ANTES de pintar su
+    # desplegable porque de ella depende cuántas columnas hay.
+    _ya = st.session_state.get("lib_marca") or ""
+    _modelos = LIB.modelos_de(_ya) if _ya else []
+    st.markdown(_CSS_FILTROS, unsafe_allow_html=True)
+    with st.container(key="lib_filtros"):
+        cols = st.columns([3, 2, 2, 2] if _modelos else [3, 2, 2])
+        q = cols[0].text_input(t("Search"), key="lib_q", label_visibility="collapsed",
+                               persist_state="session",
+                               placeholder=t("title, notes, brand, model, file name…"))
+        tipo = cols[1].selectbox(t("Type"), _TIPOS_FILTRO, key="lib_tipo",
+                                 label_visibility="collapsed", persist_state="session",
+                                 format_func=lambda x: (t("All types") if not x else
+                                                        t("All documents") if x == LIB.DOCUMENTOS
+                                                        else _tipo(x)))
+        marca = cols[2].selectbox(t("Brand"), [""] + LIB.marcas(), key="lib_marca",
+                                  label_visibility="collapsed", persist_state="session",
+                                  format_func=lambda x: t(LIB.SIN_MARCA) if not x else x)
+        modelo = ""
+        if _modelos:
+            modelo = cols[3].selectbox(t("Model"), [""] + _modelos, key="lib_modelo",
+                                       label_visibility="collapsed", persist_state="session",
+                                       format_func=lambda x: t(LIB.SIN_MODELO) if not x else x)
+    return q, marca, modelo, tipo
 
 
 def _secciones(base):
@@ -438,6 +473,52 @@ def _tabla(items, pags, _PU):
             st.rerun()
 
 
+def _bajar(did, dr):
+    """La foto abierta, de Drive UNA vez. v629 · `download` no guarda nada, y cada toque de zoom
+    es una pasada: sin esto volvería a bajarla (1,1 s medidos). Solo la de ahora, en la sesión."""
+    _m = st.session_state.get("_lib_foto_mem")
+    if _m and _m[0] == did:
+        return _m[1]
+    _b = dr.download(did)
+    st.session_state["_lib_foto_mem"] = (did, _b)
+    return _b
+
+
+def _foto(lid, data):
+    """La foto con su zoom. ⚠️ v629 · La pantalla completa de Streamlit no amplía (351 px de una foto
+    de 1200, medido a 375 px) y la página del Cloud lleva `user-scalable=no`, así que en Android no
+    se puede pellizcar: una foto técnica no se podía leer. Con 2× y 3× la foto crece dentro de su
+    recuadro y se mueve con el dedo; arranca centrada, que es donde suele estar lo que importa."""
+    _z = st.segmented_control(t("Zoom"), _ZOOMS, default=_ZOOMS[0], required=True, key="lib_zoom",
+                              label_visibility="collapsed")
+    _f = _ZOOMS.index(_z) + 1 if _z in _ZOOMS else 1
+    if _f > 1:
+        st.markdown(
+            "<style>.st-key-lib_foto{overflow:auto!important;max-height:72vh;touch-action:pan-x pan-y;"
+            "border-radius:8px}"
+            ".st-key-lib_foto>[data-testid='stElementContainer']{width:%d%%!important;"
+            "max-width:none!important;flex:0 0 auto!important}"
+            ".st-key-lib_foto [data-testid='stImage'],.st-key-lib_foto [data-testid='stImageContainer'],"
+            ".st-key-lib_foto [data-testid='stFullScreenFrame']{width:100%%!important;max-width:none!important}"
+            ".st-key-lib_foto img{width:100%%!important;max-width:none!important}"
+            ".st-key-lib_foto [data-testid='stElementToolbar']{display:none!important}</style>" % (_f * 100),
+            unsafe_allow_html=True)
+    with st.container(key="lib_foto"):
+        st.image(data, width="stretch")
+    if _f > 1:
+        from core import incrustar
+        with st.container(key="lib_foto_ir"):      # fuera del flujo, como el de `_bajar_a`
+            st.markdown("<style>.st-key-lib_foto_ir,[data-testid=\"stLayoutWrapper\"]:has(> "
+                        ".st-key-lib_foto_ir){position:absolute!important;width:1px;height:1px;"
+                        "overflow:hidden;opacity:0;pointer-events:none}</style>", unsafe_allow_html=True)
+            incrustar.script(
+                "<script>/*%s %d*/(function(){try{var D=window.parent.document,n=0;function ir(){"
+                "var b=D.querySelector('.st-key-lib_foto');if(b&&b.scrollWidth>b.clientWidth+9){"
+                "b.scrollLeft=(b.scrollWidth-b.clientWidth)/2;"
+                "b.scrollTop=(b.scrollHeight-b.clientHeight)/2;return;}"
+                "if(++n<40)setTimeout(ir,100);}setTimeout(ir,150);}catch(e){}})();</script>" % (lid, _f))
+
+
 def _detalle(lid):
     st.button(t(":material/arrow_back: Back to the library"), key="lib_back", on_click=_volver)
     it = LIB.get_item(lid)
@@ -451,13 +532,15 @@ def _detalle(lid):
     _nav = st.session_state.get("_lib_nav") or []
     if lid in _nav and len(_nav) > 1:
         _i = _nav.index(lid)
-        a, b, c = st.columns([1, 2, 1])
-        a.button(t(":material/chevron_left: Previous"), key="lib_it_prev", width="stretch",
-                 disabled=_i <= 0, on_click=_abrir, args=(_nav[max(_i - 1, 0)], _nav))
-        b.caption(t("{a} of {b}", a=_i + 1, b=len(_nav)))
-        c.button(t(":material/chevron_right: Next"), key="lib_it_next", width="stretch",
-                 disabled=_i >= len(_nav) - 1, on_click=_abrir,
-                 args=(_nav[min(_i + 1, len(_nav) - 1)], _nav))
+        st.markdown(_CSS_NAV, unsafe_allow_html=True)
+        with st.container(key="lib_nav"):
+            a, b, c = st.columns(3)
+            a.button(t(":material/chevron_left: Previous"), key="lib_it_prev", width="stretch",
+                     disabled=_i <= 0, on_click=_abrir, args=(_nav[max(_i - 1, 0)], _nav))
+            b.caption(t("{a} of {b}", a=_i + 1, b=len(_nav)))
+            c.button(t(":material/chevron_right: Next"), key="lib_it_next", width="stretch",
+                     disabled=_i >= len(_nav) - 1, on_click=_abrir,
+                     args=(_nav[min(_i + 1, len(_nav) - 1)], _nav))
 
     st.markdown("### " + maps.literal_md(_titulo(it, pags)))
     st.markdown(" ".join([
@@ -471,7 +554,7 @@ def _detalle(lid):
     _bytes = None
     if _did and dr is not None:
         try:
-            _bytes = dr.download(_did)       # aquí SÍ: es UNA ficha, la que se eligió
+            _bytes = _bajar(_did, dr)        # aquí SÍ: es UNA ficha, la que se eligió
         except Exception as e:
             st.error("%s: %s" % (t("Could not download the file"), e))
         if _bytes:
@@ -485,14 +568,14 @@ def _detalle(lid):
     else:
         st.caption(t("This entry has no attached file — it is a note."))
     if _bytes and _es_imagen(it):
-        st.image(_bytes, width="stretch")
+        _foto(lid, _bytes)
     if str(it.get("Notes", "")).strip():
         # v604 · TAL CUAL (la nota la escribió una persona; el markdown la reinterpretaba)
         st.markdown(maps.literal_md(str(it.get("Notes", "")).strip()).replace("\n", "  \n"))
-    st.caption(t("Filed by {who} on {when}",
-                 who=str(it.get("UploadedBy", "")) or "—", when=_fecha(it.get("Date", ""))))
-
     if _puede_subir():
+        # v629 · Solo a quien la gestiona: «Filed by COPEX library import» salía en las 750
+        st.caption(t("Filed by {who} on {when}",
+                     who=str(it.get("UploadedBy", "")) or "—", when=_fecha(it.get("Date", ""))))
         with st.expander(t(":material/delete: Remove from the library"), key=f"exp_lib_del_{lid}"):
             _ok = st.checkbox(t("I confirm I want to remove it"), key="lib_del_ok")
             if st.button(t(":material/delete: Remove"), key="lib_del",

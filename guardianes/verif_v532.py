@@ -106,9 +106,10 @@ chk("los 19 dibujos y cronómetros van por `incrustar.dibujo`",
 # que quedó por encima), `projects_ui._subir_arriba`, que llama la shell al final de la pasada:
 # Streamlit conservaba el desplazamiento (la ficha nueva de Contacts ~190 px abajo, medido).
 # (v622 · uno más: recargar una página vieja tras restaurar la sesión con la cookie, `auth_ui`)
-chk("⚠️ los 7 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
-    "ir a la ficha del Panel, ir a la herramienta del Resumen, volver arriba, recargar)",
-    _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1,
+# (v629 · uno más: una foto ampliada de Library arranca centrada, `library_ui._foto`, solo con 2× y 3×)
+chk("⚠️ los 8 scripts de página van por `incrustar.script` (cabecera PWA, «atrás», cookie, "
+    "ir a la ficha del Panel, ir a la herramienta del Resumen, volver arriba, recargar, centrar el zoom)",
+    _scr == {"app.py": 1, "core/home_ui.py": 1, "core/session_cookie.py": 1, "core/library_ui.py": 1,
              "core/roster_ui.py": 1, "core/projects_ui.py": 2, "core/auth_ui.py": 1}, _scr)
 for f in _scr:
     _s = io.open(os.path.join(RAIZ, f), encoding="utf-8").read()
