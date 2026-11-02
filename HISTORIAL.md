@@ -10,6 +10,28 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE DESTAPÓ EL RECORRIDO DE LA OFICINA (v633)
+
+Sesión de administrador en el panel. Decisiones del usuario («Si dale con todo»): los días de baja sobre el saldo no se
+pagan hasta que la oficina elija, con aviso en Payroll; número siempre y vencimiento en todas menos la White Card.
+
+- ⚠️ **Dinero:** el correo mandaba a decidir a Planning · Absences, donde solo había «Cancel», y la nómina pagaba todo: 20
+  días con 10 de saldo. → `sobre_saldo` lo DERIVA (guardar «10 de más» se desincroniza al cancelar otra baja) y solo se
+  guarda la decisión, en `OverBalancePay`; `horas_pagadas_dia` filtra `sin_pagar`, y nómina, parte y Xero salen de ahí.
+  «Pay them» / «Leave them unpaid» / «Change», aviso a la persona, y una baja vieja sin decidir no se sale de la bandeja.
+- ⚠️ **Seguridad:** «Add credential» aceptaba el formulario vacío y `compliance` daba `cumple: True` con una ficha de
+  Forklift sin nada. → `falta_dato` en el motor (alta y edición) y lo incompleto no cuenta.
+- Borrar una credencial pide confirmación; se corrigen tipo, clase y emisión; el selector va por ID (saltaba de credencial al
+  corregir el número); «s/n» y la matriz, en inglés; las cifras suman (la White Card cuenta como válida).
+- La vista baja a lo que se abre: ficha de Users, acciones de Files y el aviso de la campana. Los Survey por decidir, ⏳ en la
+  tabla: dos del mismo minuto se llamaban igual.
+
+⚠️ Visto verificando, en el árbol como v634 (bloqueado el despliegue: falta el «dale» expreso): `overflow:clip` en
+`stAppViewContainer` (un scrollIntoView en página corta lo movía 63 px, con franja blanca), bajar también con la persona o
+fila ya abierta, saldo sin negativos.
+
+medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258
+
 ## EL ASISTENTE EN SONNET, LA BAJA PASO A PASO Y STRIKER (v632)
 
 Decisión del usuario: «Dale con todo incluido lo recomendado», «Es striker», «Pasalo a sonnet».
@@ -15439,7 +15461,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v632 = actual)
+## Versiones desplegadas (v633 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15447,6 +15469,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v633 | **El recorrido de la oficina.** ⚠️ La nómina pagaba 20 días de baja con 10 de saldo y la oficina no podía decidir → lo que pasa del saldo se deriva y no se paga hasta «Pay them» o «Leave them unpaid». ⚠️ Una ficha vacía de Forklift hacía apto a quien no tenía el ticket → número y vencimiento obligatorios. Borrar con confirmación, editar todo, cifras que suman, la vista baja a lo que se abre, Survey por decidir marcados. medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258 |
 | v632 | **El asistente en Sonnet 5.5.** ⚠️ No bastaba el nombre: razona, así que se lee por tipo de bloque, se mira `stop_reason` y `max_tokens` da para razonar y responder; el resumen de la oficina sigue en Haiku. La baja, paso a paso y comparada con la pantalla; striker en Buffers; informe interno en inglés. medido en producción con Sonnet: la baja, pasos correctos, atajo en Timeclock y nada inventado, en 3,6 s; LFKK, dice lo que sabe y lo que no, sin adivinar, en 2,2 s; Buffers dice «car striker» y ningún «sticker». El diagrama y el informe interno, solo por guardián (el informe exige un cálculo real) · verif_v632 40/40 · romper_v632 28/28, romper_v631 22/22, romper_v630 26/26, romper_v597 22/22, romper_v594 12/12, romper_v448 7/7 y romper_v438 12/12 · suite 257/257 |
 | v631 | **Lo que destaparon las pruebas reales de v630.** ⚠️ El asistente seguía inventando parte de LFKK → bloque de siglas comparado con cada pantalla y con el motor (solo LFKK y LFGK quedan sin definición, y lo dice); ⚠️ el atajo de la baja solo lleva a My absences; «Switch project» de 64 a 210 px; anexo de firmas en inglés y DD/MM/YYYY. medido en producción: 2 preguntas reales como campo. LFKK sale bien (no tiene la definición, solo lo de Rails y cabina, sin lo del primer riel), ⚠️ salvo que dice que está en «the shaft data section» del plano. ⚠️ La baja sale a medias: ya no dice que el atajo la registra y termina en Record the sick leave, pero pone el atajo dentro de My absences (está en Timeclock) y dice «your crew knows» (no consta). «Switch project» a 210 px con el menú abierto a 859 de ancho (era 64; ahí aún corta las últimas letras de la obra) y 353 a 375; cambia de obra y avisa del Pre-Start de la nueva. Firmar tarde: PDF de 2 páginas, anexo con «Project» y 02/11/2026. Datos de prueba borrados · verif_v631 50/50 · romper_v631 22/22, romper_v630 26/26, romper_v621 24/24, romper_v546 12/12 y romper_v439 8/8 · suite 256/256 |
 | v630 | **El asistente del campo.** ⚠️ Mandaba a pantallas que ya no existen, decía dos cosas falsas desde v625 y no conocía Absences, To-do, Daily log ni Library → la guía entera con los nombres de la app, y el menú comparado con `home_ui` por un guardián; regla de no inventar. medido en producción, 4 preguntas reales como campo: la baja, las nóminas y el saldo (sin inventar cifras) y Buffers sin fichar, con pantallas y botones correctos; ⚠️ fallan dos cosas: de LFKK admite que no tiene la definición y aun así inventa una parte, y dice que el atajo de Timeclock registra la baja (solo lleva a My absences). También cerradas dos pruebas pendientes: firmar tarde (PS-0003, PDF de 2 páginas con el anexo) y cambiar de obra (la anterior cierra y la nueva abre en el mismo segundo, con la jornada abierta); ⚠️ vistos ahí: «Switch project» a 64 px con el menú abierto a 859 de ancho (353 a 375) y el anexo con «Proyecto» y la fecha ISO. Datos de prueba borrados · verif_v630 85/85 · romper_v630 26/26 y romper_v621 24/24 · suite 255/255 |
