@@ -10,6 +10,19 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO VISTO VERIFICANDO v633 (v634)
+
+Decisión del usuario: «Dale con v634». El primer despliegue lo bloqueó el clasificador por no estar aprobado expresamente.
+
+- ⚠️ **El contenedor se movía:** `stAppViewContainer` tiene `overflow:hidden`, que deja desplazar por código. En una página
+  corta, `scrollIntoView` lo movía 63 px: el menú subía y quedaba una franja blanca abajo. Viene de `_bajar_a`, en toda la
+  app; se notó al bajar la campana a Files → `overflow:clip`, regla global en `theme.py`.
+- **Lo ya abierto no bajaba:** la ficha sigue abierta al volver a Users, y comparar con ella no veía el toque → se compara con
+  la última fila tocada (`_gu_tocado`) y se olvida cuando no hay fila. Igual en Files (`_arch_sel`).
+- **El saldo del campo salía negativo** con el exceso pagado («-25») → 0.
+
+medido en producción: campana → Files con el menú en y=0, el contenedor en 0 y sin franja; tocar a la persona ya abierta baja a y=68 (se quedaba en 833); a 375 px el menú abre y se desplaza, sin desbordes. Datos de prueba borrados · verif_v633 125/125 · romper_v633 54/54 y romper_v627 60/60 · suite 258/258
+
 ## LO QUE DESTAPÓ EL RECORRIDO DE LA OFICINA (v633)
 
 Sesión de administrador en el panel. Decisiones del usuario («Si dale con todo»): los días de baja sobre el saldo no se
@@ -26,9 +39,7 @@ pagan hasta que la oficina elija, con aviso en Payroll; número siempre y vencim
 - La vista baja a lo que se abre: ficha de Users, acciones de Files y el aviso de la campana. Los Survey por decidir, ⏳ en la
   tabla: dos del mismo minuto se llamaban igual.
 
-⚠️ Visto verificando, en el árbol como v634 (bloqueado el despliegue: falta el «dale» expreso): `overflow:clip` en
-`stAppViewContainer` (un scrollIntoView en página corta lo movía 63 px, con franja blanca), bajar también con la persona o
-fila ya abierta, saldo sin negativos.
+⚠️ Lo visto verificando (franja blanca al bajar, lo ya abierto y el saldo negativo) fue v634.
 
 medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258
 
@@ -15461,7 +15472,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v633 = actual)
+## Versiones desplegadas (v634 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15469,6 +15480,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v634 | **Lo visto verificando v633.** ⚠️ Bajar la vista en una página corta movía el contenedor 63 px (menú subido y franja blanca) → `overflow:clip`, en toda la app; también baja con la persona o fila ya abierta; saldo sin negativos. medido en producción: campana → Files con el menú en y=0, el contenedor en 0 y sin franja; tocar a la persona ya abierta baja a y=68 (se quedaba en 833); a 375 px el menú abre y se desplaza, sin desbordes. Datos de prueba borrados · verif_v633 125/125 · romper_v633 54/54 y romper_v627 60/60 · suite 258/258 |
 | v633 | **El recorrido de la oficina.** ⚠️ La nómina pagaba 20 días de baja con 10 de saldo y la oficina no podía decidir → lo que pasa del saldo se deriva y no se paga hasta «Pay them» o «Leave them unpaid». ⚠️ Una ficha vacía de Forklift hacía apto a quien no tenía el ticket → número y vencimiento obligatorios. Borrar con confirmación, editar todo, cifras que suman, la vista baja a lo que se abre, Survey por decidir marcados. medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258 |
 | v632 | **El asistente en Sonnet 5.5.** ⚠️ No bastaba el nombre: razona, así que se lee por tipo de bloque, se mira `stop_reason` y `max_tokens` da para razonar y responder; el resumen de la oficina sigue en Haiku. La baja, paso a paso y comparada con la pantalla; striker en Buffers; informe interno en inglés. medido en producción con Sonnet: la baja, pasos correctos, atajo en Timeclock y nada inventado, en 3,6 s; LFKK, dice lo que sabe y lo que no, sin adivinar, en 2,2 s; Buffers dice «car striker» y ningún «sticker». El diagrama y el informe interno, solo por guardián (el informe exige un cálculo real) · verif_v632 40/40 · romper_v632 28/28, romper_v631 22/22, romper_v630 26/26, romper_v597 22/22, romper_v594 12/12, romper_v448 7/7 y romper_v438 12/12 · suite 257/257 |
 | v631 | **Lo que destaparon las pruebas reales de v630.** ⚠️ El asistente seguía inventando parte de LFKK → bloque de siglas comparado con cada pantalla y con el motor (solo LFKK y LFGK quedan sin definición, y lo dice); ⚠️ el atajo de la baja solo lleva a My absences; «Switch project» de 64 a 210 px; anexo de firmas en inglés y DD/MM/YYYY. medido en producción: 2 preguntas reales como campo. LFKK sale bien (no tiene la definición, solo lo de Rails y cabina, sin lo del primer riel), ⚠️ salvo que dice que está en «the shaft data section» del plano. ⚠️ La baja sale a medias: ya no dice que el atajo la registra y termina en Record the sick leave, pero pone el atajo dentro de My absences (está en Timeclock) y dice «your crew knows» (no consta). «Switch project» a 210 px con el menú abierto a 859 de ancho (era 64; ahí aún corta las últimas letras de la obra) y 353 a 375; cambia de obra y avisa del Pre-Start de la nueva. Firmar tarde: PDF de 2 páginas, anexo con «Project» y 02/11/2026. Datos de prueba borrados · verif_v631 50/50 · romper_v631 22/22, romper_v630 26/26, romper_v621 24/24, romper_v546 12/12 y romper_v439 8/8 · suite 256/256 |
