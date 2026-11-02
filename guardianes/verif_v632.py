@@ -138,7 +138,8 @@ chk("...y el nombre del tipo", AU.TIPOS[AU.ENFERMEDAD]["nombre"] == "Sick leave"
 chk("las fechas vienen con hoy, como dice", 't("From"), value=hoy' in _u and 't("To"), value=hoy' in _u)
 chk("el paso 3 cita el botón real", "Record the sick leave" in _u and "3. Pulsa **Record the sick leave**." in _rec)
 chk("sin aprobación, como dice", AU.TIPOS[AU.ENFERMEDAD]["aprobacion"] is False and "sin aprobación" in _rec)
-_b = _u[_u.index('key="aus_enviar"'):_u.index('st.session_state["_aus_gen"] = _g + 1')]
+# ⚠️ v640 · Lo que va tras guardar vive en `registrar`, una sola definición para la pantalla y el asistente
+_b = _u[_u.index('def registrar('):_u.index('def _pedir(')]
 chk("sale en la planificación, como dice", "AU.aplicar_al_roster" in _b and "sale en la planificación" in _rec)
 chk("avisa a la oficina, como dice", "_avisar_admins(" in _b and "la oficina recibe el aviso" in _rec)
 _v = _u[_u.index("def _avisar_admins"):]

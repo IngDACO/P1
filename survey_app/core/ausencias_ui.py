@@ -124,6 +124,26 @@ def _saldos(grupo, usuario):
                      b=_fdma(_per["hasta"])))
 
 
+def registrar(grupo, usuario, nombre, tipo, desde, hasta, motivo="", incluir_findes=False) -> tuple:
+    """Guarda la ausencia y hace lo que va detrás: `(ok, id_o_error, aviso)`. v640 · Una sola
+    definición: la usan esta pantalla y el asistente, y cada paso que faltara en uno sería un fallo
+    (una baja que no sale en el tablero, o una oficina que no se entera)."""
+    cfg = AU.TIPOS.get(tipo, {})
+    _ex = AU.exceso(grupo, usuario, tipo, len(AU.dias_del_rango(desde, hasta, incluir_findes)))
+    ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo, incluir_findes=incluir_findes)
+    if not ok:
+        return False, res, ""
+    _aviso = ""
+    # La enfermedad nace aprobada → al tablero YA. Las demás, al aprobar.
+    if not cfg["aprobacion"]:
+        _ok2, _nd = AU.aplicar_al_roster(AU.get(res) or {})
+        if not _ok2:
+            logger.warning("ausencias_ui: roster: %s", _nd)
+            _aviso = t("It is recorded, but the planner could not be updated: tell the office.")
+    _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, _ex)
+    return True, res, _aviso
+
+
 def _pedir(grupo, usuario, nombre):
     """Pedir o avisar. ⚠️ v627 · Sin `st.form`: dentro de un formulario nada reacciona hasta
     enviar, y lo primero que hace falta saber —cuántos días gasta esto— no se veía. Y los campos
@@ -188,19 +208,12 @@ def _pedir(grupo, usuario, nombre):
         if st.button(t(":material/send: Send request") if cfg["aprobacion"]
                      else t(":material/send: Record the sick leave"),
                      type="primary", width="stretch", key="aus_enviar", disabled=bool(_no)):
-            ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta,
-                                   motivo, incluir_findes=findes)
+            ok, res, _aviso = registrar(grupo, usuario, nombre, tipo, desde, hasta, motivo, findes)
             if not ok:
                 st.error(res)
             else:
-                # La enfermedad nace aprobada → al tablero YA. Las demás, al aprobar.
-                if not cfg["aprobacion"]:
-                    _ok2, _nd = AU.aplicar_al_roster(AU.get(res) or {})
-                    if not _ok2:
-                        logger.warning("ausencias_ui: roster: %s", _nd)
-                        flash.aviso(t("It is recorded, but the planner could not be updated: "
-                                      "tell the office."))
-                _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, _ex)
+                if _aviso:
+                    flash.aviso(_aviso)
                 st.session_state["_aus_gen"] = _g + 1
                 flash.exito(t("{x} recorded ({i}).", x=AU.nombre_tipo(tipo), i=res)
                             if not cfg["aprobacion"] else

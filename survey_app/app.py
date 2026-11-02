@@ -332,16 +332,22 @@ with st.sidebar:
                  else "Focused on project management and interpreting results.")
         st.caption(f"{_foco} {ctx_label}")
 
+        # v640 · Lo confirmado o cancelado, ANTES de pintar el historial (trampa 37)
+        from core import chat_ui
+        chat_ui.atender()
+
         # Historial
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"],
                                  avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
                 st.markdown(msg["content"])
+        chat_ui.tarjetas()
 
         # Input
         # v526 · Estaba en español y sin `t()` (visto en producción): el idioma base es el
         # inglés, y ningún barrido de i18n miraba `st.chat_input` (trampa nº30).
         if prompt := st.chat_input(t("Ask your question…"), key="sidebar_chat_input"):
+            _tarjetas_antes = len(chat_ui.pendientes())
             st.session_state.chat_history.append({"role": "user", "content": prompt})
             with st.chat_message("user", avatar="🧑‍🔧"):
                 st.markdown(prompt)
@@ -358,14 +364,18 @@ with st.sidebar:
                         # v639 · De la sesión: es quien decide de quién son los datos que mira
                         usuario      = st.session_state.get("auth", {}).get("usuario", ""),
                         nombre       = st.session_state.get("auth", {}).get("nombre", ""),
+                        acciones     = chat_ui.pendientes(),
                     )
                 st.markdown(_response)
             st.session_state.chat_history.append({"role": "assistant", "content": _response})
+            if len(chat_ui.pendientes()) > _tarjetas_antes:
+                st.rerun()                       # la tarjeta nueva va debajo de lo que acaba de decir
 
         # Limpiar
         if st.session_state.chat_history:
             if st.button(t(":material/delete: Clear the conversation"), width="stretch", key="clear_chat_sb"):
                 st.session_state.chat_history = []
+                chat_ui.olvidar()
                 st.rerun()
 
 # ══════════════════════════════════════════════════════

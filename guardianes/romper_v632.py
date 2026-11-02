@@ -51,7 +51,7 @@ ROTURAS = [
     ("las fechas dejan de venir con hoy", "core/ausencias_ui.py",
      [('t("From"), value=hoy', 't("From"), value=None')]),
     ("⚠️ la baja deja de avisar a la oficina", "core/ausencias_ui.py",
-     [("                _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, _ex)\n", "")]),
+     [("    _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, _ex)\n", "")]),
     ("⚠️ la baja deja de entrar en la planificación", "core/ausencias_ui.py",
      [("_ok2, _nd = AU.aplicar_al_roster(AU.get(res) or {})", "_ok2, _nd = True, 0")]),
     ("⚠️ la baja pasa a necesitar aprobación", "core/ausencias.py",

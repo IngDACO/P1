@@ -412,7 +412,8 @@ chk("`solicitar` valida que la fila cuadre con la cabecera (v363)",
 _por_id = [f_.name for f_ in ast.walk(arbol("core/ausencias_ui.py"))
            if isinstance(f_, ast.FunctionDef) and "AU.get(" in ast.unparse(f_)]
 chk("las vistas trabajan sobre listas YA filtradas por grupo (sin ID global suelto)",
-    all(n in ("_pedir", "_tarjeta_pendiente") for n in _por_id),      # v627: `_pedir`, la pieza que era
+    # v640 · `registrar`, donde se mudó lo de `_pedir`: lee el ID que `solicitar` acaba de devolver, no uno de fuera.
+    all(n in ("registrar", "_tarjeta_pendiente") for n in _por_id),   # v627: la pieza que era
     str(_por_id))
 
 # ── 10 ───────────────────────────────────────────────────────────

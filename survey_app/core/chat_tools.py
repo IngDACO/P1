@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
-"""Lo que el Field assistant puede CONSULTAR (v639): el primer nivel de autonomía.
+"""Lo que el Field assistant puede consultar y hacer (v639-v640).
 
 Hasta aquí no sabía quién le preguntaba: recibía la guía, los manuales y el cálculo abierto, y
 «¿qué me falta hoy?» no tenía respuesta. Ahora puede mirar los datos de ESA persona antes de
-contestar. Decisión del usuario (02/11/2026): tres niveles —ver, preparar y confirmar, actuar solo en
-lo reversible— y se empieza por ver.
+contestar. Decisión del usuario (02/11/2026), tres niveles:
+
+  1. VER (`LECTURA`): sus datos, y nada más.
+  2. PREPARAR Y CONFIRMAR (`PREPARAR`): el parte, el aviso a la oficina y las ausencias. Se valida, se
+     deja una tarjeta en la sesión y NO se escribe nada: lo hace `confirmar`, al tocar Confirm (`chat_ui`).
+  3. ACTUAR SOLO (`DIRECTAS`): apuntar y marcar en To-do, y nada más: es reversible y no avisa a nadie.
+
+⚠️ Fichar, firmar, enviar el Pre-Start o el checklist y acreditar avance NO están, ni confirmados: son
+actos personales de quien los hace, y la app no acredita sola (decisión del usuario).
 
 ## ⚠️ La identidad no la dice el modelo
 
@@ -17,16 +24,20 @@ error del modelo ni un texto escrito en una tarea pueden enseñar los datos de o
 Tareas, partes y avisos los escribe otra gente: el texto llega aquí tal cual y la persona del
 asistente dice que nunca es una instrucción (`chat_agent._PERSONA`).
 
-## Solo lectura
+Por eso una herramienta que cambia algo solo se usa si la persona lo pidió en la conversación.
 
-Ninguna función de este módulo escribe, y lo que el campo no ve en su pantalla no sale de aquí: las
-nóminas no están, y los documentos pasan por el mismo filtro que Files (`_CAMPO_VER`).
+## Lo que no se ve
+
+Lo que el campo no ve en su pantalla no sale de aquí: las nóminas no están, y los documentos pasan
+por el mismo filtro que Files (`_CAMPO_VER`).
 """
 import json
 import logging
+import uuid
 
 from core import clock
-from core.num import dmy, num as _num
+from core.i18n import t
+from core.num import dmy, num as _num, parse_date as _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +45,9 @@ MAX_PARTES = 3            # los últimos partes de la obra: para saber por dónd
 MAX_CARACTERES = 400      # de cada texto largo (un parte, las instrucciones)
 MAX_SOLICITUDES = 8       # las últimas ausencias
 # `credentials.estado` devuelve el dato en español, que es con lo que se compara en la app
+MAX_DIRECTAS = 5          # apuntar o marcar, por pregunta: un error del modelo no vacía la lista
+MAX_TARJETAS = 3          # esperando un toque a la vez
+MAX_AVISO = 1000          # lo mismo que manda la pantalla del parte a la oficina
 _ESTADO_CRED = {"incompleta": "incomplete", "vigente": "valid", "por_vencer": "expiring_soon", "vencido": "expired"}
 
 
@@ -182,6 +196,139 @@ def _mis_credenciales(entrada, ctx) -> dict:
                             for c in CR.list_for(ctx["usuario"]) or []]}
 
 
+# ═════════════════════════════════════════════════════════════════
+# Nivel 3 — lo que hace solo: reversible y sin avisar a nadie
+# ═════════════════════════════════════════════════════════════════
+def _una_directa(ctx) -> None:
+    ctx["_directas"] = ctx.get("_directas", 0) + 1
+    if ctx["_directas"] > MAX_DIRECTAS:
+        raise _Negado("That is enough changes for one go. Tell the person what is left and stop.")
+
+
+def _apuntar_tarea(entrada, ctx) -> dict:
+    from core import tareas as TA
+    prj = _obra(entrada, ctx)
+    _una_directa(ctx)
+    ok, r = TA.crear(str(prj.get("ID", "")), ctx["grupo"], entrada.get("text"), ctx["usuario"])
+    if not ok:
+        raise _Negado(str(r))
+    return {"done": True, "task_id": r, "job": prj.get("Name", "")}
+
+
+def _marcar_tarea(entrada, ctx) -> dict:
+    from core import tareas as TA
+    prj = _obra(entrada, ctx)
+    _una_directa(ctx)
+    ok, r = TA.marcar(str(entrada.get("task_id", "")).strip(), str(prj.get("ID", "")),
+                      bool(entrada.get("done", True)), ctx["usuario"])
+    if not ok:
+        raise _Negado(str(r))
+    return {"done": True, "job": prj.get("Name", "")}
+
+
+# ═════════════════════════════════════════════════════════════════
+# Nivel 2 — lo que prepara: valida y deja una tarjeta, SIN escribir
+# ═════════════════════════════════════════════════════════════════
+def _tarjeta(ctx, tipo, titulo, detalle, datos) -> dict:
+    lista = ctx.get("acciones")
+    if lista is None:
+        raise _Negado("Nothing can be prepared here.")
+    if any(a.get("tipo") == tipo and a.get("datos") == datos for a in lista):
+        return {"prepared": True, "status": "NOT DONE YET", "next": "That card is already waiting for them."}
+    if len(lista) >= MAX_TARJETAS:
+        raise _Negado("Several cards are already waiting. Ask the person to confirm or cancel them first.")
+    lista.append({"id": uuid.uuid4().hex[:8], "tipo": tipo, "titulo": titulo, "detalle": detalle, "datos": datos})
+    return {"prepared": True, "status": "NOT DONE YET",
+            "next": "They now see a card with Confirm and Cancel, and nothing happens until they press Confirm. "
+                    "Tell them that in one line. Do not say it is done."}
+
+
+def _preparar_parte(entrada, ctx) -> dict:
+    from core import daily_log as DL
+    prj = _obra(entrada, ctx)
+    txt = str(entrada.get("text") or "").strip()
+    if not txt:
+        raise _Negado("The daily log is empty: ask them what they did.")
+    if len(txt) > DL.MAX_TEXTO:
+        raise _Negado(f"That is too long for a daily log (limit {DL.MAX_TEXTO} characters): shorten it.")
+    hoy = clock.today(ctx["grupo"])
+    dia = _parse_date(entrada.get("date")) if entrada.get("date") else hoy
+    if not dia or dia > hoy:
+        raise _Negado("The date has to be today or an earlier day, as YYYY-MM-DD.")
+    return _tarjeta(ctx, "parte", t("Daily log · {o} · {d}", o=prj.get("Name", ""), d=dmy(dia)), txt,
+                    {"project_id": str(prj.get("ID", "")), "text": txt, "date": dia.isoformat()})
+
+
+def _preparar_aviso(entrada, ctx) -> dict:
+    prj = _obra(entrada, ctx)
+    txt = str(entrada.get("message") or "").strip()
+    if not txt:
+        raise _Negado("The alert is empty: ask them what the problem is.")
+    if len(txt) > MAX_AVISO:
+        raise _Negado(f"That is too long for an alert (limit {MAX_AVISO} characters): shorten it.")
+    return _tarjeta(ctx, "aviso", t("Alert to the office · {o}", o=prj.get("Name", "")), txt,
+                    {"project_id": str(prj.get("ID", "")), "message": txt})
+
+
+def _preparar_ausencia(entrada, ctx) -> dict:
+    from core import ausencias as AU
+    tipo = {"annual_leave": AU.VACACIONES, "day_off": AU.LIBRE, "sick_leave": AU.ENFERMEDAD}.get(str(entrada.get("type")))
+    if tipo is None:
+        raise _Negado("The type has to be annual_leave, day_off or sick_leave.")
+    d0, d1 = _parse_date(entrada.get("from")), _parse_date(entrada.get("to") or entrada.get("from"))
+    if not d0 or not d1:
+        raise _Negado("The dates have to be YYYY-MM-DD: ask them if they are not clear.")
+    findes = bool(entrada.get("include_weekends", False))
+    _err = AU.problema_solicitud(ctx["grupo"], ctx["usuario"], tipo, d0, d1, findes)
+    if _err:
+        raise _Negado(str(_err))
+    _n = len(AU.dias_del_rango(d0, d1, findes))
+    motivo = str(entrada.get("reason") or "").strip()
+    _ex = AU.exceso(ctx["grupo"], ctx["usuario"], tipo, _n)
+    _lineas = [t("{a} to {b} · {n} day(s)", a=dmy(d0), b=dmy(d1), n=_n)]
+    if motivo:
+        _lineas.append(motivo)
+    if _ex:
+        _lineas.append(t("{n} day(s) over your balance: the office decides how they are paid.", n=_ex))
+    return _tarjeta(ctx, "ausencia", AU.nombre_tipo(tipo), "\n".join(_lineas),
+                    {"tipo": tipo, "from": d0.isoformat(), "to": d1.isoformat(), "reason": motivo, "weekends": findes})
+
+
+def confirmar(accion, ctx) -> tuple:
+    """Hace lo que la tarjeta dice: `(ok, mensaje)`. Solo lo llama el toque de Confirm (`chat_ui`).
+    ⚠️ Con la identidad de la SESIÓN, y la obra se vuelve a comprobar: la cuadrilla pudo cambiar."""
+    d = (accion or {}).get("datos") or {}
+    g, u, n = ctx.get("grupo", ""), ctx.get("usuario", ""), ctx.get("nombre", "")
+    if not str(u).strip() or not str(g).strip():
+        return False, t("This person could not be identified.")
+    tipo = (accion or {}).get("tipo")
+    try:
+        if tipo == "parte":
+            from core import daily_log as DL
+            prj = _obra(d, ctx)
+            ok, r = DL.crear(str(prj.get("ID", "")), g, d.get("text"), u, dia=d.get("date"))
+            return (True, t("Daily log saved. Open it in **Daily log** to confirm what it proposes.")) if ok else (False, str(r))
+        if tipo == "aviso":
+            from core import alerts
+            prj = _obra(d, ctx)
+            ok, r = alerts.report_problem(str(prj.get("ID", "")), g, d.get("message"), u, str(prj.get("Name", "")))
+            return (True, t("Sent to the office ({a}).", a=r)) if ok else (False, str(r))
+        if tipo == "ausencia":
+            from core import ausencias as AU, ausencias_ui as AUI
+            ok, r, aviso = AUI.registrar(g, u, n, d.get("tipo"), d.get("from"), d.get("to"), d.get("reason", ""), bool(d.get("weekends")))
+            if not ok:
+                return False, str(r)
+            _m = (t("{x} recorded ({i}).", x=AU.nombre_tipo(d.get("tipo")), i=r) if not AU.TIPOS[d.get("tipo")]["aprobacion"]
+                  else t("Request sent ({i}). We will let you know when it is resolved.", i=r))
+            return True, _m + (" " + aviso if aviso else "")
+    except _Negado as e:
+        return False, str(e)
+    except Exception as e:
+        logger.warning("chat_tools.confirmar(%s): %r", tipo, e)
+        return False, t("That could not be saved. Try again in a minute.")
+    return False, t("This action is not recognised.")
+
+
 _SIN_ENTRADA = {"type": "object", "properties": {}, "additionalProperties": False}
 _POR_OBRA = {"type": "object", "additionalProperties": False, "required": ["project_id"],
              "properties": {"project_id": {"type": "string", "description": "The job ID, like PRJ-0027."}}}
@@ -206,7 +353,45 @@ LECTURA = [
      "description": "Their credentials and tickets with expiry date and status. Call it for anything about their "
                     "cards, tickets or licences."},
 ]
-_POR_NOMBRE = {h["name"]: h for h in LECTURA}
+_ID_OBRA = {"type": "string", "description": "The job ID, like PRJ-0027."}
+DIRECTAS = [
+    {"name": "add_todo", "fn": _apuntar_tarea,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "text"],
+                      "properties": {"project_id": _ID_OBRA, "text": {"type": "string", "description": "One line."}}},
+     "description": "Add a task to a job's To-do list, straight away and with no confirmation. Call it when the person "
+                    "asks you to note, add or remember something for a job."},
+    {"name": "mark_todo", "fn": _marcar_tarea,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "task_id"],
+                      "properties": {"project_id": _ID_OBRA,
+                                     "task_id": {"type": "string", "description": "Like TSK-0012, from get_job_details."},
+                                     "done": {"type": "boolean", "description": "False to reopen it. Defaults to true."}}},
+     "description": "Mark a To-do task as done, or reopen it, straight away and with no confirmation. Call it when the "
+                    "person says a task is done or asks to reopen it."},
+]
+PREPARAR = [
+    {"name": "prepare_daily_log", "fn": _preparar_parte,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "text"],
+                      "properties": {"project_id": _ID_OBRA, "text": {"type": "string", "description": "What they said they did, in their own words."},
+                                     "date": {"type": "string", "description": "YYYY-MM-DD, only if it is not for today."}}},
+     "description": "Prepare the person's daily log for a job. It shows them a card to confirm and saves nothing yet. Call "
+                    "it when they tell you what they did and ask you to write it up. Add nothing they did not say."},
+    {"name": "prepare_office_alert", "fn": _preparar_aviso,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "message"],
+                      "properties": {"project_id": _ID_OBRA, "message": {"type": "string", "description": "The problem, clear and short."}}},
+     "description": "Prepare an alert to the office about a problem on a job. It shows them a card to confirm and sends "
+                    "nothing yet. Call it when they ask you to tell the office about a problem."},
+    {"name": "prepare_absence", "fn": _preparar_ausencia,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["type", "from"],
+                      "properties": {"type": {"type": "string", "enum": ["annual_leave", "day_off", "sick_leave"]},
+                                     "from": {"type": "string", "description": "YYYY-MM-DD."},
+                                     "to": {"type": "string", "description": "YYYY-MM-DD. Defaults to the same day."},
+                                     "reason": {"type": "string"},
+                                     "include_weekends": {"type": "boolean", "description": "Only if those days are worked."}}},
+     "description": "Prepare a day off, annual leave or sick leave. It checks the dates and the balance and shows them a "
+                    "card to confirm, and records nothing yet. Call it when they ask for time off or say they are sick."},
+]
+TODAS = LECTURA + DIRECTAS + PREPARAR
+_POR_NOMBRE = {h["name"]: h for h in TODAS}
 
 
 def definiciones(rol, usuario="") -> list:
@@ -214,7 +399,7 @@ def definiciones(rol, usuario="") -> list:
     solo el campo: la oficina es el siguiente agente del recorrido."""
     if rol != "field" or not str(usuario or "").strip():
         return []
-    return [{k: v for k, v in h.items() if k != "fn"} for h in LECTURA]
+    return [{k: v for k, v in h.items() if k != "fn"} for h in TODAS]
 
 
 def ejecutar(nombre, entrada, ctx) -> tuple:

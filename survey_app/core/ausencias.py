@@ -737,6 +737,43 @@ def _next_id(recs) -> str:
         return f"AUS-{mx + 1:04d}"
 
 
+def problema_solicitud(grupo, usuario, tipo, desde, hasta, incluir_findes=False) -> str:
+    """Por qué no se puede registrar esa ausencia, o "". v640 · Aparte de `solicitar` y sin escribir
+    nada: el asistente lo pregunta ANTES de ofrecer la tarjeta, y así no hay dos listas de reglas."""
+    if tipo not in TIPOS:
+        return f"{t('Unknown absence type')}: {tipo}"
+    # ⚠️ Dos motivos DISTINTOS para no tener días, y decirlos como si fueran el mismo
+    # manda a corregir lo que no está mal. Lo cazó el ejercicio: hoy era sábado, así
+    # que una baja por enfermedad de HOY a HOY salía «la fecha de fin no puede ser
+    # anterior a la de inicio» — con las fechas perfectamente bien. Quien se pone malo
+    # un fin de semana no podía registrarlo, y encima el mensaje mentía.
+    _d0, _d1 = _parse_date(desde), _parse_date(hasta)
+    if not _d0 or not _d1:
+        return t("The dates could not be read.")
+    if _d1 < _d0:
+        return t("The end date cannot be earlier than the start date.")
+    dias = dias_del_rango(desde, hasta, incluir_findes)
+    if not dias:
+        return t("That range only covers the weekend. If those days are "
+                        "worked, tick «include weekends».")
+    _sol = solapadas(grupo, usuario, desde, hasta)
+    if _sol:
+        _r = _sol[0]
+        return (f"{t('There is already an absence overlapping those dates')}: "
+                       f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
+                       f"{dmy(_r.get('From'))} → {dmy(_r.get('To'))}, {t(str(_r.get('Status')))}).")
+
+    cfg = TIPOS[tipo]
+    # ⚠️ v627 · Lo que se PIDE no pasa del saldo, aquí y no solo en la pantalla. La enfermedad no
+    # se pide: se registra siempre —quien está enfermo está enfermo, y el tablero tiene que
+    # decirlo— y lo que pasa del saldo lo decide la oficina (`decidir_exceso`).
+    _ex = exceso(grupo, usuario, tipo, len(dias))
+    if _ex and cfg["aprobacion"]:
+        return t("You are asking for {n} and you have {m} available (what is waiting for "
+                        "approval counts).", n=len(dias), m=f"{max(saldo(grupo, usuario, tipo)['disponibles'], 0):.0f}")
+    return ""
+
+
 def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
               incluir_findes=False) -> tuple:
     """Crea la solicitud. Devuelve (ok, id|error).
@@ -750,35 +787,12 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
-    # ⚠️ Dos motivos DISTINTOS para no tener días, y decirlos como si fueran el mismo
-    # manda a corregir lo que no está mal. Lo cazó el ejercicio: hoy era sábado, así
-    # que una baja por enfermedad de HOY a HOY salía «la fecha de fin no puede ser
-    # anterior a la de inicio» — con las fechas perfectamente bien. Quien se pone malo
-    # un fin de semana no podía registrarlo, y encima el mensaje mentía.
+    _err = problema_solicitud(grupo, usuario, tipo, desde, hasta, incluir_findes)
+    if _err:
+        return False, _err
     _d0, _d1 = _parse_date(desde), _parse_date(hasta)
-    if not _d0 or not _d1:
-        return False, t("The dates could not be read.")
-    if _d1 < _d0:
-        return False, t("The end date cannot be earlier than the start date.")
     dias = dias_del_rango(desde, hasta, incluir_findes)
-    if not dias:
-        return False, t("That range only covers the weekend. If those days are "
-                        "worked, tick «include weekends».")
-    _sol = solapadas(grupo, usuario, desde, hasta)
-    if _sol:
-        _r = _sol[0]
-        return False, (f"{t('There is already an absence overlapping those dates')}: "
-                       f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
-                       f"{dmy(_r.get('From'))} → {dmy(_r.get('To'))}, {t(str(_r.get('Status')))}).")
-
     cfg = TIPOS[tipo]
-    # ⚠️ v627 · Lo que se PIDE no pasa del saldo, aquí y no solo en la pantalla. La enfermedad no
-    # se pide: se registra siempre —quien está enfermo está enfermo, y el tablero tiene que
-    # decirlo— y lo que pasa del saldo lo decide la oficina (`decidir_exceso`).
-    _ex = exceso(grupo, usuario, tipo, len(dias))
-    if _ex and cfg["aprobacion"]:
-        return False, t("You are asking for {n} and you have {m} available (what is waiting for "
-                        "approval counts).", n=len(dias), m=f"{max(saldo(grupo, usuario, tipo)['disponibles'], 0):.0f}")
     estado = PENDIENTE if cfg["aprobacion"] else APROBADA
     hoy = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
     fila = [_next_id(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)),
