@@ -167,8 +167,10 @@ chk("...y sus DESCRIPCIONES sí (van al prompt)",
     interpretation.INTERPRETATION_SCHEMA["parametros"].startswith("Analysis of"))
 # ⚠️ EXCLUSIÓN DELIBERADA: la base de conocimiento se queda en español; lo que manda
 # es la regla de estilo, que sí se tradujo.
-chk("el asistente tiene la orden de responder en INGLÉS",
-    "Responde SIEMPRE en inglés técnico claro" in chat_agent.SYSTEM_PROMPT)
+# ⚠️ v642 · CADUCADO por decisión del usuario, no relajado: ya no es «siempre en inglés», sino en el idioma
+# en que le preguntan. La regla de estilo sigue mandando sobre el idioma de esta guía.
+chk("el asistente tiene la orden de responder en el idioma en que le preguntan",
+    "Responde en el idioma en que te preguntan" in chat_agent.SYSTEM_PROMPT)
 chk("...aunque su base de conocimiento siga en español (exclusión con razón)",
     "GEOMETRÍA DEL HUECO" in chat_agent.SYSTEM_PROMPT)
 

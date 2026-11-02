@@ -23,9 +23,9 @@ ROTURAS = [
      "el comparador del prefijo de la IA se desincroniza"),
     ("core/report.py", '_d("2. CAR DIMENSIONS")', '_d("2. DIMENSIONES DE CABINA")',
      "una cabecera del informe vuelve al espanol"),
-    ("core/chat_agent.py", "Responde SIEMPRE en ingles tecnico claro".replace("ingles", "inglés").replace("tecnico", "técnico"),
+    ("core/chat_agent.py", "Responde en el idioma en que te preguntan",
      "Responde siempre en español técnico claro",
-     "el asistente vuelve a responder en espanol"),
+     "el asistente vuelve a un idioma fijo"),
     ("core/admin_digest.py", 't("Open alarms:")', '"Alarmas abiertas:"',
      "un texto del radar vuelve al espanol"),
     # ⚠️ v515: el ancla decia '"Montaje de rieles (guías)"' y apuntaba a

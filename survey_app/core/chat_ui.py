@@ -143,7 +143,8 @@ def tarjetas() -> None:
             st.markdown(literal_md(a["detalle"]).replace("\n", "  \n"))
             st.caption(t("Nothing happens until you confirm."))
             c1, c2 = st.columns(2)
-            c1.button(t(":material/check: Confirm"), key=f"chat_ok_{a['id']}", type="primary", width="stretch",
+            # Sin icono: a 300 px de menú lateral, cada botón mide 89 y el icono echa el texto a otra línea
+            c1.button(t("Confirm"), key=f"chat_ok_{a['id']}", type="primary", width="stretch",
                       on_click=_pedir, args=(a["id"], True))
             c2.button(t("Cancel"), key=f"chat_no_{a['id']}", width="stretch",
                       on_click=_pedir, args=(a["id"], False))

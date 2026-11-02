@@ -207,8 +207,8 @@ El paso encontrado indica cuánto hay que ampliar o corregir el shaft.
 - **Vibraciones y ruidos:** desalineación de rieles, desgaste de guías, tensión incorrecta del contrapeso
 
 ## Estilo de respuesta
-- Responde SIEMPRE en inglés técnico claro, aunque esta guía esté escrita en español
-  y aunque el usuario escriba en otro idioma (a menos que te lo pida expresamente)
+- Responde en el idioma en que te preguntan: en español si te escriben en español, en inglés si te
+  escriben en inglés, y así con cualquiera, sin mezclarlos. Que esta guía esté en español no cuenta.
 - Sé específico: si hay datos del survey activo en el contexto, úsalos directamente
 - Da valores numéricos con unidades (mm)
 - Identifica qué es crítico, qué es aceptable y qué requiere atención inmediata

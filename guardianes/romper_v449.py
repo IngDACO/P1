@@ -36,9 +36,9 @@ ROTURAS = [
     # que no vuelva el nombre español de la carpeta.
     ("core/inventory_ui.py", 'drive_store.folder("COPEX Assets")', 'drive_store.folder("COPEX Activos")',
      "la carpeta de Drive vuelve al nombre español (dejaria los activos en otra)"),
-    ("core/chat_agent.py", "Responde SIEMPRE en inglés técnico claro",
+    ("core/chat_agent.py", "Responde en el idioma en que te preguntan",
      "Responde siempre en español técnico claro",
-     "el asistente vuelve a responder en espanol"),
+     "el asistente vuelve a un idioma fijo"),
     # ATENCION: el t() a nivel de modulo por QUINTA vez. Se congela al importar.
     # v569 · la palabra pasó a «pending» (la de `etiqueta`, la de la tabla y el PDF): la
     # rotura es la misma, anclada a la forma nueva.

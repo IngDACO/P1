@@ -215,9 +215,9 @@ chk("...y la sonda SI caza un nombre traducido (trampa nº12)",
 # obligar a mirar la migracion — y eso es exactamente lo que hizo. La migracion se hizo
 # en v453 (123/123 filas, 1 batch, verificadas leyendo), asi que la afirmacion se
 # INVIERTE: ahora protege que no vuelvan al espanol y que codigo y hoja digan lo MISMO.
-chk("la base de conocimiento del asistente sigue en español, con la orden en inglés",
+chk("la base de conocimiento del asistente sigue en español, con la orden de idioma (v642)",
     "GEOMETRÍA DEL HUECO" in chat_agent.SYSTEM_PROMPT
-    and "Responde SIEMPRE en inglés técnico claro" in chat_agent.SYSTEM_PROMPT)
+    and "Responde en el idioma en que te preguntan" in chat_agent.SYSTEM_PROMPT)
 # ⚠️ CADUCADO por v467 e INVERTIDO, no relajado: la carpeta ya está en inglés y lo
 # que hay que proteger es que se llegue ahí RENOMBRANDO la vieja —conserva los
 # archivos— y nunca creando una nueva, que es lo que los dejaría huérfanos.
