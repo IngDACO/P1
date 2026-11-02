@@ -410,7 +410,8 @@ cual, en inglés, sin traducirlos.
 - **Daily False Car Checklist:** solo en las obras creadas con **False car? Yes**. Vive en la sección
   **Pre-Start**: en esas obras, arriba, se elige **Pre-Start** o **False car**. Se exige desde que
   **Install sky climber** está marcada al 100% hasta que se marca **Remove/dismantle sky climber & sky
-  lock**. Son 18 puntos: ✓ si pasa, X si no; con X, **Remarks** es obligatorio. Uno por obra y día: lo
+  lock**. Son 18 puntos: ✓ si pasa, X si no; con X, **Remarks** es obligatorio. **Mark all as passed**
+  marca ✓ en los que estén sin responder, sin tocar una X; se pueden cambiar y hay que firmar. Uno por obra y día: lo
   hace el primero que llega y los demás lo firman. Una X abre una alarma a la oficina y la pantalla dice
   que no se use el false car hasta arreglarlo. Avisa, no impide fichar, y el PDF queda en **Files**.
 - **Days worked with no record** (solo oficina, arriba de la sección Pre-Start): los días de los

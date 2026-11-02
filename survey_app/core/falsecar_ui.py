@@ -113,14 +113,28 @@ def _resultado(r) -> None:
                        mime="application/pdf", width="stretch", key=f"fc_dl_{r['id']}", on_click="ignore")
 
 
+def _marcar_todo(kp) -> None:
+    """✓ en los puntos SIN responder (decisión del usuario, v638). ⚠️ Una X no se pisa: una alarma no
+    puede borrarse con un toque general. Se ASIGNA, y antes de pintar: es lo que llega al navegador
+    (trampa 31), y como `on_click` no lo corta el lienzo de la firma al montarse (trampa 39)."""
+    for k, _x in FC.CHECKS:
+        if st.session_state.get(f"fc_res_{kp}_{k}") is None:
+            st.session_state[f"fc_res_{kp}_{k}"] = FC.PASA
+
+
 def _formulario(prj, pid, grupo, dia, nombre, usuario, gestor) -> None:
     from core.prestart_ui import _LIENZO, _canvas_disponible, _firma_png, _initials
     # ⚠️ Con la obra, el día y una generación en la clave (v623): sin eso, las respuestas y la firma
     # pasarían de una obra a otra, y vaciarlas no llega al navegador (trampa 31).
     _gen = int(st.session_state.get(f"_fc_gen_{pid}", 0))
     kp = f"{pid}_{dia.isoformat()}_{_gen}"
-    # Sin respuesta por defecto (v158): es una revisión, no una firma.
+    # Sin respuesta por defecto (v158): es una revisión, no una firma. El botón no cambia eso: el
+    # formulario nace vacío, marcar es un gesto de quien revisa y lo que respalda es su firma (v638).
     st.caption(t("Answer every item: ✓ if it passes, X if it does not. With X, the remarks are required."))
+    # `disabled` y no ocultarlo: que no salte lo que hay debajo del dedo.
+    st.button(t(":material/done_all: Mark all as passed"), key=f"fc_todo_{kp}", width="stretch",
+              on_click=_marcar_todo, args=(kp,),
+              disabled=not any(st.session_state.get(f"fc_res_{kp}_{k}") is None for k, _x in FC.CHECKS))
     resultados = {}
     st.markdown(_CSS_PUNTOS, unsafe_allow_html=True)
     with st.container(key="cpx_fc_puntos"):

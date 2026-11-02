@@ -300,6 +300,33 @@ ROTURAS = [
      [("""    _sin = [x for x in _a if not str(x.get("usuario", "") or "").strip()] if quien_u else _a\n""", """    _sin = _a\n""")]),
     ("⚠️ el aviso sale sobre otro día", U,
      [("""    if _r and (_r.get("dia") != hoy.isoformat() or _r.get("fecha") != dia.isoformat()):\n""", """    if _r and _r.get("dia") != hoy.isoformat():\n""")]),
+    # ── v638 ──
+    ("⚠️ el botón no marca nada", U,
+     [("""            st.session_state[f"fc_res_{kp}_{k}"] = FC.PASA\n""", """            pass\n""")]),
+    ("⚠️ el botón pisa una X", U,
+     [("""        if st.session_state.get(f"fc_res_{kp}_{k}") is None:
+            st.session_state[f"fc_res_{kp}_{k}"] = FC.PASA
+""", """        st.session_state[f"fc_res_{kp}_{k}"] = FC.PASA
+""")]),
+    ("⚠️ el botón marca X", U,
+     [("""            st.session_state[f"fc_res_{kp}_{k}"] = FC.PASA\n""", """            st.session_state[f"fc_res_{kp}_{k}"] = FC.FALLA\n""")]),
+    ("el botón no se apaga", U,
+     [("""              on_click=_marcar_todo, args=(kp,),
+              disabled=not any(st.session_state.get(f"fc_res_{kp}_{k}") is None for k, _x in FC.CHECKS))
+""", """              on_click=_marcar_todo, args=(kp,))
+""")]),
+    ("⚠️ el botón no sabe qué formulario es", U,
+     [("""              on_click=_marcar_todo, args=(kp,),\n""", """              on_click=_marcar_todo, args=(pid,),\n""")]),
+    ("⚠️ el formulario nace marcado", U,
+     [("""    st.button(t(":material/done_all: Mark all as passed"), key=f"fc_todo_{kp}", width="stretch",\n""", """    _marcar_todo(kp)
+    st.button(t(":material/done_all: Mark all as passed"), key=f"fc_todo_{kp}", width="stretch",\n""")]),
+    ("el botón desaparece", U,
+     [("""    st.button(t(":material/done_all: Mark all as passed"), key=f"fc_todo_{kp}", width="stretch",
+              on_click=_marcar_todo, args=(kp,),
+              disabled=not any(st.session_state.get(f"fc_res_{kp}_{k}") is None for k, _x in FC.CHECKS))
+""", "")]),
+    ("el asistente no lo conoce", "core/chat_agent.py",
+     [("""**Mark all as passed**\n""", """\n""")]),
     # ── Los avisos ──
     ("⚠️ dos diálogos en la misma pasada", "app.py",
      [("""    if not aviso_prestart_pendiente(_GRUPO):\n        aviso_falsecar_pendiente(_GRUPO)\n""", """    aviso_prestart_pendiente(_GRUPO)\n    aviso_falsecar_pendiente(_GRUPO)\n""")]),

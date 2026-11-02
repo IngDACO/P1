@@ -491,7 +491,7 @@ def _fir(*a):
     st.session_state["_firmado"] = a
     return {"ok": True, "archivado": True, "error": ""}
 FC.firmar = _fir
-PU._canvas_disponible = lambda: None
+PU._canvas_disponible = (lambda: (lambda **k: None)) if E.get("lienzo") else (lambda: None)
 flash.mostrar()
 _o = {"ID": "PRJ-1", "Name": "Obra A", "Group": "cliente1", "StagePlanJSON": P.plan_nuevo("Installation", S.FALSE_CAR)}
 U.render(_o, "cliente1", E.get("rol", "field"), "campo000", "Field Test", E.get("dia"))
@@ -801,6 +801,41 @@ chk("⚠️ con otro día elegido, el aviso no sale", not any("FC-0007" in s.val
 chk("...y ahí está su formulario", len(rad(at)) == 18)
 next(d for d in at.date_input if "fc_fecha" in d.key).set_value(dt.date(2026, 11, 2)).run()
 chk("al volver a su día, vuelve", any("FC-0007" in s.value for s in at.success), [s.value for s in at.success])
+
+sec("15. v638 · Mark all as passed (con clics)")
+at = pinta()
+_bt = btn(at, "fc_todo")
+chk("⚠️ el botón está, y el formulario sigue naciendo vacío", _bt is not None and _bt.disabled is False and all(r.value is None for r in rad(at)))
+chk("con su rótulo", "Mark all as passed" in _bt.label, _bt.label)
+_bt.click().run()
+chk("⚠️ marca ✓ los 18", all(r.value == "pass" for r in rad(at)), [r.value for r in rad(at)])
+chk("⚠️ y le llega al NAVEGADOR (trampa 31: el valor se asigna)", all(r.proto.set_value for r in rad(at)), [r.proto.set_value for r in rad(at)][:3])
+chk("⚠️ marcar no envía nada", "_enviado" not in at.session_state)
+chk("hecho, se apaga sin desaparecer", btn(at, "fc_todo").disabled is True)
+rad(at)[6].set_value("fail").run()
+chk("⚠️ se puede cambiar cualquiera a X, y pide sus observaciones", btn(at, "fc_submit").disabled is True and any("7" in c.value for c in at.caption if "Still to complete" in c.value), [c.value for c in at.caption][:3])
+at = pinta()
+rad(at)[4].set_value("fail").run()
+next(i for i in at.text_input if i.key.endswith("_fc05")).set_value("cable pisado").run()
+rad(at)[9].set_value("pass").run()
+btn(at, "fc_todo").click().run()
+_v = {r.key[-4:]: r.value for r in rad(at)}
+chk("⚠️ una X NO se pisa", _v["fc05"] == "fail", _v)
+chk("...ni sus observaciones", next(i for i in at.text_input if i.key.endswith("_fc05")).value == "cable pisado")
+chk("...y el resto queda en ✓", [k for k, x in _v.items() if x != "pass"] == ["fc05"], _v)
+at = pinta()
+btn(at, "fc_todo").click().run()
+next(i for i in at.text_input if i.key.startswith("fc_ini_")).set_value("FT")
+at.run()
+btn(at, "fc_submit").click().run()
+_e = at.session_state["_enviado"]
+chk("se envían los 18 en ✓, como marcados uno a uno", len(_e["res"]) == 18 and all(x["res"] == "pass" for x in _e["res"].values()), _e["res"])
+at = pinta(lienzo=True)
+btn(at, "fc_todo").click().run()
+chk("⚠️ la firma sigue siendo obligatoria", btn(at, "fc_submit").disabled is True and any("signature" in c.value for c in at.caption if "Still to complete" in c.value), [c.value for c in at.caption][:3])
+_bk = funcion(leer("core/falsecar_ui.py"), "_formulario")
+chk("el botón lleva obra, día y generación", 'key=f"fc_todo_{kp}"' in _bk and "args=(kp,)" in _bk)
+chk("el asistente lo conoce", "Mark all as passed" in leer("core/chat_agent.py"))
 
 print("\n=== verif_v636: %d OK, %d FALLOS ===" % (n_ok, len(fallos)))
 for f in fallos:
