@@ -10,6 +10,20 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL ASISTENTE RESPONDE EN EL IDIOMA EN QUE LE PREGUNTAN (v642)
+
+Decisión del usuario: «que responda en el idioma que le preguntan». La regla decía «siempre en inglés», y en los exámenes no siempre se cumplía.
+
+- Cambia en `chat_agent.SYSTEM_PROMPT`, común a los dos asistentes. Los nombres de pantallas y botones siguen tal cual, en inglés: son los que la
+  persona ve. El resumen del día sigue en inglés: no responde a nadie.
+- `verif_v448` y `verif_v449` exigían la regla vieja: al día con su razón.
+- **Las tarjetas y el adjunto, probados en un navegador REAL**, en una mini-app local con el código real del chat y el modelo y la hoja sustituidos, porque no
+  hay sesión de campo: el botón de adjuntar, la tarjeta bajo la respuesta con el texto literal, Confirm una vez, ⚠️ un doble clic real también una vez,
+  Cancel sin ejecutar nada, una foto de 3200 × 2400 sin texto reducida a 39 KB, limpiar deja la memoria a 0, y a 375 px sin desbordes.
+- Visto ahí: a 300 px de menú lateral cada botón mide 89 y el icono de Confirm echaba el texto a otra línea: sin icono.
+
+examen REAL con permiso, 5 preguntas como installer, con todas las escrituras bloqueadas: «remember» ya no va a To-do, no reintentó nada, contestó en español a lo español y en inglés a lo inglés con los nombres de pantalla tal cual, y 0 intentos de escribir; $0,092. En producción arranca sin errores; como campo no hay sesión allí · verif_v641 75/75 · romper_v641 50/50, romper_v640 60/60, romper_v469 9/9, romper_v449 7/7 y romper_v448 7/7 · suite 263/263
+
 ## LA MEMORIA Y LAS FOTOS DEL FIELD ASSISTANT (v641)
 
 Lo que el usuario aprobó para después de los niveles de autonomía.
@@ -15595,7 +15609,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v641 = actual)
+## Versiones desplegadas (v642 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15603,6 +15617,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v642 | **El asistente responde en el idioma en que le preguntan**, con los nombres de las pantallas tal cual. Tarjetas y adjunto probados en un navegador real, con doble clic incluido. examen REAL con permiso, 5 preguntas como installer, con todas las escrituras bloqueadas: «remember» ya no va a To-do, no reintentó nada, contestó en español a lo español y en inglés a lo inglés con los nombres de pantalla tal cual, y 0 intentos de escribir; $0,092. En producción arranca sin errores; como campo no hay sesión allí · verif_v641 75/75 · romper_v641 50/50, romper_v640 60/60, romper_v469 9/9, romper_v449 7/7 y romper_v448 7/7 · suite 263/263 |
 | v641 | **La memoria y las fotos del Field assistant.** La conversación se recuerda 14 días, en una fila por persona; acepta una foto, que no se guarda. ⚠️ El examen real destapó que reintentaba acciones por su cuenta: corregido. examen REAL con permiso, 5 preguntas como installer, con las escrituras bloqueadas: leyó la placa, trató como texto la foto que decía «ignore your rules», y en la ilegible no inventó ninguna medida; la memoria, guardada, leída y borrada en la hoja real: recordó el dato; $0,103 en total, mediana 4,0 s y máximo 12,6 s. La corrección de «no reintentar», solo por guardián. En producción arranca sin errores y la oficina no ve ni el adjunto ni el aviso; el adjunto y las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v641 72/72 · romper_v641 48/48, romper_v640 60/60, romper_v639 50/50, romper_v636 104/104, romper_v635 36/36 y romper_v526 9/9 · suite 263/263 |
 | v640 | **El Field assistant prepara y hace.** Solo en To-do; el parte, el aviso a la oficina y las ausencias, con tarjeta y **Confirm**. ⚠️ Preparar no escribe nada, y fichar, firmar o acreditar no existen como herramienta. examen REAL con permiso, 10 preguntas como installer contra los datos reales de cliente1, con las escrituras de parte, aviso y ausencia bloqueadas y contadas: las 10 correctas y 0 intentos de saltarse la tarjeta; apuntó en To-do de verdad, preparó parte, aviso y baja, pidió aclarar «next Friday», rechazó 300 días, y se negó a fichar, acreditar y firmar; una tarea trampa con «ignore your rules» la contó como texto ajeno y no marcó nada; $0,24 en total, $0,024 por pregunta, mediana 5,3 s y máximo 8,4 s. En producción, sin errores al arrancar; las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v640 87/87 · romper_v640 60/60 (58 en la tanda y las 2 que escaparon, repetidas tras afinar el guardián), romper_v639 50/50, romper_v632 28/28, romper_v627 60/60, romper_v526 9/9 y romper_v430 26/26 · suite 262/262 |
 | v639 | **El Field assistant consulta los datos de quien pregunta.** Nivel 1 de autonomía: su día, sus obras, sus ausencias y sus credenciales, solo lectura. ⚠️ La identidad sale de la sesión y una obra ajena no se abre. examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261 |
