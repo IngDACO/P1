@@ -10,6 +10,22 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## COMENTARIOS EN LAS TAREAS DE LA LISTA (v635)
+
+Petición del usuario: «en la herramienta to do se pueda agregar comentarios a las tareas». Decisiones suyas: comenta
+cualquiera que vea la lista, también en las hechas; borra su autor o la oficina, sin editar; no avisan a nadie.
+
+- En cada tarea, un desplegable cerrado: **Add a comment**, o **Comments (2)** cuando los hay, con el número a la vista.
+  Solo texto, hasta 500 caracteres; Enter es salto de línea y envía el botón **Comment**.
+- ⚠️ **En su propia hoja, `TaskComments`, no en una celda de la tarea:** dos personas comentando a la vez se pisarían, y
+  `append_row` no pisa nada. Va en `HOJAS_LECTURA`: su lector no lleva cabeceras, y fuera leería vacío para siempre.
+- Un doble toque no duplica, no se comenta una tarea borrada ni la de otra obra, y borrar oculta con quién y cuándo, con
+  confirmación. Borrar la obra se los lleva, y una obra sin comentarios no crea la hoja.
+- `romper_v615` no normalizaba finales de línea: `projects.py` va en CRLF y una rotura no llegaba a aplicarse.
+- ⚠️ `verif_v498` salió rojo una vez en la suite y no se reprodujo (3 veces solo y la suite entera en verde después).
+
+medido en producción como oficina, en PRJ-0027: comentario de dos líneas con asteriscos y $, literal, con autor y hora; la caja se vacía, el desplegable sigue abierto y dice Comments (1); Enter no envía; el comentario acompaña a la tarea a Done y ahí se puede seguir comentando; borrar pregunta y deja Active=NO con quién; a 375 px sin desbordes. La hoja `TaskComments` se creó sola. Como campo, solo por guardián. Datos de prueba borrados · verif_v635 56/56 · romper_v635 36/36, romper_v630 26/26, romper_v617 12/12, romper_v615 26/26 y romper_v610 26/26 · suite 259/259
+
 ## LO VISTO VERIFICANDO v633 (v634)
 
 Decisión del usuario: «Dale con v634». El primer despliegue lo bloqueó el clasificador por no estar aprobado expresamente.
@@ -15472,7 +15488,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v634 = actual)
+## Versiones desplegadas (v635 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15480,6 +15496,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v635 | **Comentarios en las tareas de To-do.** Cualquiera que vea la lista comenta, también en las hechas; borra su autor o la oficina, con confirmación; sin avisos, con el número a la vista. En su propia hoja, `TaskComments`. medido en producción como oficina, en PRJ-0027: comentario de dos líneas con asteriscos y $, literal, con autor y hora; la caja se vacía, el desplegable sigue abierto y dice Comments (1); Enter no envía; el comentario acompaña a la tarea a Done y ahí se puede seguir comentando; borrar pregunta y deja Active=NO con quién; a 375 px sin desbordes. La hoja `TaskComments` se creó sola. Como campo, solo por guardián. Datos de prueba borrados · verif_v635 56/56 · romper_v635 36/36, romper_v630 26/26, romper_v617 12/12, romper_v615 26/26 y romper_v610 26/26 · suite 259/259 |
 | v634 | **Lo visto verificando v633.** ⚠️ Bajar la vista en una página corta movía el contenedor 63 px (menú subido y franja blanca) → `overflow:clip`, en toda la app; también baja con la persona o fila ya abierta; saldo sin negativos. medido en producción: campana → Files con el menú en y=0, el contenedor en 0 y sin franja; tocar a la persona ya abierta baja a y=68 (se quedaba en 833); a 375 px el menú abre y se desplaza, sin desbordes. Datos de prueba borrados · verif_v633 125/125 · romper_v633 54/54 y romper_v627 60/60 · suite 258/258 |
 | v633 | **El recorrido de la oficina.** ⚠️ La nómina pagaba 20 días de baja con 10 de saldo y la oficina no podía decidir → lo que pasa del saldo se deriva y no se paga hasta «Pay them» o «Leave them unpaid». ⚠️ Una ficha vacía de Forklift hacía apto a quien no tenía el ticket → número y vencimiento obligatorios. Borrar con confirmación, editar todo, cifras que suman, la vista baja a lo que se abre, Survey por decidir marcados. medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258 |
 | v632 | **El asistente en Sonnet 5.5.** ⚠️ No bastaba el nombre: razona, así que se lee por tipo de bloque, se mira `stop_reason` y `max_tokens` da para razonar y responder; el resumen de la oficina sigue en Haiku. La baja, paso a paso y comparada con la pantalla; striker en Buffers; informe interno en inglés. medido en producción con Sonnet: la baja, pasos correctos, atajo en Timeclock y nada inventado, en 3,6 s; LFKK, dice lo que sabe y lo que no, sin adivinar, en 2,2 s; Buffers dice «car striker» y ningún «sticker». El diagrama y el informe interno, solo por guardián (el informe exige un cálculo real) · verif_v632 40/40 · romper_v632 28/28, romper_v631 22/22, romper_v630 26/26, romper_v597 22/22, romper_v594 12/12, romper_v448 7/7 y romper_v438 12/12 · suite 257/257 |
