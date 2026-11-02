@@ -359,7 +359,7 @@ DIRECTAS = [
      "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "text"],
                       "properties": {"project_id": _ID_OBRA, "text": {"type": "string", "description": "One line."}}},
      "description": "Add a task to a job's To-do list, straight away and with no confirmation. Call it when the person "
-                    "asks you to note, add or remember something for a job."},
+                    "asks you to add a task to a job. Not for things they only want you to remember."},
     {"name": "mark_todo", "fn": _marcar_tarea,
      "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "task_id"],
                       "properties": {"project_id": _ID_OBRA,

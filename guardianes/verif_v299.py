@@ -122,7 +122,9 @@ for n in ast.walk(a):
     if isinstance(n, (ast.Import, ast.ImportFrom)):
         definidos |= {(al.asname or al.name.split(".")[0]) for al in n.names}
     elif isinstance(n, ast.Assign):
-        definidos |= {t.id for t in n.targets if isinstance(t, ast.Name)}
+        # ⚠️ v641 · También `a, b = ...`: solo miraba el nombre suelto, y `prompt, _fotos = ...` salía
+        # como «sin definir» con el código bien (trampa 3: los falsos positivos de este chequeo).
+        definidos |= {x.id for t in n.targets for x in ast.walk(t) if isinstance(x, ast.Name)}
     elif isinstance(n, (ast.FunctionDef, ast.ClassDef)):
         definidos.add(n.name)
     elif isinstance(n, (ast.For, ast.comprehension)):

@@ -87,6 +87,8 @@ HOJAS_LECTURA = (
     "TaskComments",
     # v636: el checklist diario del false car (`falsecar`), lector SIN cabeceras: la misma regla.
     "FalseCarChecks",
+    # v641: la memoria del Field assistant (`chat_memoria`), lector SIN cabeceras: la misma regla.
+    "ChatMemory",
 )
 
 

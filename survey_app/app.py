@@ -331,9 +331,12 @@ with st.sidebar:
                  if _ROL == "field"
                  else "Focused on project management and interpreting results.")
         st.caption(f"{_foco} {ctx_label}")
+        if _ROL == "field":
+            st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))
 
         # v640 · Lo confirmado o cancelado, ANTES de pintar el historial (trampa 37)
         from core import chat_ui
+        chat_ui.recordar()                       # v641 · la conversación guardada, una vez por sesión
         chat_ui.atender()
 
         # Historial
@@ -346,11 +349,15 @@ with st.sidebar:
         # Input
         # v526 · Estaba en español y sin `t()` (visto en producción): el idioma base es el
         # inglés, y ningún barrido de i18n miraba `st.chat_input` (trampa nº30).
-        if prompt := st.chat_input(t("Ask your question…"), key="sidebar_chat_input"):
+        _entrada = st.chat_input(t("Ask your question…"), key="sidebar_chat_input", **chat_ui.opciones_foto(_ROL))
+        prompt, _fotos = chat_ui.leer_entrada(_entrada) if _entrada else ("", [])
+        if prompt:
             _tarjetas_antes = len(chat_ui.pendientes())
-            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            # v641 · En el historial, la marca de la foto: la imagen va solo en esta pregunta
+            _dicho = f"📷 {prompt}" if _fotos else prompt
+            st.session_state.chat_history.append({"role": "user", "content": _dicho})
             with st.chat_message("user", avatar="🧑‍🔧"):
-                st.markdown(prompt)
+                st.markdown(_dicho)
             with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner(t("Searching…")):
                     _r = st.session_state.get("calc_results")
@@ -365,9 +372,11 @@ with st.sidebar:
                         usuario      = st.session_state.get("auth", {}).get("usuario", ""),
                         nombre       = st.session_state.get("auth", {}).get("nombre", ""),
                         acciones     = chat_ui.pendientes(),
+                        fotos        = _fotos,
                     )
                 st.markdown(_response)
             st.session_state.chat_history.append({"role": "assistant", "content": _response})
+            chat_ui.memorizar()                  # después de responder: lo que tarde no se hace esperar
             if len(chat_ui.pendientes()) > _tarjetas_antes:
                 st.rerun()                       # la tarjeta nueva va debajo de lo que acaba de decir
 

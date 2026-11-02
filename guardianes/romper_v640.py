@@ -165,6 +165,7 @@ def _una_directa(ctx) -> None:\n""")]),
     ("⚠️ Cancel ejecuta", U,
      [("""    if not pet.get("si"):
         _hist.append({"role": "assistant", "content": t("Cancelled: {x}. Nothing was sent.", x=literal_md(a["titulo"]))})
+        memorizar()
         return
 """, "")]),
     ("⚠️ un fallo pierde la tarjeta", U,
