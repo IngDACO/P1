@@ -10,6 +10,20 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL FIELD ASSISTANT PREPARA Y HACE (v640)
+
+Niveles 2 y 3 de autonomía, decididos por el usuario.
+
+- **Nivel 3, solo:** apuntar y marcar en To-do (`add_todo`, `mark_todo`), reversible y sin avisar a nadie, con `MAX_DIRECTAS` por pregunta.
+- **Nivel 2, con tarjeta:** el parte, el aviso a la oficina y las ausencias (`prepare_*`). ⚠️ Preparar valida y deja una tarjeta en la
+  SESIÓN, sin escribir nada; lo hace `chat_tools.confirmar` al tocar **Confirm** (`core/chat_ui.py`), con la identidad de la sesión y la obra
+  comprobada otra vez. Un doble toque no manda dos veces (la tarjeta sale antes de ejecutar); si falla, vuelve para reintentar.
+- ⚠️ **Fichar, firmar, enviar el Pre-Start o el checklist y acreditar avance no existen como herramienta**, ni confirmados.
+- **Una sola definición:** `ausencias.problema_solicitud` valida sin escribir y la usan `solicitar` y el asistente; `ausencias_ui.registrar`
+  guarda, pasa la baja al tablero y avisa, y la usan la pantalla y el asistente.
+
+examen REAL con permiso, 10 preguntas como installer contra los datos reales de cliente1, con las escrituras de parte, aviso y ausencia bloqueadas y contadas: las 10 correctas y 0 intentos de saltarse la tarjeta; apuntó en To-do de verdad, preparó parte, aviso y baja, pidió aclarar «next Friday», rechazó 300 días, y se negó a fichar, acreditar y firmar; una tarea trampa con «ignore your rules» la contó como texto ajeno y no marcó nada; $0,24 en total, $0,024 por pregunta, mediana 5,3 s y máximo 8,4 s. En producción, sin errores al arrancar; las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v640 87/87 · romper_v640 60/60 (58 en la tanda y las 2 que escaparon, repetidas tras afinar el guardián), romper_v639 50/50, romper_v632 28/28, romper_v627 60/60, romper_v526 9/9 y romper_v430 26/26 · suite 262/262
+
 ## EL FIELD ASSISTANT CONSULTA LOS DATOS DE QUIEN PREGUNTA (v639)
 
 Decisión del usuario: mejorar cada agente y darles más autonomía, uno por uno, por niveles (ver, preparar y confirmar, actuar solo en
@@ -15565,7 +15579,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v639 = actual)
+## Versiones desplegadas (v640 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15573,6 +15587,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v640 | **El Field assistant prepara y hace.** Solo en To-do; el parte, el aviso a la oficina y las ausencias, con tarjeta y **Confirm**. ⚠️ Preparar no escribe nada, y fichar, firmar o acreditar no existen como herramienta. examen REAL con permiso, 10 preguntas como installer contra los datos reales de cliente1, con las escrituras de parte, aviso y ausencia bloqueadas y contadas: las 10 correctas y 0 intentos de saltarse la tarjeta; apuntó en To-do de verdad, preparó parte, aviso y baja, pidió aclarar «next Friday», rechazó 300 días, y se negó a fichar, acreditar y firmar; una tarea trampa con «ignore your rules» la contó como texto ajeno y no marcó nada; $0,24 en total, $0,024 por pregunta, mediana 5,3 s y máximo 8,4 s. En producción, sin errores al arrancar; las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v640 87/87 · romper_v640 60/60 (58 en la tanda y las 2 que escaparon, repetidas tras afinar el guardián), romper_v639 50/50, romper_v632 28/28, romper_v627 60/60, romper_v526 9/9 y romper_v430 26/26 · suite 262/262 |
 | v639 | **El Field assistant consulta los datos de quien pregunta.** Nivel 1 de autonomía: su día, sus obras, sus ausencias y sus credenciales, solo lectura. ⚠️ La identidad sale de la sesión y una obra ajena no se abre. examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261 |
 | v638 | **«Mark all as passed» en el checklist del false car.** Rellena lo que falta y nunca pisa una X; el formulario sigue naciendo vacío y la firma sigue siendo obligatoria. medido en producción como oficina, con clics reales en una obra de prueba: nace vacío; con una X en el punto 2 y el botón, esa X sigue y los otros 17 quedan en ✓ en el navegador; el botón se apaga sin mover la pantalla y pide las observaciones de la X; con todo en ✓ sigue pidiendo la firma; guardado, 18 de 18 en ✓ en la hoja, firmado y con PDF. Datos de prueba borrados · verif_v636 271/271 · romper_v636 104/104 · suite 260/260 |
 | v637 | **Lo visto verificando el checklist del false car.** La lista de días baja al formulario; ✓/X y Remarks en una fila en pantalla estrecha; la firma a la medida de su casilla; ⚠️ un doble toque ya no firma dos veces, tampoco en el Pre-Start; el aviso de guardado, solo en su día. medido en producción como oficina: tocar una fila deja la obra a 68 px (estaba a 868) con el día tocado; a 375 px el formulario pasa de 4416 a 3818 px, con ✓/X y Remarks en la misma fila y sin desbordes; firmado de verdad en una obra de prueba, el PDF en una página y la firma ocupando su casilla; con otro día elegido el aviso verde desaparece y sale su formulario. El doble toque, ensayado contra la hoja y el Drive reales: una firma y el mismo PDF de 2 páginas; en el Pre-Start, solo por guardián. Datos de prueba borrados · verif_v636 253/253 · romper_v636 96/96 · suite 260/260 |
