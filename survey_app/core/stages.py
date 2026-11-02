@@ -542,6 +542,21 @@ def falta_por_decidir(tipo, condicionales=()) -> list:
     return out
 
 
+# v636 · El false car: las tres actividades van JUNTAS y se preguntan una vez, al crear la obra.
+# ⚠️ NO es un grupo de `EXCLUYENTES`: sí/no no es elegir una de dos actividades, y las altas por
+# programa se pararían por una pregunta que solo existe en la pantalla. Sin respuesta = sin él.
+FC_MONTAR = "Install sky climber"
+FC_LOCK = "Install sky lock"
+FC_RETIRAR = "Remove/dismantle sky climber & sky lock"
+FALSE_CAR = (FC_MONTAR, FC_LOCK, FC_RETIRAR)
+PREGUNTA_FC = "False car?"
+
+
+def admite_false_car(tipo) -> bool:
+    """¿Este tipo de obra puede llevarlo? Solo si instala (decisión del usuario)."""
+    return PISTA_INSTALL in pistas_de_tipo(tipo)
+
+
 def condicionales(pista=None) -> list:
     """Todas las actividades condicionales, para que el alta de obra las pregunte."""
     return [{"pista": p, "etapa": n, "nombre": a[0]}

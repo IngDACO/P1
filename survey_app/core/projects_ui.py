@@ -56,6 +56,11 @@ def _clave_cond(key) -> str:
     return f"np_demol_{key}"
 
 
+def _clave_fc(key) -> str:
+    """Dónde vive la respuesta de «False car?» en esta pantalla de alta (v636)."""
+    return f"np_fc_{key}"
+
+
 def _pregunta_etapas(tipo, key):
     """Pinta lo que hay que DECIDIR antes de armar el plan de una obra (v512).
 
@@ -80,13 +85,23 @@ def _pregunta_etapas(tipo, key):
                  for o in g["opciones"]}
         st.radio(t(g["pregunta"]), g["opciones"], index=None, horizontal=True,
                  format_func=lambda o: _etiq.get(o, o), key=_clave_cond(key))
-    return _S.falta_por_decidir(tipo, _cond_elegidas(key))
+    _pend = _S.falta_por_decidir(tipo, _cond_elegidas(key))
+    # ⚠️ v636 · Obligatoria y sin preselección (regla v139): de ella depende un documento de
+    # seguridad diario, y un «No» por defecto lo apagaría sin que nadie lo haya decidido.
+    if _S.admite_false_car(tipo):
+        st.radio(t(_S.PREGUNTA_FC), [True, False], index=None, horizontal=True,
+                 format_func=lambda v: t("Yes") if v else t("No"), key=_clave_fc(key))
+        if st.session_state.get(_clave_fc(key)) is None:
+            _pend.append({"clave": "false_car", "pregunta": _S.PREGUNTA_FC,
+                          "opciones": [True, False], "elegidas": []})
+    return _pend
 
 
 def _cond_elegidas(key) -> tuple:
     """Las condicionales que la pantalla de alta tiene elegidas ahora mismo."""
+    from core import stages as _S
     v = st.session_state.get(_clave_cond(key))
-    return (v,) if v else ()
+    return ((v,) if v else ()) + (_S.FALSE_CAR if st.session_state.get(_clave_fc(key)) else ())
 
 
 def _filas_etapas(tipo, ns, key) -> list:
@@ -638,7 +653,7 @@ _DOC_TIPOS  = _DOC_SUBIR + ["plano"]           # para VER (el plano se sigue mos
 # El campo consulta lo que usa en obra: incluye el Pre-Start que firma y los
 # calculos (plomada, cortes) que ejecuta.
 _CAMPO_VER  = {"plano", "informe_cliente", "matriz_survey", "foto",
-               "prestart", "calculo"}
+               "prestart", "falsecar", "calculo"}
 _CAMPO_SUBE = ["foto"]                                                # campo solo sube fotos
 # v616 · lo que el campo puede subir: imágenes (HEIC/HEIF, las del iPhone; WEBP, las de Android)
 _FOTO_EXT = ["jpg", "jpeg", "png", "webp", "heic", "heif"]
@@ -647,9 +662,10 @@ _FOTO_EXT = ["jpg", "jpeg", "png", "webp", "heic", "heif"]
 _TIPO_LABEL = {"plano": "Drawing", "informe_cliente": "Client report",
                "informe_admin": "Admin report", "matriz_survey": "Survey matrix",
                "foto": "Photos", "certificado": "Certificates",
-               "prestart": "Pre-Start", "calculo": "Calculations", "otro": "Others"}
+               "prestart": "Pre-Start", "falsecar": "False car", "calculo": "Calculations",
+               "otro": "Others"}
 _TIPO_ORDER = ["plano", "informe_cliente", "informe_admin", "matriz_survey",
-               "calculo", "prestart", "foto", "certificado", "otro"]
+               "calculo", "prestart", "falsecar", "foto", "certificado", "otro"]
 # Reabrir un cálculo en su herramienta (v148): solo estas 4 guardan entradas.
 # v299: IDs de las SUB-pestañas de 🛠 Herramientas en la shell (`home_ui._SUBSECCIONES`),
 # no las etiquetas de la nav vieja — esa nav se borró.

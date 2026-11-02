@@ -85,6 +85,8 @@ HOJAS_LECTURA = (
     "Tasks",
     # v635: sus comentarios (`tareas.SHEET_COM`), lector SIN cabeceras: la misma regla.
     "TaskComments",
+    # v636: el checklist diario del false car (`falsecar`), lector SIN cabeceras: la misma regla.
+    "FalseCarChecks",
 )
 
 

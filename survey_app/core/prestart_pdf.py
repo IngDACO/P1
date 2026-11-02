@@ -138,6 +138,8 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
 
     `info` = {marca, ps_id, fecha, proyecto, location,
               firmas: [{name, initial, sig, hora}]}
+    v636 · El checklist del false car usa esta misma hoja con sus textos (`titulo`, `sub`,
+    `etiqueta`, `nota`, ya traducidos); sin ellos, los del Pre-Start.
     """
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm,
@@ -145,14 +147,15 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
                             title=d("Signature addendum {id}", id=info.get("ps_id", "")))
     st = _styles()
     el = [Paragraph(_esc(info.get("marca", "")), st["PSBrand"]), _sp(2),
-          _band(d("SIGNATURE ADDENDUM — people who joined after the briefing"), st,
-                d("These people clocked on site after this Pre-Start was issued and "
-                  "signed on arrival.")),
+          _band(info.get("titulo") or d("SIGNATURE ADDENDUM — people who joined after the briefing"), st,
+                info.get("sub") or d("These people clocked on site after this Pre-Start was issued and "
+                                     "signed on arrival.")),
           _sp(4)]
 
     # ⚠️ v631 · `fecha` llega de la hoja, en ISO, y «Proyecto» iba en español: el documento original
     # va en inglés y con la fecha DD/MM/YYYY, y esta hoja se le pega detrás.
-    ref = [[Paragraph("<b>Pre-Start</b><br/>" + _esc(info.get("ps_id", "")), st["PSInfo"]),
+    ref = [[Paragraph("<b>" + _esc(info.get("etiqueta") or "Pre-Start") + "</b><br/>"
+                      + _esc(info.get("ps_id", "")), st["PSInfo"]),
             Paragraph(f"<b>{d('Date')}</b><br/>" + _esc(dmy(info.get("fecha", ""))), st["PSInfo"]),
             Paragraph(f"<b>{d('Project')}</b><br/>" + _esc(info.get("proyecto", "")), st["PSInfo"]),
             Paragraph(f"<b>{d('Location')}</b><br/>" + _esc(info.get("location", "")), st["PSInfo"])]]
@@ -184,8 +187,8 @@ def generate_anexo_firmas_pdf(info: dict) -> bytes:
                             ("TOPPADDING", (0, 0), (-1, -1), 4),
                             ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
     el += [tf, _sp(10),
-           Paragraph(d("This addendum does not modify the original Pre-Start: it is "
-                       "attached to it. Each signature keeps the time it was taken."),
+           Paragraph(info.get("nota") or d("This addendum does not modify the original Pre-Start: it is "
+                                           "attached to it. Each signature keeps the time it was taken."),
                      st["PSSmall"])]
     doc.build(el)
     return buf.getvalue()

@@ -67,8 +67,11 @@ else:
 # regla sigue exigiendo respaldo a toda hoja que SI lo haya tenido.
 # ⚠️ v615 · `Tasks` (la lista de pendientes de la obra), por la MISMA razon: nace en ingles el
 # 28/10/2026 y nunca tuvo nombre español.
+# ⚠️ v636 · `FalseCarChecks` (el checklist diario del false car), por la MISMA razon: nace en
+# ingles el 02/11/2026 y nunca tuvo nombre español.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
-       "xeroconnections", "stageprogress", "dailylogs", "agentmemory", "tasks"}
+       "xeroconnections", "stageprogress", "dailylogs", "agentmemory", "tasks",
+       "falsecarchecks"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:

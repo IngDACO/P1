@@ -390,6 +390,12 @@ def render_prestart_tab():
                    else t("Create a project from the Survey.")))
         return
 
+    # v636 · Lo que falta de días pasados, a la vista de la oficina (decisión del usuario).
+    # ⚠️ Con grupo: el propietario no tiene uno; lo ve obra a obra, en el Handover.
+    if rol == "administrator":
+        from core import falsecar_ui
+        falsecar_ui.faltantes(grupo)
+
     idmap = {f"{p.get('Name')} ({p.get('ID')})": p for p in proys}
     # Campo: preselecciona el proyecto donde FICHÓ (lo primero que hace en el día),
     # como en 📋 Mis proyectos (v138). No es "el primero de la lista" que evitó v139:
@@ -406,6 +412,9 @@ def render_prestart_tab():
     # (antes el texto mandaba a buscarla en el desplegable). Se ASIGNA (trampa 31) y
     # gana a la preselección por fichaje: es lo que se acaba de pedir.
     _ps_pend = st.session_state.pop("_ps_proy_pending", None)
+    # v636 · El día y el documento pedidos: fuera de la sesión aquí, para que no queden para otra obra.
+    _ps_dia = st.session_state.pop("_ps_dia_pending", None)
+    _ps_doc = st.session_state.pop("_ps_doc_pending", None)
     if _ps_pend:
         _k_pend = next((k for k in idmap if k.endswith(f"({_ps_pend})")), None)
         if _k_pend:
@@ -459,6 +468,20 @@ def render_prestart_tab():
     pid = str(prj.get("ID", ""))
     pgrupo = str(prj.get("Group", "")) or grupo
 
+    # ── v636 · El checklist del false car vive aquí, solo en las obras que lo llevan ──
+    # Es el mismo gesto de cada mañana y no añade nada al menú. Si faltan los dos, primero la charla.
+    from core import falsecar as FC
+    if FC.tiene(prj):
+        _kdoc = f"cpxseg_ps_doc_{pid}"
+        if _ps_doc:
+            st.session_state[_kdoc] = _ps_doc
+        _etq_doc = {"prestart": t("Pre-Start"), "falsecar": t("False car")}
+        if st.radio(t("Document"), list(_etq_doc), horizontal=True, format_func=_etq_doc.get,
+                    key=_kdoc, label_visibility="collapsed") == "falsecar":
+            from core import falsecar_ui
+            falsecar_ui.render(prj, pgrupo, rol, usuario, nombre or usuario, _ps_dia)
+            return
+
     # ── ¿La charla ya está hecha y me falta firmar? (v403) ──
     # ⚠️ Al CAMPO se le corta aquí: lo que necesita es constar en la charla que hubo,
     # no rellenar otra. Dejarle el formulario completo debajo invitaría a emitir un
@@ -487,7 +510,13 @@ def render_prestart_tab():
     # v158 quiso impedir con «no se firma sin leer». Vaciarlas no llega al navegador (trampa 31):
     # hace falta OTRA clave. La generación sube al generar: el formulario nace vacío.
     _gen = int(st.session_state.get(f"_ps_gen_{pid}", 0))
+    # v636 · Ponerse al día con un día tocado en la lista: formulario nuevo con ESE día (trampa 31).
+    if _ps_dia:
+        _gen += 1
+        st.session_state[f"_ps_gen_{pid}"] = _gen
     kp = f"{pid}_{_gen}"
+    if _ps_dia:
+        st.session_state[f"_ps_dia_{kp}"] = _ps_dia
     hoy = clock.today(pgrupo)
     _gestor = rol != "field"
 
@@ -504,7 +533,8 @@ def render_prestart_tab():
         _ya_hoy = PS.hecho_hoy(pid, pgrupo)
     except Exception:
         _ya_hoy = False
-    if _ya_hoy and not _pf:
+    # v636 · Con un día pasado pedido, la de hoy no tapa el formulario de aquel día.
+    if _ya_hoy and not _pf and not st.session_state.get(f"_ps_dia_{kp}"):
         if not _r:
             _tarjeta_hecho(pid, pgrupo, _pf_ok)
         _forzar = st.checkbox(
@@ -523,8 +553,8 @@ def render_prestart_tab():
     # bloqueo de duplicados solo miraba hoy. La oficina sí, hacia atrás. La clave del campo lleva
     # el día: con la pantalla abierta de un día para otro seguiría enseñando ayer.
     if _gestor:
-        f_fecha = c1.date_input(t("Date"), value=hoy, max_value=hoy, key=f"ps_fecha_{kp}",
-                                format="DD/MM/YYYY")
+        f_fecha = c1.date_input(t("Date"), value=st.session_state.get(f"_ps_dia_{kp}", hoy),
+                                max_value=hoy, key=f"ps_fecha_{kp}", format="DD/MM/YYYY")
     else:
         c1.date_input(t("Date"), value=hoy, key=f"ps_fecha_{kp}_{hoy.isoformat()}", format="DD/MM/YYYY",
                       disabled=True, help=t("The Pre-Start is always recorded for today."))

@@ -889,6 +889,7 @@ def datos_asociados(pid: str) -> dict:
     # irreversible— y, al no encontrarlas, la lectura las CREABA vacías (las tres que había
     # en el libro de cliente1). Medido en PRJ-0026: «0 cálculos» con CAL-0001 en ToolRuns.
     from core import expenses as _EX, toolruns as _TR, prestart as _PS, alerts as _AL
+    from core import falsecar as _FC
     with tenant.como_grupo(_g or tenant.grupo_sesion()):
         try:
             out["Documents"] = len(list_documents(pid))
@@ -897,6 +898,7 @@ def datos_asociados(pid: str) -> dict:
         for etiqueta, hoja, col in (("Expenses", _EX.SHEET, "ProjectID"),
                                     ("Calculations", _TR.SHEET, "ProjectID"),
                                     ("Pre-Starts", _PS.SHEET, "ProjectID"),
+                                    ("False car checks", _FC.SHEET, "ProjectID"),
                                     ("Alerts", _AL.ALERTS_SHEET, "ProjectID")):
             try:
                 out[etiqueta] = sum(1 for r in _records(hoja)
@@ -1072,6 +1074,13 @@ def delete_project(pid: str) -> tuple:
     except Exception as e:
         logger.warning("projects.delete_project(%s): no se pudo borrar la lista de "
                        "pendientes: %s", pid, e)
+    # v636: y sus checklists del false car, que también viven en OTRA hoja.
+    try:
+        from core import falsecar as _FC
+        _FC.borrar_de_obra(pid)
+    except Exception as e:
+        logger.warning("projects.delete_project(%s): no se pudieron borrar los checklists "
+                       "del false car: %s", pid, e)
     _invalidate()
     return True, t("Project deleted.")
 

@@ -321,6 +321,13 @@ def fin_estimada(at):
 
 
 def crear(at):
+    # ⚠️ v636 · CADUCADO por un cambio deliberado: una instalación pregunta «False car?», obligatoria
+    # y sin preselección (decisión del usuario), y sin responderla no se crea. Lo que aquí se prueba
+    # no depende de la respuesta; la pregunta la vigila verif_v636.
+    for r in at.radio:
+        if str(r.key).startswith("np_fc_") and r.value is None:
+            r.set_value(False)
+    at.run()
     [x for x in at.button if "Create project" in str(x.label)][0].click()
     at.run()
 

@@ -61,6 +61,18 @@ def contexto(pid, grupo, prj) -> dict:
     except Exception:
         pass
 
+    # v636 · Los días trabajados sin su registro, y los checklists del false car
+    false_car, checks_fc, sin_ps, sin_fc = False, [], [], []
+    try:
+        from core import falsecar as FC
+        false_car = FC.tiene(prj)
+        checks_fc = FC.de_obra(pid) if false_car else []
+        _dias = FC.dias_sin_registro(grupo, dias=None, pid=pid)
+        sin_ps = [x["fecha"] for x in _dias if "prestart" in x["falta"]]
+        sin_fc = [x["fecha"] for x in _dias if "falsecar" in x["falta"]]
+    except Exception:
+        pass
+
     # Quién trabajó de verdad aquí, con su último día
     trabajaron = {}
     try:
@@ -111,7 +123,8 @@ def contexto(pid, grupo, prj) -> dict:
         "params": _p, "matrix": _mx,
         # La plomada se calcula del survey: si hay `LengthTemplate`, se midió.
         "plumb_ok": bool(P._num(_p.get("LengthTemplate"))),
-        "acts": acts, "prestarts": prestarts,
+        "acts": acts, "prestarts": prestarts, "sin_prestart": sin_ps,
+        "false_car": false_car, "checks_fc": checks_fc, "sin_falsecar": sin_fc,
         "trabajaron": trabajaron, "credenciales": creds, "docs": docs,
         "asignados": [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()],
         "nombres": nombres,
@@ -150,7 +163,8 @@ def render(pid, grupo, prj, editable=True, key_prefix="ho"):
             for m in malos:
                 st.warning(":material/priority_high: " + m["texto"])
 
-        st.markdown(t("**The thirteen items**"))
+        st.markdown(t("**The thirteen items, plus the false car**") if ctx.get("false_car")
+                    else t("**The thirteen items**"))
         for f in filas:
             _org = t("we can evidence it") if f["fuente"] == H.COPEX else t("third party")
             st.markdown("%s **(%s)** %s — %s  \n&nbsp;&nbsp;&nbsp;:gray[%s · %s]"

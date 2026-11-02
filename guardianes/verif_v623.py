@@ -323,7 +323,8 @@ _tc = open(os.path.join(RAIZ, "core", "timeclock_ui.py"), encoding="utf-8").read
 _hu = open(os.path.join(RAIZ, "core", "home_ui.py"), encoding="utf-8").read()
 chk("⚠️ `_ir_a_prestart` deja pedida la obra", "_ps_proy_pending" in inspect.getsource(TU._ir_a_prestart))
 chk("⚠️ nadie la llama sin decir qué obra", "_ir_a_prestart()" not in _tc + _hu, re.findall(r".{30}_ir_a_prestart\(\)", _tc + _hu))
-chk("el banner escapa el nombre de la obra", "_html.escape(str(prj.get(" in _hu)
+# ⚠️ v636 · `_nom =`: el de la banda del false car es otro, y con la búsqueda vieja tapaba a este
+chk("el banner escapa el nombre de la obra", "_nom = _html.escape(str(prj.get(" in _hu)
 _s2 = re.sub(r'""".*?"""', "", _src, flags=re.S)
 chk("ningún aviso armado con f-string sin `t()`", not re.search(r'st\.(success|warning|error|info)\(f"|flash\.\w+\(f"', _s2),
     re.findall(r'st\.\w+\(f"[^\n]{0,50}', _s2)[:3])

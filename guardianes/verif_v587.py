@@ -55,8 +55,11 @@ st.session_state["_COND"] = PU._cond_elegidas("adm")
 '''
 at = AppTest.from_string(G1).run()
 r = _w(at, "radio", "np_demol_adm")
-chk("sin contestar: la pregunta está y queda 1 pendiente", r is not None and at.session_state["_PEND"] == 1)
+# ⚠️ v636 · CADUCADO por un cambio deliberado: las obras que instalan preguntan además «False car?»
+# (obligatoria, decisión del usuario), así que aquí hay DOS pendientes; la pregunta, en verif_v636.
+chk("sin contestar: la pregunta está y quedan 2 pendientes", r is not None and at.session_state["_PEND"] == 2)
 r.set_value(TRAC)
+_w(at, "radio", "np_fc_adm").set_value(False)
 at.run()
 chk("contestada: la pregunta SIGUE en pantalla con su respuesta (antes desaparecía)",
     _w(at, "radio", "np_demol_adm") is not None and _w(at, "radio", "np_demol_adm").value == TRAC)
@@ -67,7 +70,8 @@ chk("⚠️ …y dos pasadas después la respuesta sigue (antes volvía vacía)"
 at = AppTest.from_string(G1)
 at.session_state["_T"] = "Installation"
 at.run()
-chk("una instalación no pregunta nada", _w(at, "radio", "np_demol_adm") is None and at.session_state["_PEND"] == 0)
+chk("una instalación no pregunta la demolición, solo el false car (v636)", _w(at, "radio", "np_demol_adm") is None
+    and _w(at, "radio", "np_fc_adm") is not None and at.session_state["_PEND"] == 1)
 
 print("\n2. ⚠️ «New project» crea un Ripout + Installation de principio a fin (AppTest, sin hoja)")
 G2 = r'''
@@ -91,6 +95,9 @@ def _alta(tipo, demol, ns=6):
     a.run()
     if demol:
         _w(a, "radio", "np_demol_adm").set_value(demol)
+        a.run()
+    if _w(a, "radio", "np_fc_adm") is not None:              # v636: obligatoria si instala
+        _w(a, "radio", "np_fc_adm").set_value(False)
         a.run()
     _w(a, "number_input", "np_ns_adm").set_value(ns)
     a.run()
@@ -154,6 +161,7 @@ _crear(at)
 chk("…sin contestar NO crea y lo dice", not at.session_state["_LOG"]
     and any("Answer this first" in e.value for e in at.error), [e.value for e in at.error])
 _w(at, "radio", "np_demol_cot_COT-9").set_value(TRAC)
+_w(at, "radio", "np_fc_cot_COT-9").set_value(False)          # v636: también desde cotización
 at.run()
 _nums(at)[0].set_value(10)
 _crear(at)

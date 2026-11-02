@@ -1101,6 +1101,27 @@ def proyectos_por_usuario_dia(grupo: str, fecha) -> dict:
     return out
 
 
+def obras_por_dia(grupo: str, desde=None, hasta=None) -> dict:
+    """{(fecha, pid): {'nombre', 'usuarios'}} de las obras con gente fichada en [desde, hasta]
+    (v636), con los mismos criterios que `proyectos_por_usuario_dia`, y en una sola pasada: con
+    ella, 30 días serían 30 vueltas al fichaje entero. Sin ID no hay obra a la que pedirle nada."""
+    out = {}
+    _pn = mapa_nombres(grupo)
+    for r in _cached_records():
+        if str(r.get("Group", "")).strip() != str(grupo).strip():
+            continue
+        if _tipo_of(r) != TIPO_PROYECTO or not pid_of(r):
+            continue
+        for d, hh in _row_segmentos(r):
+            if hh <= 0 or (desde and d < desde) or (hasta and d > hasta):
+                continue
+            e = out.setdefault((d, pid_of(r)),
+                               {"nombre": _nombre_actual(pid_of(r), r.get("Project", "")),
+                                "usuarios": set()})
+            e["usuarios"].add(clave_de(r, _pn))
+    return out
+
+
 def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
     """{clave: {nombre, horas}} — horas de JORNADA (general) por usuario en [desde, hasta].
 

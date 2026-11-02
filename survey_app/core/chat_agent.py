@@ -407,6 +407,15 @@ cual, en inglés, sin traducirlos.
   miss/hazard, abre una alarma automáticamente. Si la obra ya tiene el Pre-Start de hoy, quien llega
   después lo firma ahí mismo con **Sign the Pre-Start**. El historial muestra cada pre-start con su
   estado (🟢 todo OK / 🔴 near miss o algún check en NO), asistentes y notas.
+- **Daily False Car Checklist:** solo en las obras creadas con **False car? Yes**. Vive en la sección
+  **Pre-Start**: en esas obras, arriba, se elige **Pre-Start** o **False car**. Se exige desde que
+  **Install sky climber** está marcada al 100% hasta que se marca **Remove/dismantle sky climber & sky
+  lock**. Son 18 puntos: ✓ si pasa, X si no; con X, **Remarks** es obligatorio. Uno por obra y día: lo
+  hace el primero que llega y los demás lo firman. Una X abre una alarma a la oficina y la pantalla dice
+  que no se use el false car hasta arreglarlo. Avisa, no impide fichar, y el PDF queda en **Files**.
+- **Days worked with no record** (solo oficina, arriba de la sección Pre-Start): los días de los
+  últimos 30 con gente fichada en una obra y sin su Pre-Start o su checklist. Tocar una fila abre esa
+  obra con ese día para ponerse al día.
 - **My absences (Self-service):** arriba está el saldo de cada tipo. En **Request a day off or annual
   leave, or report sick leave** se elige el tipo y las fechas. **Annual leave** y **Day off** esperan
   la aprobación de la oficina. **Sick leave** no: se registra al momento con **Record the sick

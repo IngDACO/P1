@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 # v374: el recordatorio del Pre-Start del día. Sin ciclo: `prestart` importa
 # `timeclock`/`clock`/`num`, nunca esta UI.
 from core import prestart
+from core import falsecar
 from core import tabla
 from core import incrustar
 from core import theme
@@ -102,6 +103,12 @@ def _ir_a_prestart(pid=""):
         _home.navegar("prestart")                       # `navegar` ya hace el rerun
     else:
         _home.navegar("herramientas", "🦺 Pre-Start")
+
+
+def _ir_a_falsecar(pid=""):
+    """Al checklist del false car, que vive dentro de la sección Pre-Start (v636)."""
+    st.session_state["_ps_doc_pending"] = "falsecar"
+    _ir_a_prestart(pid)
 
 
 def _ps_descartar():
@@ -203,8 +210,72 @@ def aviso_prestart_pendiente(grupo: str = ""):
             st.session_state.pop("_ps_aviso", None)
             return
         _dialogo_firmar(nombre or t("this site"), str(_pf.get("facilitador", "")))
-        return
+        return True
     _dialogo_prestart(nombre or t("this site"))
+    return True
+
+
+def _fc_descartar():
+    """Deja de recordar el checklist de esta obra en lo que queda de sesión."""
+    p = st.session_state.get("_fc_aviso") or {}
+    pid = str(p.get("pid", ""))
+    if pid:
+        st.session_state[f"_fc_visto_{pid}"] = True
+    st.session_state.pop("_fc_aviso", None)
+
+
+def _falsecar_toca(pid, grupo) -> str:
+    """Lo que ME toca hoy con el checklist de esa obra: `HACER`, `FIRMAR` o nada (v636)."""
+    a = st.session_state.get("auth", {}) or {}
+    try:
+        return falsecar.pendiente_hoy(projects_data.get_project(pid) or {}, grupo,
+                                      a.get("nombre") or a.get("usuario", ""), a.get("usuario", ""))
+    except Exception:
+        return ""                    # nunca estorbar por un fallo del aviso
+
+
+@st.dialog(t(":material/verified: Today's false car check"), width="small",
+           on_dismiss=_fc_descartar)
+def _dialogo_falsecar(obra: str, toca: str):
+    """Pop-up del checklist diario (v636), igual que el del Pre-Start."""
+    if toca == falsecar.FIRMAR:
+        st.markdown(t("Today's false car check for **{o}** is already recorded, but **you have not "
+                      "signed it**.", o=literal_md(obra)))
+    else:
+        st.markdown(t("**{o}** still has **no false car check** today. It has to be done before "
+                      "using the false car.", o=literal_md(obra)))
+    c1, c2 = st.columns(2)
+    if c1.button(t(":material/verified: Do it now"), type="primary", width="stretch", key="fc_dlg_ir"):
+        _pid = (st.session_state.get("_fc_aviso") or {}).get("pid", "")
+        _fc_descartar()
+        _ir_a_falsecar(_pid)
+    if c2.button(t("Not now"), width="stretch", key="fc_dlg_no"):
+        _fc_descartar()
+        st.rerun()
+
+
+def aviso_falsecar_pendiente(grupo: str = ""):
+    """El modal del checklist, como CONDICIÓN de estado, igual que el del Pre-Start (v375).
+
+    ⚠️ Solo con el Pre-Start de esa obra hecho y firmado (decisión del usuario: primero la charla):
+    al terminarlo aparece este, y mientras tanto no tapa el formulario que se está rellenando.
+    ⚠️ `app.py` lo llama solo si no se abrió el otro: Streamlit admite un diálogo por pasada.
+    """
+    p = st.session_state.get("_fc_aviso") or {}
+    pid, nombre = str(p.get("pid", "")), str(p.get("nombre", ""))
+    if not pid or st.session_state.get(f"_fc_visto_{pid}"):
+        return
+    _g = grupo or p.get("grupo", "")
+    try:
+        if not prestart.hecho_hoy(pid, _g) or _pend_firma_de(pid, _g):
+            return
+    except Exception:
+        return
+    _toca = _falsecar_toca(pid, _g)
+    if not _toca:
+        st.session_state.pop("_fc_aviso", None)
+        return
+    _dialogo_falsecar(nombre or t("this site"), _toca)
 
 
 def _chip_prestart(pid, nombre_obra, grupo):
@@ -229,6 +300,19 @@ def _chip_prestart(pid, nombre_obra, grupo):
     if st.button(t(":material/health_and_safety: Do it now"), width="stretch",
                  key="sb_ps_ir"):
         _ir_a_prestart(pid)
+
+
+def _chip_falsecar(pid, grupo):
+    """El mismo recordatorio para el checklist del false car (v636), solo mientras haga falta."""
+    _toca = _falsecar_toca(pid, grupo)
+    if _toca == falsecar.FIRMAR:
+        st.warning(t(":material/draw: Sign today's **false car check**."))
+        if st.button(t(":material/draw: Sign"), width="stretch", key="sb_fc_firmar"):
+            _ir_a_falsecar(pid)
+    elif _toca:
+        st.warning(t(":material/warning: Today's **false car check** is missing."))
+        if st.button(t(":material/verified: Do it now"), width="stretch", key="sb_fc_ir"):
+            _ir_a_falsecar(pid)
 
 
 def render_sidebar_chrono():
@@ -310,6 +394,7 @@ def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
     if prj:
         _chip_prestart(str(prj.get("proyecto_id", "") or ""),
                        str(prj.get("proyecto", "") or ""), grupo)
+        _chip_falsecar(str(prj.get("proyecto_id", "") or ""), grupo)
 
 
 def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
@@ -409,6 +494,10 @@ def _armar_aviso_prestart(pid, nom_obra, grupo):
             st.session_state.pop(f"_ps_visto_{pid}", None)
     except Exception:
         pass                          # sin pre-starts configurados: no se estorba
+    # v636 · El checklist va por su cuenta: hay que recordarlo aunque la charla ya esté hecha.
+    if _falsecar_toca(pid, grupo):
+        st.session_state["_fc_aviso"] = {"pid": pid, "nombre": nom_obra, "grupo": grupo}
+        st.session_state.pop(f"_fc_visto_{pid}", None)
 
 
 def _es_hoy(clock_in_str) -> bool:

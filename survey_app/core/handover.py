@@ -106,6 +106,11 @@ ITEMS = [
      "nombre": "Safe-to-Operate certification"},
 ]
 
+# v636 · NO es uno de los trece del estándar: solo lo llevan las obras con false car.
+ITEM_FALSE_CAR = {"clave": "false_car", "letra": "FC", "fuente": COPEX,
+                  "nombre": "Daily false car checks",
+                  "nota": "Signed daily checklists for the days the false car was in use"}
+
 CLAVES = [i["clave"] for i in ITEMS]
 _POR_CLAVE = {i["clave"]: i for i in ITEMS}
 
@@ -143,9 +148,26 @@ def _ev_as_built(ctx):
 
 def _ev_risk(ctx):
     n = len(ctx.get("prestarts") or [])
+    # v636 · Tenerlos no basta: un día trabajado sin el suyo es lo que pediría un inspector.
+    sin = len(ctx.get("sin_prestart") or [])
+    if n and sin:
+        return PARCIAL, "%d pre-start%s on file, %d day%s worked with none" % (
+            n, "" if n == 1 else "s", sin, "" if sin == 1 else "s")
     if n:
         return OK, "%d pre-start%s on file" % (n, "" if n == 1 else "s")
     return FALTA, "No pre-start recorded for this job"
+
+
+def _ev_false_car(ctx):
+    n, sin = len(ctx.get("checks_fc") or []), len(ctx.get("sin_falsecar") or [])
+    if n and sin:
+        return PARCIAL, "%d check%s on file, %d day%s worked with none" % (
+            n, "" if n == 1 else "s", sin, "" if sin == 1 else "s")
+    if n:
+        return OK, "%d check%s on file" % (n, "" if n == 1 else "s")
+    if sin:
+        return FALTA, "No check recorded, %d day%s worked" % (sin, "" if sin == 1 else "s")
+    return PARCIAL, "The false car is not marked as installed yet"
 
 
 def _ev_installer_certs(ctx):
@@ -183,6 +205,7 @@ _EVIDENCIA = {
     "as_built": _ev_as_built,
     "risk": _ev_risk,
     "installer_certs": _ev_installer_certs,
+    "false_car": _ev_false_car,
 }
 
 
@@ -194,6 +217,8 @@ def estado(ctx) -> list:
       plumb_ok         – si hay verificación de plomada
       acts             – actividades, con sus fechas reales
       prestarts        – pre-starts de la obra
+      sin_prestart     – días trabajados sin Pre-Start (v636)
+      false_car        – si la obra lo lleva; checks_fc, sus checklists; sin_falsecar, los días sin él
       trabajaron       – {login: última fecha trabajada}
       credenciales     – {login: [vencimiento, …]}
       docs             – documentos subidos: {clave del ítem: nombre del fichero}
@@ -203,7 +228,7 @@ def estado(ctx) -> list:
     """
     docs = ctx.get("docs") or {}
     out = []
-    for it in ITEMS:
+    for it in ITEMS + ([ITEM_FALSE_CAR] if ctx.get("false_car") else []):
         _doc = docs.get(it["clave"])
         if it["fuente"] == TERCERO:
             _e = (OK, "Uploaded: %s" % _doc) if _doc else (FALTA, "Not uploaded yet")

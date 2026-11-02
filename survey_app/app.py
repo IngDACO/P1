@@ -381,8 +381,10 @@ _home.render_topbar(_GRUPO)
 # Se dispara por bandera en la pasada SIGUIENTE al fichaje, porque el `st.rerun()`
 # de la acción descarta los deltas de la suya (v365).
 if _ROL in ("administrator", "field"):
-    from core.timeclock_ui import aviso_prestart_pendiente
-    aviso_prestart_pendiente(_GRUPO)
+    from core.timeclock_ui import aviso_falsecar_pendiente, aviso_prestart_pendiente
+    # v636 · Si faltan los dos, primero la charla: Streamlit admite un diálogo por pasada.
+    if not aviso_prestart_pendiente(_GRUPO):
+        aviso_falsecar_pendiente(_GRUPO)
 # El default NO puede ser "home" fijo: campo y propietario no tienen esa sección;
 # `render_admin_content` cae a la primera del rol (v297).
 _home.render_admin_content(st.session_state.get("_admin_sec", ""), _GRUPO)

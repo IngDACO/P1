@@ -702,7 +702,9 @@ def render_topbar(grupo):
         _campana(grupo)
     st.markdown("<hr style='margin:2px 0 14px 0;border:none;border-top:1px solid #e6e9ef;'>",
                 unsafe_allow_html=True)
-    _banda_prestart()        # v383: el aviso que no se va hasta que se haga
+    # v383: el aviso que no se va hasta que se haga. v636: si faltan los dos, primero la charla.
+    if not _banda_prestart():
+        _banda_falsecar()
     _mobile_back_trap()      # el back del móvil hace lo mismo que el botón '←'
 
 
@@ -764,7 +766,7 @@ def _banda_prestart():
                          type="primary", width="stretch"):
                 from core.timeclock_ui import _ir_a_prestart
                 _ir_a_prestart(pid)
-        return
+        return True
     c1, c2 = st.columns([5, 1])
     with c1:
         st.markdown(
@@ -783,6 +785,51 @@ def _banda_prestart():
                      type="primary", width="stretch"):
             from core.timeclock_ui import _ir_a_prestart
             _ir_a_prestart(pid)
+    return True
+
+
+def _banda_falsecar():
+    """La misma banda para el checklist diario del false car (v636), detrás de la del Pre-Start."""
+    a = st.session_state.get("auth") or {}
+    if str(a.get("rol", "")) not in ("administrator", "field"):
+        return
+    try:
+        from core import falsecar, projects, timeclock
+        if not timeclock.is_configured():
+            return
+        ses = timeclock.open_sessions(a.get("nombre") or a.get("usuario", ""),
+                                      a.get("grupo", ""), a.get("usuario", ""))
+        prj = ses.get(timeclock.TIPO_PROYECTO)
+        if timeclock.olvidos(ses) or not prj:
+            return
+        pid = str(prj.get("proyecto_id", "") or "")
+        if not pid:
+            return
+        _toca = falsecar.pendiente_hoy(projects.get_project(pid) or {}, a.get("grupo", ""),
+                                       a.get("nombre") or a.get("usuario", ""), a.get("usuario", ""))
+        if not _toca:
+            return
+    except Exception:
+        return                      # nunca estorbar por un fallo del aviso
+    import html as _html
+    _obra = _html.escape(str(prj.get("proyecto", "") or t("this job")))
+    _firmar = _toca == falsecar.FIRMAR
+    _tit = t("Sign today's false car check") if _firmar else t("Today's false car check is missing")
+    _txt = (t("the check for <b>{o}</b> is already recorded, but you have not signed it.", o=_obra)
+            if _firmar else t("you are clocked in at <b>{o}</b> and nobody has recorded it today.", o=_obra))
+    c1, c2 = st.columns([5, 1])
+    with c1:
+        st.markdown(
+            '<div style="background:#fff4e5;border-left:5px solid #e67e22;'
+            'border-radius:8px;padding:9px 14px;margin-bottom:10px;">'
+            '<span style="font-weight:700;color:#a35b12;font-size:16px;">' + "⚠️ " + _tit + "</span>"
+            + '<span style="color:#7a5b3a;font-size:13px;"> · ' + _txt + "</span></div>",
+            unsafe_allow_html=True)
+    with c2:
+        if st.button(t(":material/draw: Sign") if _firmar else t(":material/verified: Do it"),
+                     key="banda_fc_ir", type="primary", width="stretch"):
+            from core.timeclock_ui import _ir_a_falsecar
+            _ir_a_falsecar(pid)
 
 
 def _norm_busq(s) -> str:
