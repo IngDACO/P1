@@ -90,8 +90,9 @@ _pu = open(os.path.join(RAIZ, "core", "projects_ui.py"), encoding="utf-8").read(
 chk("el del recibo, en concreto (donde se vio)",
     'with st.form(f"{key_prefix}_add_{pid}{_sf}", clear_on_submit=False, enter_to_submit=False):' in _pu)
 _td = formularios(open(os.path.join(RAIZ, "core", "tareas_ui.py"), encoding="utf-8").read())
-chk("la caja de «To-do» (UN campo) conserva el Enter: es como se apunta una tarea", _td == [(_td[0][0], 1, None)]
-    if _td else False, _td)
+# v635 · Y la de cada comentario, sin Enter: son varias líneas, y ahí Enter es un salto de línea.
+chk("la caja de «To-do» (UN campo) conserva el Enter: es como se apunta una tarea",
+    {(x[1], x[2]) for x in _td} == {(1, None), (1, False)}, _td)
 
 # AppTest: el formulario del recibo sale SIN Enter en el navegador (el proto que recibe)
 APP = r'''

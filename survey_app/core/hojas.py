@@ -83,6 +83,8 @@ HOJAS_LECTURA = (
     "AgentMemory",
     # v615: la lista de pendientes de la obra (`tareas`), lector SIN cabeceras: la misma regla.
     "Tasks",
+    # v635: sus comentarios (`tareas.SHEET_COM`), lector SIN cabeceras: la misma regla.
+    "TaskComments",
 )
 
 

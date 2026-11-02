@@ -16,6 +16,12 @@ avance sigue siendo lo que el campo marca en «Progress» (v514) o confirma de s
 ## ⚠️ Borrar OCULTA, no elimina
 `Active=NO` con quién y cuándo: una tarea que alguien apuntó no desaparece del libro porque otro
 la quite de la vista. Solo `borrar_de_obra` (al borrar la OBRA, como los partes) quita filas.
+
+## Comentarios (v635)
+Decisión del usuario: cualquiera que vea la lista comenta (también en las hechas); borra su autor o
+la oficina, sin editar; y no avisan a nadie: se ve el número en la tarea, como marcar tampoco avisa.
+⚠️ En su PROPIA hoja, no en una celda de la tarea: dos personas comentando a la vez se pisarían, y
+`append_row` no pisa nada. Comentar tampoco acredita nada.
 """
 import logging
 import re
@@ -35,6 +41,12 @@ HEADERS = ["ID", "Group", "ProjectID", "Text", "CreatedBy", "Created",
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 HECHA = "YES"
 MAX_TEXTO = 200        # una tarea es una línea («Pick up the landing door keys»), no un parte
+# v635 · Los comentarios de las tareas, en su hoja (ver el módulo)
+SHEET_COM = "TaskComments"
+HEADERS_COM = ["ID", "Group", "ProjectID", "TaskID", "Text", "CreatedBy", "Created",
+               "Active", "DeletedBy", "DeletedAt"]
+_COL_COM = {h: i + 1 for i, h in enumerate(HEADERS_COM)}
+MAX_COMENTARIO = 500
 
 
 def _libro_de(_hoja) -> str:
@@ -58,6 +70,37 @@ def _ws():
     except Exception as e:
         logger.warning("tareas: no se pudo abrir %s: %s", SHEET, e)
         return None
+
+
+def _ws_com():
+    """⚠️ Como `_ws`: `get_sheet` CREA la hoja si falta, y solo lo usan las escrituras."""
+    if not timeclock._secrets_present():
+        return None
+    try:
+        return timeclock.get_sheet(SHEET_COM, tuple(HEADERS_COM))
+    except Exception as e:
+        logger.warning("tareas: no se pudo abrir %s: %s", SHEET_COM, e)
+        return None
+
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _comentarios_cached(libro: str) -> list:
+    """⚠️ SIN cabeceras, y por eso va en `hojas.HOJAS_LECTURA` (ver `_records_cached`)."""
+    from core import hojas
+    return hojas.registros(SHEET_COM) or []
+
+
+def _registros_com():
+    return _comentarios_cached(_libro_de(SHEET_COM))
+
+
+def _invalidate_com():
+    from core import hojas
+    hojas.invalidar(SHEET_COM)
+    try:
+        _comentarios_cached.clear()
+    except Exception as e:
+        logger.warning("tareas._invalidate_com: %s", e)
 
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -116,6 +159,19 @@ def hechas(pid) -> list:
     """Las hechas, la ÚLTIMA marcada primero."""
     return sorted([r for r in de_obra(pid) if hecha(r)],
                   key=lambda r: (str(r.get("DoneAt", "")), str(r.get("ID", ""))), reverse=True)
+
+
+def comentarios(pid) -> dict:
+    """v635 · {tarea: [sus comentarios vivos]} de una obra, el más ANTIGUO primero: se lee como una
+    conversación."""
+    out = {}
+    for c in _registros_com():
+        if (str(c.get("ProjectID", "")) == str(pid) and _activa(c)
+                and str(c.get("Text", "")).strip()):
+            out.setdefault(str(c.get("TaskID", "")), []).append(c)
+    for lista in out.values():
+        lista.sort(key=lambda c: (str(c.get("Created", "")), str(c.get("ID", ""))))
+    return out
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -250,6 +306,117 @@ def borrar(tid, pid, quien, gestor) -> tuple:
     return True, t("Task deleted.")
 
 
+def _next_id_com(recs) -> str:
+    n = 0
+    for r in recs:
+        _v = str(r.get("ID", ""))
+        if _v.startswith("TKC-"):
+            n = max(n, int(_num(_v[4:]) or 0))
+    from core import hojas
+    try:
+        return hojas.siguiente_id_libre("TKC-", n, propia=SHEET_COM)
+    except Exception as e:                       # nunca impedir comentar
+        logger.warning("tareas._next_id_com: %s", e)
+        return "TKC-%04d" % (n + 1)
+
+
+def comentar(tid, pid, grupo, texto, autor) -> tuple:
+    """v635 · Añade un comentario a una tarea. `(ok, id_o_mensaje)`.
+
+    ⚠️ La tarea se mira FRESCA: otro pudo borrarla mientras se escribía, y el comentario quedaría
+    colgando de nada. Y un doble toque en el móvil no duplica: el mismo texto del mismo autor en esa
+    tarea ya está, así que lo que se quería ya es verdad (como `marcar`)."""
+    _txt = re.sub(r"\n{3,}", "\n\n", str(texto or "").replace("\r\n", "\n")).strip()
+    if not _txt:
+        return False, t("Write the comment first.")
+    if len(_txt) > MAX_COMENTARIO:
+        return False, t("That comment is too long ({n} of {max} characters).",
+                        n=len(_txt), max=MAX_COMENTARIO)
+    w = _ws()
+    if w is None:
+        return False, timeclock.motivo_sin_hoja()
+    try:
+        _f, r = _fila(_frescos(w), tid, pid)
+        if _f is None or not _activa(r):
+            return False, t("That task is no longer on the list.")
+        wc = _ws_com()
+        if wc is None:
+            return False, timeclock.motivo_sin_hoja()
+        recs = _frescos(wc)
+        _ya = next((c for c in recs if str(c.get("TaskID", "")) == str(tid) and _activa(c)
+                    and str(c.get("CreatedBy", "")) == str(autor)
+                    and normaliza(c.get("Text")) == normaliza(_txt)), None)
+        if _ya is not None:
+            return True, str(_ya.get("ID", ""))
+        cid = _next_id_com(recs)
+        _ahora = clock.now(grupo).strftime("%Y-%m-%d %H:%M:%S")
+        # ⚠️ La fila ENTERA, posicional (v363): lo de «borrado» nace vacío.
+        wc.append_row([cid, str(grupo or ""), str(pid), str(tid), _txt, str(autor or ""), _ahora,
+                       "", "", ""], value_input_option="RAW")
+    except Exception as e:
+        logger.warning("tareas.comentar(%s): %s", tid, e)
+        return False, timeclock.motivo_sin_hoja()
+    _invalidate_com()
+    return True, cid
+
+
+def borrar_comentario(cid, pid, quien, gestor) -> tuple:
+    """v635 · Lo quita de la tarea (`Active=NO`, con quién y cuándo), como `borrar`. Su autor o la
+    oficina: la regla de `puede_borrar`, mirada AQUÍ sobre la fila fresca."""
+    wc = _ws_com()
+    if wc is None:
+        return False, timeclock.motivo_sin_hoja()
+    try:
+        recs = _frescos(wc)
+    except Exception as e:
+        logger.warning("tareas.borrar_comentario(%s): %s", cid, e)
+        return False, timeclock.motivo_sin_hoja()
+    fila, r = _fila(recs, cid, pid)
+    if fila is None or not _activa(r):
+        return False, t("That comment is no longer there.")
+    if not puede_borrar(r, quien, gestor):
+        return False, t("Only the person who wrote it (or the office) can delete it.")
+    from core.num import col_letter
+    _ahora = clock.now(r.get("Group")).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        wc.batch_update([
+            {"range": "%s%d" % (col_letter(_COL_COM["Active"]), fila), "values": [["NO"]]},
+            {"range": "%s%d" % (col_letter(_COL_COM["DeletedBy"]), fila), "values": [[str(quien)]]},
+            {"range": "%s%d" % (col_letter(_COL_COM["DeletedAt"]), fila), "values": [[_ahora]]},
+        ], value_input_option="RAW")
+    except Exception as e:
+        logger.warning("tareas.borrar_comentario(%s): %s", cid, e)
+        return False, timeclock.motivo_sin_hoja()
+    _invalidate_com()
+    return True, t("Comment deleted.")
+
+
+def _borrar_comentarios_de_obra(pid) -> int:
+    """⚠️ Solo si los hay: `_ws_com` CREA la hoja, y borrar una obra sin comentarios no debe
+    escribir nada."""
+    try:
+        if not any(str(c.get("ProjectID", "")) == str(pid) for c in _registros_com()):
+            return 0
+        wc = _ws_com()
+        if wc is None:
+            return 0
+        filas = [i + 2 for i, c in enumerate(_frescos(wc)) if str(c.get("ProjectID", "")) == str(pid)]
+    except Exception as e:
+        logger.warning("tareas._borrar_comentarios_de_obra(%s): %s", pid, e)
+        return 0
+    n = 0
+    for fila in sorted(filas, reverse=True):      # de abajo arriba, como `borrar_de_obra`
+        try:
+            wc.delete_rows(fila)
+            n += 1
+        except Exception as e:
+            logger.warning("tareas._borrar_comentarios_de_obra(%s): %s", pid, e)
+            break
+    if n:
+        _invalidate_com()
+    return n
+
+
 def borrar_de_obra(pid) -> int:
     """Todas las tareas de una obra, de una vez (al borrar la OBRA, `projects.delete_project`).
     Devuelve cuántas se fueron. ⚠️ Como los partes (v516) y los créditos (v514): viven en OTRA
@@ -275,4 +442,5 @@ def borrar_de_obra(pid) -> int:
             break
     if n:
         _invalidate()
+    _borrar_comentarios_de_obra(pid)
     return n

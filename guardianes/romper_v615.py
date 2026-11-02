@@ -59,7 +59,8 @@ ROTURAS = [
        '        if str(r.get("ID", "")) == str(tid):\n')]),
     # ── borrar ──
     ("⚠️ el módulo deja borrar la de otro (solo la pantalla lo impedía)", TA,
-     [('    if not puede_borrar(r, quien, gestor):\n', '    if False:\n')]),
+     [('        return False, t("That task is no longer on the list.")\n    if not puede_borrar(r, quien, gestor):\n',
+       '        return False, t("That task is no longer on the list.")\n    if False:\n')]),
     ("⚠️ el campo puede borrar cualquiera", TA,
      [('    return bool(gestor) or str((r or {}).get("CreatedBy", "")) == str(quien)\n', '    return True\n')]),
     ("borrar no oculta", TA,
@@ -76,13 +77,13 @@ ROTURAS = [
     ("⚠️ borrar la obra deja su lista huérfana", PJ,
      [('        _TA.borrar_de_obra(pid)\n', '        pass\n')]),
     ("⚠️ `Tasks` fuera del lote (se escribe y se lee VACÍA)", HJ,
-     [('    "Tasks",\n)', ')')]),
+     [('    "Tasks",\n    # v635', '    # v635')]),
     # ── la pantalla ──
     ("⚠️ el texto de la persona sin escapar (cursivas, fórmulas)", TU,
      [('st.checkbox(literal_md(r.get("Text", "")), value=False, key=_c,',
        'st.checkbox(str(r.get("Text", "")), value=False, key=_c,')]),
     ("la caja no se vacía tras apuntar", TU,
-     [('                st.session_state[_k] = int(st.session_state.get(_k, 0)) + 1   # la caja nace vacía\n', '')]),
+     [('                _k = _clave_gen(pet.get("kp"), pid)\n                st.session_state[_k] = int(st.session_state.get(_k, 0)) + 1   # la caja nace vacía\n', '')]),
     ("⚠️ la caja se vacía aunque NO se guardara (se pierde lo escrito)", TU,
      [('                # vuelve a escribir.\n                flash.error(r)\n',
        '                # vuelve a escribir.\n                _k = _clave_gen(pet.get("kp"), pid)\n'
@@ -113,7 +114,7 @@ def aplica(rel, cambios):
     """Aplica TODOS los cambios o ninguno. Devuelve (ok, bak, p, detalle)."""
     p = os.path.normpath(os.path.join(RAIZ, rel.replace("/", os.sep)))
     bak = io.open(p, encoding="utf-8", newline="").read()
-    txt = bak
+    txt = bak.replace("\r\n", "\n")        # v635 · `projects.py` va en CRLF y el ancla no casaba
     for viejo, nuevo in cambios:
         if txt.count(viejo) != 1:
             return None, bak, p, "x%d: %s" % (txt.count(viejo), viejo[:50])
@@ -129,7 +130,7 @@ if __name__ == "__main__":
         for r in ROTURAS + [CONTROL]:
             desc, rel, cambios = r[:3]
             txt = io.open(os.path.normpath(os.path.join(RAIZ, rel.replace("/", os.sep))),
-                          encoding="utf-8", newline="").read()
+                          encoding="utf-8", newline="").read().replace("\r\n", "\n")
             for viejo, _ in cambios:
                 if txt.count(viejo) != 1:
                     _m += 1

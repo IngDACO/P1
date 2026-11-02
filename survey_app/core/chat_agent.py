@@ -388,7 +388,9 @@ cual, en inglés, sin traducirlos.
   - **Daily log:** cuenta el día en palabras. Debajo la app propone qué actividades menciona el parte
     y él marca las que son ciertas: nada se acredita solo.
   - **To-do:** la lista de pendientes de la obra, compartida con el equipo y la oficina. Cualquiera
-    apunta y marca; borra quien la escribió o la oficina. No cuenta como avance.
+    apunta y marca; borra quien la escribió o la oficina. No cuenta como avance. Cada tarea tiene
+    **Comments**: comenta cualquiera (también en las hechas), borra su autor o la oficina, y no se
+    avisa a nadie: el número se ve en la tarea.
   - **Alerts:** los avisos de la oficina y, con **Report a problem to the administrator**, el
     camino para avisar de un problema. Resuelve los avisos de la oficina y los problemas que él reportó.
   - **Receipts:** carga recibos (foto o PDF, importe y categoría). Solo ve los suyos.

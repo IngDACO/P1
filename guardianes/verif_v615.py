@@ -297,7 +297,7 @@ chk("⚠️ una petición de OTRA obra no se aplica a la que se ve (y se tira)",
 _tu = ast.parse(open(os.path.join(RAIZ, "core", "tareas_ui.py"), encoding="utf-8").read())
 _exps = [n for n in ast.walk(_tu) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "expander"]
 chk("los desplegables con controles, CON clave (trampa 35: sin ella se cierran con cada aviso)",
-    len(_exps) == 2 and all(any(k.arg == "key" for k in n.keywords) for n in _exps), len(_exps))
+    len(_exps) == 3 and all(any(k.arg == "key" for k in n.keywords) for n in _exps), len(_exps))
 chk("ninguna excepción en todo el recorrido", not at.exception and not at2.exception,
     [e.value for e in list(at.exception) + list(at2.exception)][:1])
 

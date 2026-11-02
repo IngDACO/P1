@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 _PET = "_td_pet"           # lo que pidió la pantalla: alta / marcar / borrar
 _GEN = "_td_gen"           # generación de la caja de alta: sube al guardar → nace vacía (v602)
 _MAX_HECHAS = 30           # las hechas que se pintan (las más recientes); el resto se cuenta
+_CGEN = "_td_cgen"         # generación de la caja de cada comentario (como `_GEN`)
+_CBORRA = "_td_cborra"     # el comentario que espera «Yes, delete it»
 
 
 def _nombre(login) -> str:
@@ -65,6 +67,32 @@ def _pedir_borrar(kp, pid) -> None:
                               "tid": st.session_state.get(f"{kp}_td_del_{pid}")}
 
 
+def _clave_cgen(kp, pid, tid) -> str:
+    return f"{_CGEN}_{kp}_{pid}_{tid}"
+
+
+def _clave_com(kp, pid, tid) -> str:
+    return f"{kp}_td_com_{pid}_{tid}_{int(st.session_state.get(_clave_cgen(kp, pid, tid), 0))}"
+
+
+def _pedir_comentario(kp, pid, tid) -> None:
+    st.session_state[_PET] = {"accion": "comentar", "pid": str(pid), "tid": str(tid), "kp": kp,
+                              "texto": str(st.session_state.get(_clave_com(kp, pid, tid)) or "")}
+
+
+def _confirmar_borrar_com(cid) -> None:
+    st.session_state[_CBORRA] = str(cid)
+
+
+def _no_borrar_com() -> None:
+    st.session_state.pop(_CBORRA, None)
+
+
+def _pedir_borrar_com(pid, cid) -> None:
+    st.session_state.pop(_CBORRA, None)
+    st.session_state[_PET] = {"accion": "borrar_com", "pid": str(pid), "cid": str(cid)}
+
+
 def _atender(pid, grupo, usuario, gestor) -> None:
     """Lo pedido, ANTES de pintar (trampa 37). ⚠️ Una petición de OTRA obra (se cambió de obra
     con algo a medias) se tira: nunca se aplica a la obra que se está viendo."""
@@ -87,12 +115,56 @@ def _atender(pid, grupo, usuario, gestor) -> None:
             ok, r = T.marcar(pet.get("tid"), pid, pet.get("hecho"), usuario)
             if not ok:
                 flash.error(r)
+        elif pet["accion"] == "comentar":
+            ok, r = T.comentar(pet.get("tid"), pid, grupo, pet.get("texto"), usuario)
+            if ok:
+                _k = _clave_cgen(pet.get("kp"), pid, pet.get("tid"))
+                st.session_state[_k] = int(st.session_state.get(_k, 0)) + 1   # la caja nace vacía
+            else:
+                flash.error(r)                    # lo escrito SE QUEDA, como en el alta
+        elif pet["accion"] == "borrar_com":
+            ok, r = T.borrar_comentario(pet.get("cid"), pid, usuario, gestor)
+            (flash.exito if ok else flash.error)(r)
         elif not pet.get("tid"):
             flash.aviso(t("Choose the task to delete first."))
         else:
             ok, r = T.borrar(pet["tid"], pid, usuario, gestor)
             (flash.exito if ok else flash.error)(r)
     st.rerun()
+
+
+def _comentarios(kp, pid, tid, lista, usuario, gestor) -> None:
+    """Los comentarios de una tarea (v635), cerrados: la lista sigue siendo corta y el número se ve
+    sin abrir nada. ⚠️ Con clave (trampa 35) y con «exp» en ella: el convenio de `verif_v547`."""
+    _n = len(lista)
+    with st.expander(t("Comments ({n})", n=_n) if _n else t("Add a comment"),
+                     icon=":material/chat_bubble:", key=f"{kp}_td_exp_com_{pid}_{tid}"):
+        for c in lista:
+            _cid = str(c.get("ID", ""))
+            # ⚠️ Lo escribe una persona: escapado, y sus saltos de línea se respetan.
+            st.markdown(literal_md(c.get("Text", "")).replace("\n", "  \n"))
+            _cu = str(c.get("Created", ""))
+            st.caption(t("{q} · {d}", q=_nombre(c.get("CreatedBy")),
+                         d=_dmy(_cu) + (" " + _cu[11:16] if len(_cu) >= 16 else "")))
+            if not T.puede_borrar(c, usuario, gestor):
+                continue
+            if st.session_state.get(_CBORRA) != _cid:
+                st.button(t(":material/delete: Delete"), key=f"{kp}_td_cdel_{pid}_{_cid}",
+                          type="tertiary", on_click=_confirmar_borrar_com, args=(_cid,))
+                continue
+            st.warning(t("Delete this comment?"))
+            b1, b2 = st.columns(2)
+            b1.button(t(":material/delete: Yes, delete it"), key=f"{kp}_td_cdelok_{pid}_{_cid}",
+                      type="primary", width="stretch", on_click=_pedir_borrar_com, args=(pid, _cid))
+            b2.button(t("Keep it"), key=f"{kp}_td_cdelno_{pid}_{_cid}", width="stretch",
+                      on_click=_no_borrar_com)
+        # Varias líneas: Enter es un salto de línea y solo envía el botón (v617).
+        _g = int(st.session_state.get(_clave_cgen(kp, pid, tid), 0))
+        with st.form(f"{kp}_td_cform_{pid}_{tid}_{_g}", border=False, enter_to_submit=False):
+            st.text_area(t("New comment"), key=_clave_com(kp, pid, tid), max_chars=T.MAX_COMENTARIO,
+                         placeholder=t("Write a comment…"), label_visibility="collapsed", height=68)
+            st.form_submit_button(t(":material/send: Comment"), key=f"{kp}_td_csend_{pid}_{tid}",
+                                  on_click=_pedir_comentario, args=(kp, pid, tid))
 
 
 def render(pid, grupo, usuario, gestor=False, key_prefix="fld") -> None:
@@ -117,6 +189,7 @@ def render(pid, grupo, usuario, gestor=False, key_prefix="fld") -> None:
         st.caption(t("Nothing on the list yet. Write the first task above."))
         return
     st.caption(t("{p} pending · {h} done", p=len(_p), h=len(_h)))
+    _com = T.comentarios(pid)                     # v635 · una lectura para toda la lista
     if not _p:
         st.caption(t(":material/task_alt: Nothing pending."))
     for r in _p:
@@ -127,6 +200,7 @@ def render(pid, grupo, usuario, gestor=False, key_prefix="fld") -> None:
         st.checkbox(literal_md(r.get("Text", "")), value=False, key=_c,
                     on_change=_pedir_marcar, args=(pid, _tid, _c))
         st.caption(t("Added by {q} · {d}", q=_nombre(r.get("CreatedBy")), d=_dmy(r.get("Created"))))
+        _comentarios(kp, pid, _tid, _com.get(_tid, []), usuario, gestor)
 
     if _h:
         # ⚠️ Con clave (trampa 35): con controles dentro, sin ella se cierra solo con cada aviso. Y
@@ -141,6 +215,7 @@ def render(pid, grupo, usuario, gestor=False, key_prefix="fld") -> None:
                 _da = str(r.get("DoneAt", ""))
                 st.caption(t("Done by {q} · {d}", q=_nombre(r.get("DoneBy")),
                              d=_dmy(_da) + (" " + _da[11:16] if len(_da) >= 16 else "")))
+                _comentarios(kp, pid, _tid, _com.get(_tid, []), usuario, gestor)
             if len(_h) > _MAX_HECHAS:
                 st.caption(t("…and {n} older ones.", n=len(_h) - _MAX_HECHAS))
 
