@@ -415,6 +415,15 @@ def firmar(cid: str, grupo: str, nombre: str, iniciales: str = "", firma_png=Non
     fila = filas[idx]
     hora = clock.now(grupo).strftime("%H:%M")
     pid, drive_id = str(fila.get("ProjectID", "")), str(fila.get("DriveID", "") or "")
+    try:
+        asist = json.loads(fila.get("Signers", "") or "[]")
+    except Exception:
+        asist = []
+    # v637 · Ya consta: es un sí, sin otra fila ni otro anexo (un doble toque).
+    from core.prestart import ya_firmo
+    if ya_firmo(asist, nombre, usuario):
+        res["ok"], res["archivado"] = True, True
+        return res
 
     # El PDF nuevo ANTES de tocar la fila, y el viejo se borra DESPUÉS (lección de v343).
     nuevo_id = ""
@@ -444,10 +453,6 @@ def firmar(cid: str, grupo: str, nombre: str, iniciales: str = "", firma_png=Non
     except Exception as e:                                        # noqa: BLE001
         logger.warning("falsecar.firmar: no se pudo rehacer el PDF: %s", e)
 
-    try:
-        asist = json.loads(fila.get("Signers", "") or "[]")
-    except Exception:
-        asist = []
     _nuevo = {"name": str(nombre), "initial": str(iniciales or ""), "firmado": bool(firma_png),
               "hora": hora, "tarde": True}
     if str(usuario or "").strip():

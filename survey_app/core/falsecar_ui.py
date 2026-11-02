@@ -17,6 +17,16 @@ from core.num import dmy
 logger = logging.getLogger(__name__)
 
 _MAX_HIST = 10             # los que se ven de entrada; el resto, con un botón
+# v637 · En una pantalla estrecha, el texto a todo el ancho y ✓/X con Remarks en UNA fila: apilados,
+# los 18 puntos medían 4416 px en un teléfono. Mide el CONTENEDOR, como `theme.dos_por_fila`.
+_CSS_PUNTOS = ("<style>.st-key-cpx_fc_puntos{container-type:inline-size}@container (max-width:700px){"
+               ".st-key-cpx_fc_puntos [data-testid='stHorizontalBlock']{flex-wrap:wrap!important}"
+               ".st-key-cpx_fc_puntos [data-testid='stColumn']:nth-child(1)"
+               "{flex:0 0 100%!important;min-width:100%!important;width:100%!important}"
+               ".st-key-cpx_fc_puntos [data-testid='stColumn']:nth-child(2)"
+               "{flex:0 0 96px!important;min-width:96px!important;width:96px!important}"
+               ".st-key-cpx_fc_puntos [data-testid='stColumn']:nth-child(3)"
+               "{flex:1 1 0!important;min-width:0!important;width:auto!important}}</style>")
 
 
 def _no_usar(fallos) -> None:
@@ -112,15 +122,17 @@ def _formulario(prj, pid, grupo, dia, nombre, usuario, gestor) -> None:
     # Sin respuesta por defecto (v158): es una revisión, no una firma.
     st.caption(t("Answer every item: ✓ if it passes, X if it does not. With X, the remarks are required."))
     resultados = {}
-    for n, (k, texto) in enumerate(FC.CHECKS, 1):
-        c1, c2, c3 = st.columns([5, 2, 3])
-        c1.markdown(f"**{n}.** " + literal_md(texto).replace("\n", "  \n"))
-        _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=None, horizontal=True,
-                        format_func=FC.SIMBOLO.get, key=f"fc_res_{kp}_{k}",
-                        label_visibility="collapsed")
-        _nota = c3.text_input(t("Remarks"), key=f"fc_nota_{kp}_{k}", label_visibility="collapsed",
-                              placeholder=t("Remarks"), max_chars=200)
-        resultados[k] = {"res": _res, "nota": str(_nota or "").strip()}
+    st.markdown(_CSS_PUNTOS, unsafe_allow_html=True)
+    with st.container(key="cpx_fc_puntos"):
+        for n, (k, texto) in enumerate(FC.CHECKS, 1):
+            c1, c2, c3 = st.columns([5, 2, 3])
+            c1.markdown(f"**{n}.** " + literal_md(texto).replace("\n", "  \n"))
+            _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=None, horizontal=True,
+                            format_func=FC.SIMBOLO.get, key=f"fc_res_{kp}_{k}",
+                            label_visibility="collapsed")
+            _nota = c3.text_input(t("Remarks"), key=f"fc_nota_{kp}_{k}", label_visibility="collapsed",
+                                  placeholder=t("Remarks"), max_chars=200)
+            resultados[k] = {"res": _res, "nota": str(_nota or "").strip()}
 
     st.markdown("---")
     st.markdown(t("**Name of person conducting daily check:** {n}", n=literal_md(nombre)))
@@ -147,7 +159,8 @@ def _formulario(prj, pid, grupo, dia, nombre, usuario, gestor) -> None:
         if not res["ok"]:
             st.error(res["error"] or t("The checklist could not be saved."))
         else:
-            st.session_state[f"_fc_res_{pid}"] = {**res, "dia": clock.today(grupo).isoformat()}
+            st.session_state[f"_fc_res_{pid}"] = {**res, "dia": clock.today(grupo).isoformat(),
+                                                  "fecha": dia.isoformat()}
             st.session_state[f"_fc_gen_{pid}"] = _gen + 1
             st.rerun()
 
@@ -196,7 +209,10 @@ def render(prj, grupo, rol, usuario, nombre, dia_pedido=None) -> None:
                          key=f"fc_fecha_{pid}_{_fg}", format="DD/MM/YYYY") if gestor else hoy)
 
     _r = st.session_state.get(f"_fc_res_{pid}")
-    if _r and _r.get("dia") == hoy.isoformat():
+    # ⚠️ v637 · El aviso es de SU día: con otro elegido, decía «saved» encima de un formulario vacío.
+    if _r and (_r.get("dia") != hoy.isoformat() or _r.get("fecha") != dia.isoformat()):
+        _r = None
+    if _r:
         _resultado(_r)
 
     d = FC.del_dia(pid, dia)
@@ -245,6 +261,7 @@ def faltantes(grupo) -> None:
             st.session_state[_gk] = st.session_state.get(_gk, 0) + 1
             st.session_state["_ps_proy_pending"] = _x["pid"]
             st.session_state["_ps_dia_pending"] = _x["fecha"]
+            st.session_state["_bajar_cpx_ps_obra"] = True
             # Si faltan los dos, primero la charla (decisión del usuario).
             if _x["falta"] == ["falsecar"]:
                 st.session_state["_ps_doc_pending"] = "falsecar"

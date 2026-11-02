@@ -227,6 +227,19 @@ def _norm_nombre(s) -> str:
     return " ".join(_s.lower().split())
 
 
+def ya_firmo(asistentes, nombre: str = "", usuario: str = "") -> bool:
+    """¿Esta persona ya consta entre `asistentes`? El mismo criterio que `pendiente_de_firma`: el
+    login manda, y el nombre solo cuenta entre quienes no lo tienen (v418). v637 · Lo usan los dos
+    `firmar`: la pantalla oculta el botón al firmar, pero un doble toque llega antes que eso, y
+    añadiría otra fila y otra hoja de anexo al documento de seguridad."""
+    _a = [x for x in (asistentes or []) if isinstance(x, dict)]
+    quien, quien_u = _norm_nombre(nombre), str(usuario or "").strip().lower()
+    if quien_u and any(str(x.get("usuario", "") or "").strip().lower() == quien_u for x in _a):
+        return True
+    _sin = [x for x in _a if not str(x.get("usuario", "") or "").strip()] if quien_u else _a
+    return bool(quien) and any(_norm_nombre(x.get("name")) == quien for x in _sin)
+
+
 def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "") -> dict:
     """El Pre-Start de HOY de esa obra que a `persona` le falta por firmar, o {}.
 
@@ -317,6 +330,14 @@ def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",
         return res
     fila = filas[idx]
     hora = clock.now(grupo).strftime("%H:%M")
+    # v637 · Ya consta: es un sí, sin otra fila ni otro anexo (un doble toque).
+    try:
+        _ya = json.loads(fila.get("Attendees", "") or "[]")
+    except Exception:
+        _ya = []
+    if ya_firmo(_ya, nombre, usuario):
+        res.update(ok=True, archivado=True, drive_id=str(fila.get("DriveID", "") or ""))
+        return res
 
     # 1) el anexo, y el PDF final = original + anexo (pypdf, ya es dependencia)
     nuevo_pdf, drive_id = None, str(fila.get("DriveID", "") or "")

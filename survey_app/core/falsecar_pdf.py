@@ -69,7 +69,8 @@ def generate_pdf(data: dict) -> bytes:
     pie = Table([[Paragraph("Name of person conducting daily check", _PIE),
                   Paragraph(_esc(data.get("nombre", "")), _PIE)],
                  [Paragraph("Signature", _PIE),
-                  _celda_firma({"sig": data.get("firma"), "initial": data.get("iniciales", "")}, st)],
+                  _celda_firma({"sig": data.get("firma"), "initial": data.get("iniciales", "")}, st,
+                               ancho=60 * mm, alto=18 * mm)],
                  [Paragraph("Date of Daily Check", _PIE),
                   Paragraph(_esc(dmy(data.get("fecha"))) + " · " + _esc(data.get("hora", "")), _PIE)]],
                 colWidths=[W * 0.5, W * 0.5])

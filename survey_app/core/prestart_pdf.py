@@ -78,8 +78,9 @@ def _ans(options, selected, st):
     return t
 
 
-def _celda_firma(a, st):
-    """La firma DIBUJADA del asistente (v383), o sus iniciales si no la hay.
+def _celda_firma(a, st, ancho=25 * mm, alto=8 * mm):
+    """La firma DIBUJADA del asistente (v383), o sus iniciales si no la hay. `ancho` y `alto`: la
+    caja donde cabe (v637): la medida por defecto es la de la columna del Pre-Start.
 
     ⚠️ Degrada en vez de romper: si el lienzo no estuvo disponible (o la imagen
     viene corrupta), la celda cae a las iniciales tecleadas y el Pre-Start se
@@ -91,8 +92,7 @@ def _celda_firma(a, st):
         try:
             from reportlab.platypus import Image as RLImage
             # Ajustada a la columna de firma (16,3% del ancho útil), con margen.
-            return RLImage(io.BytesIO(sig), width=25 * mm, height=8 * mm,
-                           kind="proportional")
+            return RLImage(io.BytesIO(sig), width=ancho, height=alto, kind="proportional")
         except Exception as e:
             logger.warning("prestart_pdf: firma ilegible (%s); se usan las iniciales", e)
     return Paragraph(_esc(a.get("initial", "")) or "&nbsp;", st["PSQ"])

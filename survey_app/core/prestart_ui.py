@@ -457,8 +457,13 @@ def render_prestart_tab():
     # una obra», que no es lo mismo, y seria el «primero de la lista» que evito v139.
     elif rol == "field" and len(idmap) == 1 and "ps_proy" not in st.session_state:
         st.session_state["ps_proy"] = next(iter(idmap))
-    sel = st.selectbox(t("Project"), [_VACIO] + list(idmap.keys()), key="ps_proy",
-                       format_func=lambda o: t(o) if o == _VACIO else o)
+    # v637 · Tocar un día de la lista baja aquí: el formulario se abre debajo de la tabla, fuera de la
+    # vista, y parecía que el toque no había hecho nada (medido en producción: la obra, a 868 px).
+    with st.container(key="cpx_ps_obra"):
+        from core import projects_ui as _PU
+        _PU._bajar_a("cpx_ps_obra", "_bajar_cpx_ps_obra", bloque="start")
+        sel = st.selectbox(t("Project"), [_VACIO] + list(idmap.keys()), key="ps_proy",
+                           format_func=lambda o: t(o) if o == _VACIO else o)
     if _fich_key and sel == _fich_key:
         st.caption(t(":material/schedule: This is the project you clocked in to today. Change it if the pre-start is for another one."))
     if not sel or sel == _VACIO:

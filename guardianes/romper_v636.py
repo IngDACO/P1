@@ -197,7 +197,7 @@ ROTURAS = [
      [("""               "prestart", "falsecar", "calculo"}\n""", """               "prestart", "calculo"}\n""")]),
     # ── La pantalla ──
     ("⚠️ las respuestas nacen en ✓", U,
-     [("""        _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=None, horizontal=True,\n""", """        _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=0, horizontal=True,\n""")]),
+     [("""            _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=None, horizontal=True,\n""", """            _res = c2.radio(t("Inspection results"), [FC.PASA, FC.FALLA], index=0, horizontal=True,\n""")]),
     ("⚠️ se envía sin completar", U,
      [("""                 key=f"fc_submit_{kp}", disabled=bool(_falta)):\n""", """                 key=f"fc_submit_{kp}"):\n""")]),
     ("⚠️ el formulario no lleva la obra en la clave", U,
@@ -266,6 +266,40 @@ ROTURAS = [
      [("""    if _ya_hoy and not _pf and not st.session_state.get(f"_ps_dia_{kp}"):\n""", """    if _ya_hoy and not _pf:\n""")]),
     ("⚠️ el día pedido no llega al Pre-Start", PSU,
      [("""        f_fecha = c1.date_input(t("Date"), value=st.session_state.get(f"_ps_dia_{kp}", hoy),\n""", """        f_fecha = c1.date_input(t("Date"), value=hoy,\n""")]),
+    # ── v637 ──
+    ("⚠️ tocar la fila no baja", U,
+     [("""            st.session_state["_bajar_cpx_ps_obra"] = True\n""", "")]),
+    ("⚠️ el bloque de la obra no baja", PSU,
+     [("""        _PU._bajar_a("cpx_ps_obra", "_bajar_cpx_ps_obra", bloque="start")\n""", "")]),
+    ("⚠️ la regla no se pinta", U,
+     [("""    st.markdown(_CSS_PUNTOS, unsafe_allow_html=True)\n""", "")]),
+    ("⚠️ el bloque de los puntos cambia de nombre", U,
+     [("""    with st.container(key="cpx_fc_puntos"):\n""", """    with st.container(key="cpx_fc_otro"):\n""")]),
+    ("en estrecho vuelven a apilarse", U,
+     [("""               "{flex:0 0 96px!important;min-width:96px!important;width:96px!important}"\n""", "")]),
+    ("⚠️ la firma sigue diminuta en el checklist", PDF,
+     [("""st,
+                               ancho=60 * mm, alto=18 * mm)],
+""", """st)],
+""")]),
+    ("⚠️ se ignora la caja de la firma", "core/prestart_pdf.py",
+     [("""            return RLImage(io.BytesIO(sig), width=ancho, height=alto, kind="proportional")\n""", """            return RLImage(io.BytesIO(sig), width=25 * mm, height=8 * mm, kind="proportional")\n""")]),
+    ("⚠️ la firma del Pre-Start cambia de medida", "core/prestart_pdf.py",
+     [("""def _celda_firma(a, st, ancho=25 * mm, alto=8 * mm):\n""", """def _celda_firma(a, st, ancho=60 * mm, alto=18 * mm):\n""")]),
+    ("⚠️ un doble toque firma dos veces", M,
+     [("""    if ya_firmo(asist, nombre, usuario):
+        res["ok"], res["archivado"] = True, True
+        return res
+""", "")]),
+    ("⚠️ un doble toque firma dos veces en el Pre-Start", "core/prestart.py",
+     [("""    if ya_firmo(_ya, nombre, usuario):
+        res.update(ok=True, archivado=True, drive_id=str(fila.get("DriveID", "") or ""))
+        return res
+""", "")]),
+    ("⚠️ un homónimo con otro login no puede firmar", "core/prestart.py",
+     [("""    _sin = [x for x in _a if not str(x.get("usuario", "") or "").strip()] if quien_u else _a\n""", """    _sin = _a\n""")]),
+    ("⚠️ el aviso sale sobre otro día", U,
+     [("""    if _r and (_r.get("dia") != hoy.isoformat() or _r.get("fecha") != dia.isoformat()):\n""", """    if _r and _r.get("dia") != hoy.isoformat():\n""")]),
     # ── Los avisos ──
     ("⚠️ dos diálogos en la misma pasada", "app.py",
      [("""    if not aviso_prestart_pendiente(_GRUPO):\n        aviso_falsecar_pendiente(_GRUPO)\n""", """    aviso_prestart_pendiente(_GRUPO)\n    aviso_falsecar_pendiente(_GRUPO)\n""")]),
