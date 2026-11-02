@@ -1718,9 +1718,14 @@ def _grupo_usuarios(grupo):
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(vista):
-        if st.session_state.get("_gu_open") != vista[_sr[0]]["User"]:
+        # ⚠️ v634 · Contra la última fila TOCADA, no contra la ficha abierta: la ficha sigue abierta
+        # al volver a Users, y tocar a esa persona no bajaba (medido: se quedó en y=833).
+        if st.session_state.get("_gu_tocado") != vista[_sr[0]]["User"]:
+            st.session_state["_gu_tocado"] = vista[_sr[0]]["User"]
             st.session_state["_bajar_cpx_gu_ficha"] = True
         st.session_state["_gu_open"] = vista[_sr[0]]["User"]
+    else:
+        st.session_state.pop("_gu_tocado", None)
     _op = st.session_state.get("_gu_open")
     _oi = next((i for i, u in enumerate(gente) if u["User"] == _op), None) if _op else None
     if _oi is not None:

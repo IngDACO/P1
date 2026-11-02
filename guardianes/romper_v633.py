@@ -135,10 +135,23 @@ ROTURAS = [
     ("⚠️ la ficha de Users no baja", A,
      [("""            _PU._bajar_a("cpx_gu_ficha", "_bajar_cpx_gu_ficha", bloque="start")\n""", "")]),
     ("la ficha baja en cada pasada", A,
-     [("""        if st.session_state.get("_gu_open") != vista[_sr[0]]["User"]:
+     [("""        if st.session_state.get("_gu_tocado") != vista[_sr[0]]["User"]:
+            st.session_state["_gu_tocado"] = vista[_sr[0]]["User"]
             st.session_state["_bajar_cpx_gu_ficha"] = True
 """, """        st.session_state["_bajar_cpx_gu_ficha"] = True
 """)]),
+    ("⚠️ v634 · la persona ya abierta no baja", A,
+     [("""    else:
+        st.session_state.pop("_gu_tocado", None)
+""", "")]),
+    ("⚠️ v634 · la fila ya elegida no baja", P,
+     [("""        else:
+            st.session_state.pop("_arch_sel", None)        # v634 · como `_gu_tocado`
+""", "")]),
+    ("⚠️ v634 · vuelve la franja blanca", "core/theme.py",
+     [("""[data-testid="stAppViewContainer"] {{ overflow: clip !important; }}\n""", "")]),
+    ("v634 · vuelve el saldo negativo", U,
+     [("""            _v = f"{max(s['disponibles'], 0):.0f}"\n""", """            _v = f"{s['disponibles']:.0f}"\n""")]),
     # ── Files y la campana ──
     ("⚠️ las acciones de Files no bajan", P,
      [("""                _bajar_a("cpx_arch_acc", "_bajar_cpx_arch_acc")\n""", "")]),

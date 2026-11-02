@@ -181,6 +181,9 @@ h4 {{ font-size:16px !important; font-weight: 650; color: {AZUL_OSC}; }}
    Dos señales, porque resuelven cosas distintas: la BARRA dice «te he oído y estoy
    trabajando» (aparece al instante, en el navegador) y el ATENUADO dice «lo que ves
    ya no es lo definitivo». Sin ellas, hasta 2,9 s de pantalla idéntica y quieta. */
+/* ⚠️ v634 · `overflow:hidden` deja desplazar por código: en una página corta, un scrollIntoView
+   movía este contenedor 63 px (medido): el menú subía y quedaba una franja blanca abajo. */
+[data-testid="stAppViewContainer"] {{ overflow: clip !important; }}
 [data-testid="stMain"] {{ transition: opacity .2s ease; }}
 body:has([data-testid="stStatusWidget"]) [data-testid="stMain"] {{ opacity: .55; }}
 

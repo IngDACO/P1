@@ -1026,6 +1026,8 @@ def _archivos_section(pid: str):
             with st.container(key="cpx_arch_acc"):
                 _bajar_a("cpx_arch_acc", "_bajar_cpx_arch_acc")
                 _acciones_archivo(pid, _e, puede_borrar)
+        else:
+            st.session_state.pop("_arch_sel", None)        # v634 · como `_gu_tocado`
 
     if not vis:
         st.info(t("No file matches the filter."))

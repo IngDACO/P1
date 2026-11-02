@@ -500,10 +500,17 @@ sec("7. La vista baja a lo que se abre, y los Survey se distinguen")
 _pu, _hu = leer("core/projects_ui.py"), leer("core/home_ui.py")
 chk("⚠️ la ficha de Users", 'with st.container(key="cpx_gu_ficha"):\n            _PU._bajar_a("cpx_gu_ficha", "_bajar_cpx_gu_ficha", bloque="start")\n            _ficha_usuario(gente[_oi], grupo)' in _au)
 chk("...solo al CAMBIAR de persona, no en cada pasada",
-    'if st.session_state.get("_gu_open") != vista[_sr[0]]["User"]:\n            st.session_state["_bajar_cpx_gu_ficha"] = True' in _au)
+    'if st.session_state.get("_gu_tocado") != vista[_sr[0]]["User"]:\n            st.session_state["_gu_tocado"] = vista[_sr[0]]["User"]\n            st.session_state["_bajar_cpx_gu_ficha"] = True' in _au)
+chk("⚠️ v634 · y baja también con la persona que ya estaba abierta: al no haber fila, se olvida",
+    'else:\n        st.session_state.pop("_gu_tocado", None)' in _au)
 chk("...y también desde otra pantalla", 'st.session_state["_gu_open"] = _du\n        st.session_state["_bajar_cpx_gu_ficha"] = True' in _au)
 chk("⚠️ las acciones de una fila de Files", 'with st.container(key="cpx_arch_acc"):\n                _bajar_a("cpx_arch_acc", "_bajar_cpx_arch_acc")\n                _acciones_archivo(pid, _e, puede_borrar)' in _pu)
 chk("...una vez por fila elegida", 'if st.session_state.get("_arch_sel") != _sel:' in _pu)
+chk("⚠️ v634 · lo mismo en Files", 'else:\n            st.session_state.pop("_arch_sel", None)' in _pu)
+_tm = leer("core/theme.py")
+chk("⚠️ v634 · el contenedor no se mueve: ni menú subido ni franja blanca",
+    '[data-testid="stAppViewContainer"] {{ overflow: clip !important; }}' in _tm)
+chk("⚠️ v634 · el campo no ve un saldo negativo", """_v = f"{max(s['disponibles'], 0):.0f}\"""" in leer("core/ausencias_ui.py"))
 chk("⚠️ el aviso de la campana", 'st.session_state["_bajar_cpx_arch_espera"] = True' in _hu and '_bajar_a("cpx_arch_espera", "_bajar_cpx_arch_espera", bloque="start")' in _pu)
 chk("⚠️ marcados en la tabla", '"Archivo": ("⏳ " if _espera(e) else "") + e["nombre"]' in _pu)
 chk("...y el aviso ya no lista nombres iguales", "Tap its row below" not in _pu and "the rows marked ⏳" in _pu)

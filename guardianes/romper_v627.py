@@ -54,7 +54,7 @@ ROTURAS = [
     ("la lista no se filtra", U,
      [("""    _lista = [r for r in mias if not _f or str(r.get("Type")) == _f]\n""", """    _lista = list(mias)\n""")]),
     ("⚠️ la cifra enseña lo que queda, sin lo pendiente", U,
-     [("""            _v = f"{s['disponibles']:.0f}"\n""", """            _v = f"{s['restantes']:.0f}"\n""")]),
+     [("""            _v = f"{max(s['disponibles'], 0):.0f}"\n""", """            _v = f"{max(s['restantes'], 0):.0f}"\n""")]),
     ("lo pendiente no se ve en la tarjeta", U,
      [("""            if s["pendientes"]:\n""", """            if False:\n""")]),
     ("⚠️ el periodo vuelve a ISO", U,

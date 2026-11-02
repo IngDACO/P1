@@ -91,7 +91,8 @@ def _saldos(grupo, usuario):
         if s["ilimitado"]:
             _v, _pie = f"{s['usados']:.0f}", t("days used in the period")
         else:
-            _v = f"{s['disponibles']:.0f}"
+            # v634 · Con el exceso pagado saldría «-25» (10 de saldo, 35 días): no le queda nada.
+            _v = f"{max(s['disponibles'], 0):.0f}"
             _pie = t("of {a} · used {b}", a=f"{s['asignados']:.0f}", b=f"{s['usados']:.0f}")
             if s["pendientes"]:
                 _pie += " · " + t("{n} pending", n=f"{s['pendientes']:.0f}")
