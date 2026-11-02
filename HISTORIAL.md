@@ -10,6 +10,22 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL FIELD ASSISTANT CONSULTA LOS DATOS DE QUIEN PREGUNTA (v639)
+
+Decisión del usuario: mejorar cada agente y darles más autonomía, uno por uno, por niveles (ver, preparar y confirmar, actuar solo en
+lo reversible). Se empieza por el Field assistant, que no sabía quién le preguntaba: «¿qué me falta hoy?» no tenía respuesta.
+
+- **`core/chat_tools.py`:** cinco consultas de solo lectura: su día, sus obras, una obra en detalle, sus ausencias y sus credenciales.
+- ⚠️ **La identidad sale de la sesión**, nunca del modelo: ninguna herramienta recibe un usuario, y `project_id` se comprueba contra sus
+  obras. Lo que escriben otros (tareas, partes, avisos) es DATO, y la persona del asistente lo dice.
+- ⚠️ **El bucle respeta a Sonnet 5.5** (`chat_agent._conversar`): el turno vuelve entero con su razonamiento, los resultados van juntos y
+  con su id, `tool_choice` no fuerza herramientas (400 en este modelo), y con `MAX_VUELTAS` la última vuelta contesta con lo que tenga.
+- Un fallo vuelve al modelo con `is_error` y sin el error interno. Las nóminas no están. Oficina y propietario siguen sin herramientas.
+- **Caché en la parte fija:** con herramientas una pregunta son varias llamadas; lo que cambia (cálculo, manuales) va detrás del corte.
+- La regla sigue siendo responder siempre en inglés: en el examen, una de las dos preguntas en español salió en español.
+
+examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261
+
 ## «MARK ALL AS PASSED» EN EL CHECKLIST DEL FALSE CAR (v638)
 
 Petición del usuario: una opción para marcar como aprobado todo el checklist. Se le advirtió que un toque da por buenos los 18
@@ -15549,7 +15565,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v638 = actual)
+## Versiones desplegadas (v639 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15557,6 +15573,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v639 | **El Field assistant consulta los datos de quien pregunta.** Nivel 1 de autonomía: su día, sus obras, sus ausencias y sus credenciales, solo lectura. ⚠️ La identidad sale de la sesión y una obra ajena no se abre. examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261 |
 | v638 | **«Mark all as passed» en el checklist del false car.** Rellena lo que falta y nunca pisa una X; el formulario sigue naciendo vacío y la firma sigue siendo obligatoria. medido en producción como oficina, con clics reales en una obra de prueba: nace vacío; con una X en el punto 2 y el botón, esa X sigue y los otros 17 quedan en ✓ en el navegador; el botón se apaga sin mover la pantalla y pide las observaciones de la X; con todo en ✓ sigue pidiendo la firma; guardado, 18 de 18 en ✓ en la hoja, firmado y con PDF. Datos de prueba borrados · verif_v636 271/271 · romper_v636 104/104 · suite 260/260 |
 | v637 | **Lo visto verificando el checklist del false car.** La lista de días baja al formulario; ✓/X y Remarks en una fila en pantalla estrecha; la firma a la medida de su casilla; ⚠️ un doble toque ya no firma dos veces, tampoco en el Pre-Start; el aviso de guardado, solo en su día. medido en producción como oficina: tocar una fila deja la obra a 68 px (estaba a 868) con el día tocado; a 375 px el formulario pasa de 4416 a 3818 px, con ✓/X y Remarks en la misma fila y sin desbordes; firmado de verdad en una obra de prueba, el PDF en una página y la firma ocupando su casilla; con otro día elegido el aviso verde desaparece y sale su formulario. El doble toque, ensayado contra la hoja y el Drive reales: una firma y el mismo PDF de 2 páginas; en el Pre-Start, solo por guardián. Datos de prueba borrados · verif_v636 253/253 · romper_v636 96/96 · suite 260/260 |
 | v636 | **Daily False Car Checklist.** Pregunta obligatoria al crear la obra; los 18 puntos del formato, literales, con firma y PDF calcado en Files; uno por obra y día, con firma del que llega después; una X abre una alarma y la pantalla dice que no se use; se exige desde que está montado hasta que se retira; avisos detrás del Pre-Start. También para el Pre-Start: Handover y lista de días sin registro. medido en producción como oficina, obra de prueba PRJ-0036: la pregunta sale sin marcar y sin contestar no crea; Yes sella las 3 actividades; al fichar, primero el diálogo del Pre-Start y, con la charla hecha (fila de prueba, sin enviar ninguno), el diálogo, la banda y el menú lateral del checklist; «Do it now» lleva a False car en esa obra; una X sin observaciones bloquea y dice cuál; firmado y guardado FC-0001 con 18 respuestas, firma y login; PDF en Files como «False car», mirado: calcado, firma dibujada y observación con * & < $ literal; la banda se va, historial e informe de entrega al día (14 ítems, FC 1 check); la lista dio 10 días reales y tocar el del 31/10 abrió Parramatta con esa fecha, aunque ⚠️ la vista no baja al formulario; a 375 px sin desbordes y 4416 px de alto. Una X (FC-0002) y firmar después (anexo de 2 páginas), ensayados contra la hoja y el Drive reales con la alarma sustituida; como campo, solo por guardián. Datos de prueba borrados · verif_v636 229/229 · romper_v636 84/84 (80 en la tanda y las 4 que escaparon, repetidas tras afinar el guardián), romper_v623 30/30, romper_v635 36/36, romper_v631 22/22, romper_v630 26/26, romper_v615 26/26, romper_v590 28/28, romper_v587 9/9, romper_v564 38/38, romper_v559 35/35, romper_v558 26/26, romper_v546 12/12, romper_v512 22/22 y romper_v506 12/12 · suite 260/260 |
