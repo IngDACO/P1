@@ -355,6 +355,9 @@ with st.sidebar:
                         all_params   = _r["all_params"] if _r else None,
                         rol          = _ROL,
                         grupo        = _GRUPO,
+                        # v639 · De la sesión: es quien decide de quién son los datos que mira
+                        usuario      = st.session_state.get("auth", {}).get("usuario", ""),
+                        nombre       = st.session_state.get("auth", {}).get("nombre", ""),
                     )
                 st.markdown(_response)
             st.session_state.chat_history.append({"role": "assistant", "content": _response})

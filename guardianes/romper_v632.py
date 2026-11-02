@@ -31,7 +31,7 @@ ROTURAS = [
      [('MODEL_RESUMEN = "claude-haiku-4-5"', 'MODEL_RESUMEN = "claude-sonnet-5-5"')]),
     # ── Lo que vuelve ──
     ("⚠️ vuelve `content[0].text`", C,
-     [('        return _texto_de(response)\n', '        return response.content[0].text\n')]),
+     [('            return _texto_de(r)\n', '            return r.content[0].text\n')]),
     ("⚠️ el rechazo deja de mirarse", C,
      [("""    if r.stop_reason == "refusal":\n        return "⚠️ I can't answer that one. Try asking it another way, or ask the office."\n""", "")]),
     ("cortada por tokens y sin decirlo", C,
