@@ -10,6 +10,37 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## DAILY FALSE CAR CHECKLIST (v636)
+
+Petición del usuario, con la foto del formato de CI Liftworx: digitalizarlo tal y como se ve y que, como el Pre-Start, lo
+rellene y firme quien trabaja en una obra con false car. Decisiones suyas: uno por obra y día (lo hace el primero, los demás
+lo firman); ✓ si pasa, X si no, sin respuesta por defecto y con X las observaciones son obligatorias; una X abre alarma y la
+pantalla dice que no se use; se exige desde que está montado hasta que se retira; avisa, no bloquea; las obras ya creadas
+cuentan como que no tienen; se pregunta en Installation y Ripout + Installation. Y, también para el Pre-Start: en el Handover
+y una lista de oficina con los días sin registro.
+
+- **Al crear la obra:** pregunta **False car?** obligatoria y sin preselección, también desde cotización. Yes añade al plan
+  las tres actividades (`stages.FALSE_CAR`). ⚠️ No es un grupo de `EXCLUYENTES`: las altas por programa se pararían por una
+  pregunta que solo existe en pantalla.
+- **`core/falsecar.py` + `falsecar_pdf.py` + `falsecar_ui.py`.** Hoja `FalseCarChecks` (en `HOJAS_LECTURA`, IDs `FC-####`). Los 18
+  puntos, literales, se guardan por CLAVE: cambiar el texto cambiaría lo firmado. `periodo` sale de lo MARCADO al 100 %
+  (Install sky climber) con su día de trabajo, hasta Remove/dismantle sky climber & sky lock, y ese día ya no se exige.
+- **Dentro de la sección Pre-Start**, sin añadir nada al menú: en esas obras, un segmentado Pre-Start / False car.
+- **Avisos:** diálogo, banda y menú lateral, siempre detrás del Pre-Start (Streamlit admite un diálogo por pasada, y el del
+  checklist espera a la charla hecha y firmada: al terminarla aparece, y mientras no tapa el formulario).
+- **Una X:** UNA alarma con todos los puntos y sus observaciones; si la alarma falla, se dice.
+- **Firmar después:** anexo con `prestart_pdf.generate_anexo_firmas_pdf`, que acepta sus textos. El documento firmado no se reescribe.
+- **Days worked with no record** (solo administrador, arriba de la sección): días de los últimos 30 con gente fichada y sin su
+  Pre-Start o su checklist, hasta ayer; tocar una fila abre esa obra con ese día, aunque hoy ya esté hecho. `timeclock.obras_por_dia`
+  lo saca en una pasada. El propietario no tiene grupo: lo ve en el Handover.
+- **Handover:** el estándar siguen siendo trece; el del false car es aparte (`ITEM_FALSE_CAR`) y solo si la obra lo lleva. Un día
+  trabajado sin su registro deja el Pre-Start y el checklist en PARCIAL.
+- ⚠️ **El ✓ salía como un cuadro negro:** a ZapfDingbats hay que dárselo como carácter, no con su byte (trampa 51). Solo se vio
+  mirando el PDF, y el guardián ahora cuenta los ✓.
+- `verif_v558` y `verif_v587` responden la pregunta nueva; `verif_v623` buscaba un texto que la banda nueva también tenía.
+
+medido en producción como oficina, obra de prueba PRJ-0036: la pregunta sale sin marcar y sin contestar no crea; Yes sella las 3 actividades; al fichar, primero el diálogo del Pre-Start y, con la charla hecha (fila de prueba, sin enviar ninguno), el diálogo, la banda y el menú lateral del checklist; «Do it now» lleva a False car en esa obra; una X sin observaciones bloquea y dice cuál; firmado y guardado FC-0001 con 18 respuestas, firma y login; PDF en Files como «False car», mirado: calcado, firma dibujada y observación con * & < $ literal; la banda se va, historial e informe de entrega al día (14 ítems, FC 1 check); la lista dio 10 días reales y tocar el del 31/10 abrió Parramatta con esa fecha, aunque ⚠️ la vista no baja al formulario; a 375 px sin desbordes y 4416 px de alto. Una X (FC-0002) y firmar después (anexo de 2 páginas), ensayados contra la hoja y el Drive reales con la alarma sustituida; como campo, solo por guardián. Datos de prueba borrados · verif_v636 229/229 · romper_v636 84/84 (80 en la tanda y las 4 que escaparon, repetidas tras afinar el guardián), romper_v623 30/30, romper_v635 36/36, romper_v631 22/22, romper_v630 26/26, romper_v615 26/26, romper_v590 28/28, romper_v587 9/9, romper_v564 38/38, romper_v559 35/35, romper_v558 26/26, romper_v546 12/12, romper_v512 22/22 y romper_v506 12/12 · suite 260/260
+
 ## COMENTARIOS EN LAS TAREAS DE LA LISTA (v635)
 
 Petición del usuario: «en la herramienta to do se pueda agregar comentarios a las tareas». Decisiones suyas: comenta
@@ -15488,7 +15519,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v635 = actual)
+## Versiones desplegadas (v636 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15496,6 +15527,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v636 | **Daily False Car Checklist.** Pregunta obligatoria al crear la obra; los 18 puntos del formato, literales, con firma y PDF calcado en Files; uno por obra y día, con firma del que llega después; una X abre una alarma y la pantalla dice que no se use; se exige desde que está montado hasta que se retira; avisos detrás del Pre-Start. También para el Pre-Start: Handover y lista de días sin registro. medido en producción como oficina, obra de prueba PRJ-0036: la pregunta sale sin marcar y sin contestar no crea; Yes sella las 3 actividades; al fichar, primero el diálogo del Pre-Start y, con la charla hecha (fila de prueba, sin enviar ninguno), el diálogo, la banda y el menú lateral del checklist; «Do it now» lleva a False car en esa obra; una X sin observaciones bloquea y dice cuál; firmado y guardado FC-0001 con 18 respuestas, firma y login; PDF en Files como «False car», mirado: calcado, firma dibujada y observación con * & < $ literal; la banda se va, historial e informe de entrega al día (14 ítems, FC 1 check); la lista dio 10 días reales y tocar el del 31/10 abrió Parramatta con esa fecha, aunque ⚠️ la vista no baja al formulario; a 375 px sin desbordes y 4416 px de alto. Una X (FC-0002) y firmar después (anexo de 2 páginas), ensayados contra la hoja y el Drive reales con la alarma sustituida; como campo, solo por guardián. Datos de prueba borrados · verif_v636 229/229 · romper_v636 84/84 (80 en la tanda y las 4 que escaparon, repetidas tras afinar el guardián), romper_v623 30/30, romper_v635 36/36, romper_v631 22/22, romper_v630 26/26, romper_v615 26/26, romper_v590 28/28, romper_v587 9/9, romper_v564 38/38, romper_v559 35/35, romper_v558 26/26, romper_v546 12/12, romper_v512 22/22 y romper_v506 12/12 · suite 260/260 |
 | v635 | **Comentarios en las tareas de To-do.** Cualquiera que vea la lista comenta, también en las hechas; borra su autor o la oficina, con confirmación; sin avisos, con el número a la vista. En su propia hoja, `TaskComments`. medido en producción como oficina, en PRJ-0027: comentario de dos líneas con asteriscos y $, literal, con autor y hora; la caja se vacía, el desplegable sigue abierto y dice Comments (1); Enter no envía; el comentario acompaña a la tarea a Done y ahí se puede seguir comentando; borrar pregunta y deja Active=NO con quién; a 375 px sin desbordes. La hoja `TaskComments` se creó sola. Como campo, solo por guardián. Datos de prueba borrados · verif_v635 56/56 · romper_v635 36/36, romper_v630 26/26, romper_v617 12/12, romper_v615 26/26 y romper_v610 26/26 · suite 259/259 |
 | v634 | **Lo visto verificando v633.** ⚠️ Bajar la vista en una página corta movía el contenedor 63 px (menú subido y franja blanca) → `overflow:clip`, en toda la app; también baja con la persona o fila ya abierta; saldo sin negativos. medido en producción: campana → Files con el menú en y=0, el contenedor en 0 y sin franja; tocar a la persona ya abierta baja a y=68 (se quedaba en 833); a 375 px el menú abre y se desplaza, sin desbordes. Datos de prueba borrados · verif_v633 125/125 · romper_v633 54/54 y romper_v627 60/60 · suite 258/258 |
 | v633 | **El recorrido de la oficina.** ⚠️ La nómina pagaba 20 días de baja con 10 de saldo y la oficina no podía decidir → lo que pasa del saldo se deriva y no se paga hasta «Pay them» o «Leave them unpaid». ⚠️ Una ficha vacía de Forklift hacía apto a quien no tenía el ticket → número y vencimiento obligatorios. Borrar con confirmación, editar todo, cifras que suman, la vista baja a lo que se abre, Survey por decidir marcados. medido en producción: baja de prueba de 35 días (campo000): 10 pagados y 25 por decidir, «Leave them unpaid» 10, «Change», «Pay them» 35, con quién y cuándo en la hoja; Payroll avisa antes de generar, acotado al periodo; formulario de credencial vacío rechazado, alta correcta y borrado con confirmación; la campana baja al aviso (y=68), la fila de Files a sus acciones y la ficha de Users (y=68); 2 preguntas reales al asistente de oficina, correctas (4,9 y 11,3 s). Datos de prueba borrados · verif_v633 121/121 · romper_v633 50/50, romper_v627 60/60, romper_v626 11/11, romper_v625 63/63, romper_v555 14/14, romper_v498 4/4 y romper_v430 26/26 · suite 258/258 |
