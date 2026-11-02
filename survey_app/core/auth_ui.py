@@ -158,7 +158,8 @@ def _tarjetas_cred(C, creds, key_prefix):
                                           C.dias_para(x.get("ExpiryDate")) or 0)):
         with st.container(border=True):
             st.markdown(f"**{_lit(r.get('Type'))}**")
-            st.markdown(_estado_cred(C, r.get("ExpiryDate")))
+            st.markdown(_estado_cred(C, r.get("ExpiryDate")) if C.completa(r) else
+                        t(":orange[:material/report:] **Incomplete**: ask the office to fix it"))
             _d = []
             if str(r.get("Number", "")).strip():
                 _d.append(t("No. {x}", x=_lit(r.get("Number"))))
@@ -185,18 +186,22 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
     if creds:
         # KPIs de un vistazo (v186): vigentes / por vencer / vencidas.
         # v627 · ACTIVAS, y de 2 en 2 en el móvil: las cuatro apiladas empujaban la tabla a 834 px.
-        _sts = [C.status(r.get("ExpiryDate")) for r in creds]
+        # v633 · Por FILA: lo que no vence no entraba en ninguna cifra (1 + 1 + 1 de 4).
+        _sts = [C.estado(r) for r in creds]
         _kf = f"_cred_filtro_{usuario}"
         _f = st.session_state.get(_kf, "")
         # ⚠️ v628 · TRES líneas: el tema solo agranda la cifra si lleva pie (`p:nth-child(2):not(
         # :last-child)`); con dos, el número salía a 12 px y en gris, como un pie (medido).
         _kp = [("", t("Credentials"), len(creds), t("on record")),
                ("vigente", t(":material/check_circle: Valid"), _sts.count("vigente"),
-                t("over 30 days left")),
+                t("up to date")),
                ("por_vencer", t(":material/schedule: Expiring"), _sts.count("por_vencer"),
                 t("within 30 days")),
                ("vencido", t(":material/cancel: Expired"), _sts.count("vencido"),
                 t("need renewing"))]
+        if _sts.count("incompleta"):
+            _kp.append(("incompleta", t(":material/report: Incomplete"), _sts.count("incompleta"),
+                        t("need fixing")))
         st.markdown(T.por_fila("cpx_cred_kpis", 4), unsafe_allow_html=True)
         with st.container(key="cpx_cred_kpis"):
             for _col, (_s, _l, _v, _pie) in zip(st.columns(len(_kp)), _kp):
@@ -204,7 +209,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                                width="stretch"):
                     st.session_state[_kf] = "" if _f == _s else _s
                     st.rerun()
-        _vis = [r for r in creds if not _f or C.status(r.get("ExpiryDate")) == _f]
+        _vis = [r for r in creds if not _f or C.estado(r) == _f]
         if _f and not _vis:
             st.caption(t("None in this state."))
         if not editable:
@@ -215,7 +220,8 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
             # priorizar, no encoger — a 375 px encoger recorta el texto SIN avisar (v408).
             st.dataframe(pd.DataFrame([{
                 "Tipo": r.get("Type"),
-                "Estado": C.status_label(r.get("ExpiryDate")) if r.get("ExpiryDate") else t("No expiry"),
+                "Estado": (_etq(C.estado(r)).capitalize() if r.get("ExpiryDate") or not C.completa(r)
+                           else t("No expiry")),
                 "Vence": _dmy(r.get("ExpiryDate")), "Number": r.get("Number"),
                 "Clase": r.get("Class"), "Issued": _dmy(r.get("IssueDate")),
             } for r in _vis]), hide_index=True, width="stretch",
@@ -263,7 +269,7 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
                 clase = ""
             c3, c4 = st.columns(2)
             emi = _fecha_input(c3, t("Issued"), key=f"{key_prefix}_emi_{_cg}")
-            ven = _fecha_input(c4, "Expiry (blank if it does not expire)", key=f"{key_prefix}_ven_{_cg}")
+            ven = _fecha_input(c4, t("Expiry"), key=f"{key_prefix}_ven_{_cg}")
             arch = st.file_uploader(t("Photo or document (optional)"),
                                     type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_file_{_cg}")
             nota = st.text_input(t("Note"), key=f"{key_prefix}_nota_{_cg}")
@@ -288,27 +294,56 @@ def render_credenciales(usuario, grupo, editable=False, key_prefix="cr"):
 
     if creds:
         with st.expander(t("Edit / delete credential"), icon=":material/edit:", key=f"{key_prefix}_exp_editcred"):
-            idmap = {f"{r.get('Type')} · {r.get('Number') or 's/n'} ({r.get('ID')})": r for r in creds}
-            sel = st.selectbox(t("Credential"), list(idmap.keys()), key=f"{key_prefix}_esel")
+            # ⚠️ v633 · Por ID: con la etiqueta como opción, corregir el número la cambiaba y el
+            # selector saltaba a otra credencial. Y se corrige todo: el tipo y la emisión no se podían.
+            idmap = {str(r.get("ID")): r for r in creds}
+            sel = st.selectbox(t("Credential"), list(idmap), key=f"{key_prefix}_eselid",
+                               format_func=lambda k: f"{idmap[k].get('Type')} · "
+                                                     f"{idmap[k].get('Number') or t('no number')} ({k})")
             r = idmap[sel]
             _kid = str(r.get("ID", ""))
+            _tp0 = str(r.get("Type", ""))
+            _tipos = C.CATALOGO if _tp0 in C.CATALOGO else [_tp0] + C.CATALOGO
+            etipo = st.selectbox(t("Type"), _tipos, index=_tipos.index(_tp0),
+                                 key=f"{key_prefix}_etipo_{_kid}")
+            eclase = ""
+            if etipo == "Driver License":
+                _cl0 = str(r.get("Class", ""))
+                _clases = C.CLASES_LICENCIA if _cl0 in C.CLASES_LICENCIA else [_cl0] + C.CLASES_LICENCIA
+                eclase = st.selectbox(t("Class (licence)"), _clases, index=_clases.index(_cl0),
+                                      key=f"{key_prefix}_eclase_{_kid}")
             c1, c2 = st.columns(2)
             enum = c1.text_input(t("Number"), value=r.get("Number", ""), key=f"{key_prefix}_enum_{_kid}")
-            even = _fecha_input(c2, "Expiry (blank if it does not expire)", r.get("ExpiryDate", ""),
-                                key=f"{key_prefix}_even_{_kid}")
-            enota = st.text_input(t("Note"), value=r.get("Note", ""), key=f"{key_prefix}_enota_{_kid}")
+            eemi = _fecha_input(c2, t("Issued"), r.get("IssueDate", ""), key=f"{key_prefix}_eemi_{_kid}")
+            c3, c4 = st.columns(2)
+            even = _fecha_input(c3, t("Expiry"), r.get("ExpiryDate", ""), key=f"{key_prefix}_even_{_kid}")
+            enota = c4.text_input(t("Note"), value=r.get("Note", ""), key=f"{key_prefix}_enota_{_kid}")
+            _kb = f"_{key_prefix}_borrar"
+            if st.session_state.get(_kb) == _kid:
+                # ⚠️ v633 · Se iba de un toque, con su documento en Drive.
+                st.warning(t("Delete this credential? Its document is deleted too."))
+                b1, b2 = st.columns(2)
+                if b1.button(t(":material/delete: Yes, delete it"), key=f"{key_prefix}_edelok",
+                             type="primary", width="stretch"):
+                    st.session_state.pop(_kb, None)
+                    ok, msg = C.delete(r.get("ID"))
+                    (flash.exito if ok else flash.error)(msg)
+                    st.rerun()
+                if b2.button(t("Keep it"), key=f"{key_prefix}_edelno", width="stretch"):
+                    st.session_state.pop(_kb, None)
+                    st.rerun()
+                return
             b1, b2 = st.columns(2)
             if b1.button(t(":material/save: Save"), key=f"{key_prefix}_eupd"):
-                ok, msg = C.update(r.get("ID"), {"Number": enum, "ExpiryDate": even, "Note": enota,
-                                                 "UpdatedBy": admin_usr})
+                ok, msg = C.update(r.get("ID"), {"Type": etipo, "Class": eclase, "Number": enum,
+                                                 "IssueDate": eemi, "ExpiryDate": even,
+                                                 "Note": enota, "UpdatedBy": admin_usr})
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
             if b2.button(t(":material/delete: Delete"), key=f"{key_prefix}_edel"):
-                ok, msg = C.delete(r.get("ID"))
-                (flash.exito if ok else st.error)(msg)
-                if ok:
-                    st.rerun()
+                st.session_state[_kb] = _kid
+                st.rerun()
 
 
 def render_my_credentials():
@@ -1553,6 +1588,7 @@ def _grupo_usuarios(grupo):
         _du = (_deep.rsplit("(", 1)[-1].rstrip(")").strip()
                if "(" in str(_deep) else str(_deep).strip())
         st.session_state["_gu_open"] = _du
+        st.session_state["_bajar_cpx_gu_ficha"] = True
         _soltar_tablas_usuarios()                  # descarta cualquier selección previa
         # ⚠️ v577 · aquí solo hay fichas del CAMPO: quien llegaba pidiendo a un
         # administrador (tocarlo en Horas, en el «No rate» del resumen, en el buscador…)
@@ -1682,6 +1718,8 @@ def _grupo_usuarios(grupo):
     except Exception:
         _sr = []
     if _sr and _sr[0] < len(vista):
+        if st.session_state.get("_gu_open") != vista[_sr[0]]["User"]:
+            st.session_state["_bajar_cpx_gu_ficha"] = True
         st.session_state["_gu_open"] = vista[_sr[0]]["User"]
     _op = st.session_state.get("_gu_open")
     _oi = next((i for i, u in enumerate(gente) if u["User"] == _op), None) if _op else None
@@ -1689,7 +1727,11 @@ def _grupo_usuarios(grupo):
         st.markdown("---")
         # sel_key por defecto (gp_fichasel, ya popeado aquí): al eliminar deja `_gu_open`
         # apuntando al usuario borrado → el bloque de arriba cierra la ficha en el rerun.
-        _ficha_usuario(gente[_oi], grupo)
+        # ⚠️ v633 · La ficha se abre debajo de la tabla y la vista subía: quedaba fuera de pantalla.
+        from core import projects_ui as _PU
+        with st.container(key="cpx_gu_ficha"):
+            _PU._bajar_a("cpx_gu_ficha", "_bajar_cpx_gu_ficha", bloque="start")
+            _ficha_usuario(gente[_oi], grupo)
 
     # ── Secundarios: matriz de credenciales + crear usuario ──
     if C.is_configured():

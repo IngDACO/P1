@@ -122,7 +122,8 @@ PU._archivos_section("PRJ-1")
 PEND = {"ID": "CAL-7", "Tool": "survey", "File": "Survey_*1*.json", "DriveID": "D1",
         "DataJSON": json.dumps({"por_decidir": True})}
 HECHA = {**PEND, "DataJSON": json.dumps({"por_decidir": False})}
-SINF = {**PEND, "DriveID": ""}
+# v633 · Con entradas: sin ellas no llega a ser una fila y el caso no prueba nada
+SINF = {**PEND, "DriveID": "", "DataJSON": json.dumps({"por_decidir": True, "entradas": {"BS": 1}})}
 OF = {"usuario": "Admin2", "nombre": "B", "rol": "administrator", "grupo": "cliente1"}
 CA = {"usuario": "installer", "nombre": "i", "rol": "field", "grupo": "cliente1"}
 
@@ -136,12 +137,12 @@ def files(auth, runs):
 
 
 _i = files(OF, [PEND])
-chk("⚠️ a la oficina, cuál es y qué hacer", "Waiting for your decision: **Survey\\_\\*1\\*.json**" in _i
-    or "Waiting for your decision: **Survey_\\*1\\*.json**" in _i, _i)
-chk("…con «Tap its row below»", "Tap its row below" in _i, _i)
-chk("ya decidida, no", "Waiting for your decision" not in files(OF, [HECHA]))
-chk("sin archivo, no (no hay fila que tocar)", "Waiting for your decision" not in files(OF, [SINF]))
-chk("⚠️ al campo, no: no es suya la decisión", "Waiting for your decision" not in files(CA, [PEND]))
+# v633 · Ya no cita el nombre (dos del mismo minuto se llamaban igual): la fila va marcada en la tabla
+chk("⚠️ a la oficina, cuál es y qué hacer", "A survey from the field is waiting for your decision" in _i, _i)
+chk("…y dice cómo encontrarlo", "tap the row marked ⏳" in _i, _i)
+chk("ya decidida, no", "waiting for your decision" not in files(OF, [HECHA]))
+chk("sin archivo, no (no hay fila que tocar)", "waiting for your decision" not in files(OF, [SINF]))
+chk("⚠️ al campo, no: no es suya la decisión", "waiting for your decision" not in files(CA, [PEND]))
 
 sec("4. El texto de la oficina no es para el campo")
 _v625 = io.open(os.path.join(RAIZ, "..", "guardianes", "verif_v625.py"), encoding="utf-8").read()

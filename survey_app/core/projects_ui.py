@@ -930,11 +930,20 @@ def _archivos_section(pid: str):
         return
 
     # v626 · La campana trae aquí: que la lista diga cuál es, no solo que hay algo
-    _esperan = [maps.literal_md(r.get("File")) for r in runs
-                if toolruns.datos_de(r).get("por_decidir") and str(r.get("DriveID", "")).strip()]
-    if puede_borrar and _esperan:
-        st.info(t(":material/rule: Waiting for your decision: **{x}**. Tap its row below.",
-                  x=", ".join(_esperan)))
+    # ⚠️ v633 · Marcados EN la tabla: el nombre lleva el minuto, y dos del mismo minuto no se
+    # distinguían (medido). Y la campana baja hasta este aviso (`_bajar_cpx_arch_espera`).
+    def _espera(e):
+        return (puede_borrar and bool(e.get("run")) and bool(e.get("did"))
+                and bool(toolruns.datos_de(e["run"]).get("por_decidir")))
+
+    _esperan = sum(1 for e in entries if _espera(e))
+    if _esperan:
+        with st.container(key="cpx_arch_espera"):
+            _bajar_a("cpx_arch_espera", "_bajar_cpx_arch_espera", bloque="start")
+            st.info(t(":material/rule: A survey from the field is waiting for your decision: tap the "
+                      "row marked ⏳.") if _esperan == 1 else
+                    t(":material/rule: {n} surveys from the field are waiting for your decision: tap "
+                      "the rows marked ⏳.", n=_esperan))
 
     # ── Barra para acotar: buscar + tipo (con contadores) + orden ──
     cuenta = Counter(e["tipo"] for e in entries)
@@ -991,7 +1000,7 @@ def _archivos_section(pid: str):
     resto = [e for e in vis if e["tipo"] != "foto"]
     if resto:
         _ev = st.dataframe(pd.DataFrame([{
-            "Archivo": e["nombre"], "Tipo": e["label"],
+            "Archivo": ("⏳ " if _espera(e) else "") + e["nombre"], "Tipo": e["label"],
             "Uploaded by": e["por_n"], "Fecha": _fecha_corta(e["fecha"]),
         } for e in resto]), hide_index=True, width="stretch",
             # ⚠️ v592 · `single-cell`: con `single-row` tocar el nombre solo ENMARCABA la celda
@@ -1008,7 +1017,15 @@ def _archivos_section(pid: str):
         # Clamp: si cambiaste el filtro con una fila elegida, el índice podría
         # apuntar fuera de la lista actual — no abrir un archivo equivocado.
         if _rows and _rows[0] < len(resto):
-            _acciones_archivo(pid, resto[_rows[0]], puede_borrar)
+            _e = resto[_rows[0]]
+            # ⚠️ v633 · Las acciones salen debajo y la vista no bajaba: una vez por fila elegida.
+            _sel = f"{pid}|{_e.get('did')}|{_e.get('nombre')}|{_e.get('fecha')}"
+            if st.session_state.get("_arch_sel") != _sel:
+                st.session_state["_arch_sel"] = _sel
+                st.session_state["_bajar_cpx_arch_acc"] = True
+            with st.container(key="cpx_arch_acc"):
+                _bajar_a("cpx_arch_acc", "_bajar_cpx_arch_acc")
+                _acciones_archivo(pid, _e, puede_borrar)
 
     if not vis:
         st.info(t("No file matches the filter."))

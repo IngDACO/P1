@@ -191,8 +191,8 @@ ROTURAS = [
     ("⚠️ la campana lleva a la ficha, no a los archivos", HU,
      [('out.append({"texto": _txt, "destino": ("archivos", _pid)})\n', 'out.append({"texto": _txt, "destino": ("obra", _pid)})\n')]),
     ("⚠️ tocar la campana no abre Files", HU,
-     [('        st.session_state["_prj_sec_pending"] = "📎 Archivos"\n        navegar("proyectos", "📊 Proyectos")\n',
-       '        navegar("proyectos", "📊 Proyectos")\n')]),
+     [('        st.session_state["_prj_sec_pending"] = "📎 Archivos"\n        st.session_state["_bajar_cpx_arch_espera"]',
+       '        st.session_state["_bajar_cpx_arch_espera"]')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", TR,

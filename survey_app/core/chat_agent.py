@@ -360,7 +360,9 @@ cual, en inglés, sin traducirlos.
   se asigna tocando la celda, marca en rojo los choques de turno y en ámbar los certificados que
   bloquean, y tiene sugerencia de a quién asignar, Radar, Compliance (plan vs real + quién
   está fichado ahora) y el catálogo de Jobs.
-- **Planning → Absences (administrator):** la bandeja de ausencias que pide el campo.
+- **Planning → Absences (administrator):** la bandeja de ausencias que pide el campo. Los días de baja
+  que pasan del saldo no se pagan hasta que la oficina elija **Pay them** o **Leave them unpaid** en
+  esa baja, en **Sick leave recorded**.
   **Planning → Time fixes:** las correcciones de fichaje, para revisarlas.
 - **Detalle de un proyecto** (5 pestañas): **Status** (alarmas, curva S real vs plan, proyección de
   adelanto/retraso) · **Data** (instrucciones, inducciones, editar datos con fechas de calendario,

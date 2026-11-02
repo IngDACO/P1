@@ -32,6 +32,9 @@ CATALOGO = [
 ]
 CLASES_LICENCIA = ["", "C", "LR", "MR", "HR", "HC", "MC"]
 
+# v633 · Lo único que no vence (decisión del usuario): todo lo demás lleva fecha.
+SIN_VENCIMIENTO = ("White Card",)
+
 DIAS_AVISO = 30   # umbral "por vencer"
 FMT_FECHA  = "%Y-%m-%d"
 
@@ -119,6 +122,29 @@ def status(vencimiento) -> str:
     return "vigente"
 
 
+def falta_dato(tipo, numero, vencimiento) -> str:
+    """v633 · Lo que le falta a una credencial para valer, o "". ⚠️ El formulario vacío se aceptaba
+    y `compliance` daba por vigente lo que no tenía fecha: una ficha de Forklift sin nada hacía
+    apto a quien no tenía el ticket (medido en producción)."""
+    if not str(numero or "").strip():
+        return t("The credential number is required.")
+    if str(tipo or "").strip() not in SIN_VENCIMIENTO and not str(vencimiento or "").strip():
+        return t("The expiry date is required: only a White Card does not expire.")
+    return ""
+
+
+def completa(r) -> bool:
+    return not falta_dato(r.get("Type"), r.get("Number"), r.get("ExpiryDate"))
+
+
+def estado(r) -> str:
+    """v633 · 'incompleta' | 'vigente' | 'por_vencer' | 'vencido' de una FILA. `status` solo mira la
+    fecha y no dice nada de lo que no vence, que está vigente."""
+    if not completa(r):
+        return "incompleta"
+    return status(r.get("ExpiryDate")) or "vigente"
+
+
 def status_label(vencimiento) -> str:
     """Cómo se MUESTRA el estado. ⚠️ `status()` sigue devolviendo el valor español,
     que es el DATO con el que se compara en medio repo; aquí solo se traduce de cara
@@ -149,7 +175,8 @@ def compliance(usuario, requeridos) -> dict:
 
     Devuelve {'por_tipo': {tipo: estado}, 'cumple': bool} donde estado ∈
     'vigente' | 'por_vencer' | 'vencido' | 'falta' (no la tiene). Una credencial sin
-    fecha de vencimiento (p.ej. White Card que no caduca) cuenta como 'vigente'.
+    fecha de vencimiento (la White Card, que no caduca) cuenta como 'vigente'; ⚠️ v633 · una
+    incompleta no cuenta: es como no tenerla.
     **cumple** = ningún tipo requerido queda 'vencido' ni 'falta' (por-vencer SÍ cumple,
     solo se marca para renovar; decisión del usuario v219). Si un usuario tiene varias
     del mismo tipo, se toma la de MEJOR estado (la vigente manda sobre la vencida)."""
@@ -157,7 +184,8 @@ def compliance(usuario, requeridos) -> dict:
     _orden = {"vigente": 3, "por_vencer": 2, "vencido": 1, "falta": 0}
     por_tipo, cumple = {}, True
     for tipo in requeridos:
-        matching = [c for c in creds if str(c.get("Type", "")).strip() == str(tipo).strip()]
+        matching = [c for c in creds if str(c.get("Type", "")).strip() == str(tipo).strip()
+                    and completa(c)]
         if not matching:
             por_tipo[tipo] = "falta"
             cumple = False
@@ -185,9 +213,10 @@ def matrix(grupo) -> tuple:
             if not mias:
                 fila[_tp] = "—"
             else:
-                sts = [status(c.get("ExpiryDate")) for c in mias]
-                fila[_tp] = ("vencido" if "vencido" in sts
-                           else "por vencer" if "por_vencer" in sts else "vigente")
+                # v633 · Sacaba «vencido» y «por vencer» en español, bajo un título en inglés.
+                sts = [estado(c) for c in mias]
+                fila[_tp] = _etq(next((e for e in ("vencido", "por_vencer", "vigente") if e in sts),
+                                      "incompleta"))
         filas.append(fila)
     return tipos, filas
 
@@ -234,6 +263,9 @@ def add(usuario, grupo, tipo, numero="", clase="", emision="", vencimiento="",
     # TEXTO, y se comprueba ANTES de abrir la hoja: un dato inválido no merece una llamada.
     if not isinstance(tipo, str) or not tipo.strip():
         return False, t("The credential type is required.")
+    _falta = falta_dato(tipo, numero, vencimiento)
+    if _falta:
+        return False, _falta
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
@@ -260,6 +292,12 @@ def update(cred_id, fields: dict) -> tuple:
         return False, t("Error reading: {e}", e=e)
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) == str(cred_id):
+            # v633 · Solo si se tocan estos datos: `notify_expiring` también pasa por aquí.
+            if {"Type", "Number", "ExpiryDate"} & set(fields):
+                _n = {**r, **fields}
+                _falta = falta_dato(_n.get("Type"), _n.get("Number"), _n.get("ExpiryDate"))
+                if _falta:
+                    return False, _falta
             row = i + 2
             batch = [{"range": f"{_col_letter(_col(k))}{row}", "values": [[str(v)]]}
                      for k, v in fields.items() if k in HEADERS]

@@ -189,6 +189,7 @@ VALORES = {
     "borrador": "draft", "enviada": "sent", "aceptada": "accepted",
     # credenciales
     "vigente": "valid", "por_vencer": "expiring", "vencido": "expired", "falta": "missing",
+    "incompleta": "incomplete",
     # fichaje
     "general": "workday", "proyecto": "project", "interno": "overhead",
     # categorías de gasto (expenses.CATEGORIAS)

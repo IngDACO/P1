@@ -122,8 +122,9 @@ h = monta([fila("A1", E, "2026-02-02", "2026-02-13", 10, A_)])
 ok, res = AU.solicitar("cliente1", "installer", "i", E, "2026-11-04", "2026-11-05")
 chk("⚠️⚠️ sin saldo, la baja se registra igual (aprobada: no se pide permiso para estar enfermo)",
     ok and h.altas and h.altas[0]["Status"] == A_, res)
-chk("⚠️ …y lo que pasa del saldo queda escrito para la oficina",
-    h.altas and h.altas[0]["AdminNote"] == "Over the balance by 2", h.altas[:1])
+# v633 · Ya no se escribe: «Over the balance by 2» se desincronizaba al cancelar otra baja (verif_v633)
+chk("⚠️ …y nace sin decidir: lo que pasa del saldo se deriva, y lo decide la oficina",
+    h.altas and h.altas[0]["AdminNote"] == "" and h.altas[0]["OverBalancePay"] == "", h.altas[:1])
 h = monta([])
 ok, res = AU.solicitar("cliente1", "installer", "i", E, "2026-11-04", "2026-11-04")
 chk("con saldo, sin nota", ok and h.altas[0]["AdminNote"] == "", h.altas[:1])

@@ -243,6 +243,12 @@ def _tarjeta_mia(r, usuario):
             _pie.append(literal_md(r.get("Reason")))
         if str(r.get("AdminNote", "")).strip():
             _pie.append(t("Note: {x}", x=literal_md(r.get("AdminNote"))))
+        _ex = AU.exceso_de(r)                     # v633
+        if _ex["dias"]:
+            _n = _dias(len(_ex["dias"]))
+            _pie.append({AU.EXCESO_PAGA: t("{n} over your balance: paid", n=_n),
+                         AU.EXCESO_NO: t("{n} over your balance: unpaid", n=_n)}.get(
+                _ex["decision"], t("{n} over your balance: the office decides how they are paid", n=_n)))
         # v627 · Su nombre, no su login. Lo automático y lo que cancela uno mismo no tienen «quién».
         _por = str(r.get("ResolvedBy", "")).strip()
         if _por and _por != str(usuario) and not _por.startswith("("):
@@ -393,10 +399,14 @@ def render_bandeja(grupo: str):
     # `ausencias` dice que el admin «la ve y la confirma después»… pero esta bandeja
     # solo enseñaba lo pendiente: una baja no le llegaba nunca. Aquí las de los últimos
     # 14 días y las próximas, con «Cancel» si no procede.
+    # ⚠️ v633 · Y las que tienen días sobre el saldo sin decidir, por viejas que sean: esos días no
+    # se pagan hasta que se decida, y se saldrían de la lista sin que nadie lo hubiera hecho.
     from core.num import parse_date as _pd
+    _sin_decidir = {x["id"] for x in AU.excesos_por_decidir(grupo)}
     _bajas = [r for r in todas if str(r.get("Type")) == AU.ENFERMEDAD
               and str(r.get("Status")) == AU.APROBADA
-              and (_pd(r.get("To")) or hoy) >= hoy - timedelta(days=14)]
+              and ((_pd(r.get("To")) or hoy) >= hoy - timedelta(days=14)
+                   or str(r.get("ID")) in _sin_decidir)]
     if _bajas:
         st.markdown(t("#### :material/sick: Sick leave recorded"))
         st.caption(t("Recorded straight away, without approval. Review it: if it is not "
@@ -471,6 +481,38 @@ def _de_grupo(grupo, aid) -> dict:
     return next((r for r in AU.list_group(grupo) if str(r.get("ID")) == str(aid)), {})
 
 
+def _decidir_exceso(r, donde):
+    """v633 · Los días de baja que pasan del saldo: aquí decide la oficina. Los botones van en la
+    sección de bajas (ACCIÓN DIFERIDA, v555); en el histórico, solo se dice cómo quedó."""
+    ex = AU.exceso_de(r)
+    if not ex["dias"]:
+        return
+    aid = str(r.get("ID"))
+    _n, _rg = _dias(len(ex["dias"])), _rango(ex["dias"][0], ex["dias"][-1])
+    if ex["decision"]:
+        c1, c2 = st.columns([5, 1])
+        c1.caption(t(":material/payments: {n} over the balance ({r}): paid", n=_n, r=_rg)
+                   if ex["decision"] == AU.EXCESO_PAGA else
+                   t(":material/money_off: {n} over the balance ({r}): unpaid", n=_n, r=_rg))
+        if donde != "hist" and c2.button(t(":material/undo: Change"), key=f"ausexc_{donde}_{aid}",
+                                         width="stretch"):
+            st.session_state["_aus_accion"] = {"aid": aid, "exceso": ""}
+            st.rerun()
+        return
+    st.warning(t(":material/rule: **{n} over the balance** ({r}): not paid until you decide.",
+                 n=_n, r=_rg))
+    if donde == "hist":
+        return
+    b1, b2 = st.columns(2)
+    if b1.button(t(":material/payments: Pay them"), key=f"ausexp_{donde}_{aid}", width="stretch"):
+        st.session_state["_aus_accion"] = {"aid": aid, "exceso": AU.EXCESO_PAGA}
+        st.rerun()
+    if b2.button(t(":material/money_off: Leave them unpaid"), key=f"ausexn_{donde}_{aid}",
+                 width="stretch"):
+        st.session_state["_aus_accion"] = {"aid": aid, "exceso": AU.EXCESO_NO}
+        st.rerun()
+
+
 def _fila_con_cancelar(r, donde):
     """Una ausencia en una línea y, si está APROBADA, «Cancel» con confirmación (v555).
 
@@ -482,8 +524,9 @@ def _fila_con_cancelar(r, donde):
     aid = str(r.get("ID"))
     c1, c2 = st.columns([5, 1])
     c1.markdown(f"`{aid}` · **{r.get('Name')}** — " + _linea(r))
-    if str(r.get("AdminNote", "")).strip():       # v627 · p. ej. una baja por encima del saldo
+    if str(r.get("AdminNote", "")).strip():
         c1.caption(literal_md(r.get("AdminNote")))
+    _decidir_exceso(r, donde)
     if str(r.get("Status")) != AU.APROBADA:
         return
     _conf = st.session_state.get("_aus_cancelar") == (donde, aid)
@@ -514,6 +557,19 @@ def _ejecutar(acc, quien, grupo):
         flash.error(t("Request not found."))
         return
     usuario = str(r.get("User", ""))
+    if "exceso" in acc:
+        _como = str(acc.get("exceso") or "")
+        ok, msg = AU.decidir_exceso(aid, _como, quien)
+        if not ok:
+            flash.error(msg)
+            return
+        if _como:
+            _avisar_exceso(usuario, r, _como)
+        flash.exito(msg)
+        if _como == AU.EXCESO_PAGA:
+            flash.info(t("If a payslip for those dates is already issued, void it and generate it "
+                         "again so they are included."))
+        return
     if acc.get("cancelar"):
         _estaba = str(r.get("Status")) == AU.APROBADA
         ok, msg = AU.cancelar(aid, quien, gestor=True)
@@ -623,6 +679,19 @@ def _tarjeta_pendiente(grupo, r, quien):
                      width="stretch"):
             st.session_state["_aus_accion"] = {"aid": aid, "aprobar": False, "nota": nota}
             st.rerun()
+
+
+def _avisar_exceso(usuario, r, como):
+    """v633 · Le toca a su nómina: que no se entere por la colilla. Best-effort, como las demás."""
+    try:
+        from core import notify
+        _rg = _rango(r.get("From"), r.get("To"))
+        _s = "will be paid" if como == AU.EXCESO_PAGA else "stay unpaid"
+        notify.notify_user(usuario, f"Sick leave: {_rg}",
+                           [f"The days of your sick leave ({_rg}) that go over your balance "
+                            f"<b>{_s}</b>."])
+    except Exception as e:
+        logger.warning("ausencias_ui._avisar_exceso: %s", e)
 
 
 def _avisar_persona(usuario, r, aprobada, nota):

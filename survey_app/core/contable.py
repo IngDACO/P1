@@ -671,6 +671,16 @@ def partes(grupo: str, desde, hasta) -> dict:
                         "shift, so the absence only pays the remainder: {q}",
                         q=" · ".join(f"{n} {r['fecha']}: {r['pagadas']} h"
                                      for n, r in recortes[:6])))
+    # ⚠️ v633 · Lo mismo que avisa Payroll: esos días no van en este parte.
+    try:
+        from core import ausencias as _AU2
+        _exc = _AU2.excesos_por_decidir(grupo, d0, d1)
+        if _exc:
+            avisos.append(t("Sick leave over the balance with no decision: those days are not in "
+                            "this timesheet until you decide in Planning · Absences: {q}",
+                            q=", ".join(sorted(f"{x['nombre']} ({len(x['dias'])} d)" for x in _exc))))
+    except Exception as e:
+        logger.warning("contable: no se pudieron leer las bajas sin decidir: %s", e)
     # ⚠️ Horas de obra por encima de la jornada = alguien fichó a una obra sin abrir
     # jornada (v320). Sus horas PAGADAS salen de la jornada, así que ese parte va corto
     # y hay que decirlo: es el hueco que el resumen financiero llama «horas sin nómina».

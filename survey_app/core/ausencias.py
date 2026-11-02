@@ -53,7 +53,11 @@ HEADERS = ["ID", "Group", "User", "Name", "Type", "From", "To", "Days",
            # valor se añadió a la fila en el mismo cambio (lección v363: cabecera y
            # fila posicional siempre juntas). Una fila anterior no la trae → "" →
            # días hábiles, que era el comportamiento por defecto.
-           "IncludesWeekends"]
+           "IncludesWeekends",
+           # v633 · Qué decide la oficina sobre los días de baja que pasan del saldo (`paid` |
+           # `unpaid`; vacío = sin decidir, y no se pagan). Solo la DECISIÓN: cuáles son esos
+           # días se deriva, como el saldo (`sobre_saldo`).
+           "OverBalancePay"]
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
@@ -63,6 +67,8 @@ PENDIENTE, APROBADA, RECHAZADA, CANCELADA = ("pending", "approved",
 ESTADOS = (PENDIENTE, APROBADA, RECHAZADA, CANCELADA)
 # Las que ocupan el calendario: una rechazada o cancelada no bloquea a nadie.
 VIGENTES = (PENDIENTE, APROBADA)
+# v633 · Lo que la oficina decide sobre los días de baja que pasan del saldo
+EXCESO_PAGA, EXCESO_NO = "paid", "unpaid"
 
 # ── Los tipos ────────────────────────────────────────────────────
 # `estado_roster` reusa los estados que el tablero YA pinta (`roster.ESTADOS`) en vez
@@ -269,6 +275,72 @@ def periodo_saldo(grupo, usuario, ref=None) -> dict:
             "origen": "natural", "ingreso": None}
 
 
+def sobre_saldo(grupo, usuario, tipo) -> dict:
+    """v633 · {id de la ausencia: [días que pasan del saldo]} de un tipo que se registra sin
+    aprobación (la baja): las otras no pasan del saldo, `solicitar` no lo deja.
+
+    ⚠️ DERIVADO, como `saldo` (ver el módulo): se recorren las aprobadas por orden y gastan saldo
+    hasta agotarlo, periodo a periodo. Guardar «10 de más» se desincroniza: cancelar otra baja
+    devuelve días y esos 10 seguirían sin pagarse. Solo se guarda la DECISIÓN de la oficina."""
+    cfg = TIPOS.get(tipo, {})
+    tope = float(cfg.get("dias_anio", 0) or 0)
+    if tope <= 0 or cfg.get("aprobacion", True):
+        return {}
+    filas = sorted((r for r in _records() if str(r.get("Group", "")) == str(grupo)
+                    and str(r.get("User", "")) == str(usuario)
+                    and str(r.get("Type", "")) == str(tipo)
+                    and str(r.get("Status", "")) == APROBADA),
+                   key=lambda r: (str(r.get("From", "")), str(r.get("ID", ""))))
+    gastados, p, out = {}, None, {}
+    for r in filas:
+        for d in dias_del_rango(r.get("From"), r.get("To"), incluye_findes(r)):
+            if p is None or not p["desde"] <= d <= p["hasta"]:
+                p = periodo_saldo(grupo, usuario, d)
+            if gastados.get(p["desde"], 0) < tope:
+                gastados[p["desde"]] = gastados.get(p["desde"], 0) + 1
+            else:
+                out.setdefault(str(r.get("ID", "")), []).append(d)
+    return out
+
+
+def sin_pagar(grupo, usuario, tipo) -> dict:
+    """v633 · {id: días que NO se pagan}: los que pasan del saldo, salvo que la oficina haya dicho
+    que sí. ⚠️ Sin decidir tampoco se pagan (decisión del usuario): un pago de más cuesta más de
+    recuperar que uno que se añade después."""
+    m = sobre_saldo(grupo, usuario, tipo)
+    if not m:
+        return {}
+    pagados = {str(r.get("ID", "")) for r in _records()
+               if str(r.get("OverBalancePay", "")).strip() == EXCESO_PAGA}
+    return {a: set(d) for a, d in m.items() if a not in pagados}
+
+
+def exceso_de(r) -> dict:
+    """v633 · {dias, decision} de una ausencia: lo que pasa del saldo y qué decidió la oficina
+    (`paid` | `unpaid` | "" sin decidir)."""
+    dias = []
+    if str(r.get("Status", "")) == APROBADA:
+        dias = sobre_saldo(r.get("Group"), r.get("User"), str(r.get("Type", ""))).get(
+            str(r.get("ID", "")), [])
+    return {"dias": dias, "decision": str(r.get("OverBalancePay", "")).strip()}
+
+
+def excesos_por_decidir(grupo, desde=None, hasta=None) -> list:
+    """v633 · Las bajas con días sobre el saldo sin decidir, con `dias` dentro del rango si se da.
+    Las usan Payroll y el parte de horas para decirlo ANTES de pagar."""
+    d0, d1 = _parse_date(desde), _parse_date(hasta)
+    out = []
+    for r in _records():
+        if str(r.get("Group", "")) != str(grupo):
+            continue
+        ex = exceso_de(r)
+        _d = [d for d in ex["dias"] if not (d0 and d1) or d0 <= d <= d1]
+        if _d and not ex["decision"]:
+            out.append({"id": str(r.get("ID", "")), "usuario": str(r.get("User", "")),
+                        "nombre": str(r.get("Name") or r.get("User", "")), "dias": _d})
+    return out
+
+
 def dias_usados(grupo, usuario, tipo, desde=None, hasta=None, estado=APROBADA) -> float:
     """Días APROBADOS de ese tipo DENTRO del periodo [desde, hasta] (base del saldo).
     `estado`: los que siguen esperando decisión (v627), para `saldo`.
@@ -281,6 +353,9 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None, estado=APROBADA) -
     ⚠️ Solo las aprobadas: contar las pendientes haría que el saldo bajara antes de
     que nadie decidiera nada, y una solicitud rechazada devolvería días que nunca se
     gastaron. La enfermedad se registra ya aprobada, así que cuenta desde el aviso.
+
+    ⚠️ v633 · Un día sobre el saldo que no se paga no gasta saldo: si no, 20 días de baja con 10 de
+    saldo dejaban «usados 20» aunque se pagaran 10.
     """
     if desde is None or hasta is None:
         p = periodo_saldo(grupo, usuario)
@@ -289,6 +364,7 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None, estado=APROBADA) -
     if not d0 or not d1:
         return 0.0
     tot = 0
+    _fuera = sin_pagar(grupo, usuario, tipo) if estado == APROBADA else {}
     for r in _records():
         if (str(r.get("Group", "")) != str(grupo)
                 or str(r.get("User", "")) != str(usuario)
@@ -297,9 +373,10 @@ def dias_usados(grupo, usuario, tipo, desde=None, hasta=None, estado=APROBADA) -
             continue
         # los MISMOS días que se pidieron (con o sin fin de semana), recortados al
         # periodo — la misma regla que usa el pago (`horas_pagadas_grupo`)
+        _no = _fuera.get(str(r.get("ID", "")), ())
         tot += sum(1 for d in dias_del_rango(r.get("From"), r.get("To"),
                                              incluye_findes(r))
-                   if d0 <= d <= d1)
+                   if d0 <= d <= d1 and d not in _no)
     return round(float(tot), 1)
 
 
@@ -412,6 +489,10 @@ def horas_pagadas_dia(grupo, desde, hasta) -> dict:
     el tope aquí sería arreglar un caso que la app no permite — y cambiaría el agregado
     que la nómina ya usa. Si algún día se edita la hoja a mano, ese tope es su propio
     cambio con su propia prueba.
+
+    ⚠️ v633 · Un día de baja que pasa del saldo no está aquí hasta que la oficina diga que se paga
+    (`sin_pagar`). Nómina, parte de horas y Xero salen de esta función: con este filtro basta.
+    Quien solo tiene esos días no aparece, y así no se le emite una colilla de $0.
     """
     d0, d1 = _parse_date(desde), _parse_date(hasta)
     if not d0 or not d1:
@@ -424,7 +505,7 @@ def horas_pagadas_dia(grupo, desde, hasta) -> dict:
         # recorte y se dice en `recortados`, para que el aviso de la nómina lo saque.
         logger.warning("ausencias: no se pudieron leer las horas fichadas: %s", e)
         fichadas = {}
-    out = {}
+    out, _fuera = {}, {}
     for r in _records():
         if (str(r.get("Group", "")) != str(grupo)
                 or str(r.get("Status", "")) != APROBADA):
@@ -435,12 +516,15 @@ def horas_pagadas_dia(grupo, desde, hasta) -> dict:
         # ⚠️ Los MISMOS días que se descontaron del saldo, no un recuento propio:
         # si el rango se pidió con fin de semana, `Dias` los cuenta y la paga
         # también. Lo contrario le quitaba 12 días de saldo pagándole 8.
+        clave = str(r.get("User", ""))
+        if (clave, tipo) not in _fuera:
+            _fuera[(clave, tipo)] = sin_pagar(grupo, clave, tipo)
+        _no = _fuera[(clave, tipo)].get(str(r.get("ID", "")), ())
         _d = [d for d in dias_del_rango(r.get("From"), r.get("To"),
                                         incluye_findes(r))
-              if d0 <= d <= d1]
+              if d0 <= d <= d1 and d not in _no]
         if not _d:
             continue
-        clave = str(r.get("User", ""))
         e = out.setdefault(clave, {"nombre": str(r.get("Name") or clave),
                                    "dias": {}, "por_tipo": {},
                                    "dias_contados": 0.0, "recortados": []})
@@ -690,7 +774,7 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     cfg = TIPOS[tipo]
     # ⚠️ v627 · Lo que se PIDE no pasa del saldo, aquí y no solo en la pantalla. La enfermedad no
     # se pide: se registra siempre —quien está enfermo está enfermo, y el tablero tiene que
-    # decirlo— y lo que pasa del saldo queda escrito para que la oficina decida cómo se paga.
+    # decirlo— y lo que pasa del saldo lo decide la oficina (`decidir_exceso`).
     _ex = exceso(grupo, usuario, tipo, len(dias))
     if _ex and cfg["aprobacion"]:
         return False, t("You are asking for {n} and you have {m} available (what is waiting for "
@@ -704,9 +788,8 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
             # una que nace aprobada la «resuelve» el propio sistema, y se dice
             (t("(automatic)") if estado == APROBADA else ""),
             (hoy if estado == APROBADA else ""),
-            (f"Over the balance by {_ex}" if _ex else ""),
-            str(usuario), hoy,
-            ("SI" if incluir_findes else "NO")]
+            "", str(usuario), hoy,
+            ("SI" if incluir_findes else "NO"), ""]
     if len(fila) != len(HEADERS):
         return False, (f"{t('Internal error: the row has')} {len(fila)} "
                        f"{t('values and the header has')} "
@@ -758,6 +841,43 @@ def resolver(aid, aprobar: bool, quien, nota="") -> tuple:
         return False, f"{t('Error saving')}: {e}"
     _invalidate()
     return True, (t("Absence approved.") if aprobar else t("Request rejected."))
+
+
+def decidir_exceso(aid, como, quien) -> tuple:
+    """v633 · La oficina decide si se pagan los días de baja que pasan del saldo: `como` = paid |
+    unpaid, o "" para volver a decidir. Devuelve (ok, mensaje).
+
+    ⚠️ El correo mandaba a decidirlo a Planning · Absences, donde solo había «Cancel», y la nómina
+    pagaba todo: 20 días con 10 de saldo (medido en producción)."""
+    if como not in (EXCESO_PAGA, EXCESO_NO, ""):
+        return False, t("Unknown decision.")
+    w = _ws()
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    try:
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)   # FRESCO: es escritura
+    except Exception as e:
+        return False, t("Error reading: {e}", e=e)
+    fila = next((i + 2 for i, r in enumerate(recs)
+                 if str(r.get("ID", "")) == str(aid)), None)
+    if fila is None:
+        return False, t("Request not found.")
+    if str(recs[fila - 2].get("Status", "")) != APROBADA:
+        return False, t("That absence is no longer approved.")
+    from core.num import col_letter as _cl
+    try:
+        w.batch_update([
+            {"range": f"{_cl(_COL['OverBalancePay'])}{fila}", "values": [[como]]},
+            {"range": f"{_cl(_COL['ResolvedBy'])}{fila}", "values": [[str(quien)]]},
+            {"range": f"{_cl(_COL['ResolvedDate'])}{fila}",
+             "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
+        ], value_input_option="RAW")
+    except Exception as e:
+        return False, f"{t('Error saving')}: {e}"
+    _invalidate()
+    if not como:
+        return True, t("Decision undone: those days are not paid until you decide.")
+    return True, t("Those days will be paid.") if como == EXCESO_PAGA else t("Those days stay unpaid.")
 
 
 def cancelable_por_el_campo(r, hoy=None) -> bool:

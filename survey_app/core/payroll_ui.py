@@ -19,6 +19,7 @@ from core import tenant
 from core import auth, clock, timeclock
 from core import payroll
 from core import flash          # v365: mensajes que sobreviven al st.rerun()
+from core.maps import literal_md
 from core.num import num as _num, dmy as _dmy
 from core import tabla
 
@@ -303,6 +304,20 @@ def _generar(grupo):
                            "Nota": st.column_config.TextColumn(t("Note"))}))
     else:
         st.info(t("Nobody has workday hours in that period."))
+
+    # ⚠️ v633 · Una baja sobre el saldo sin decidir: esos días no se pagan, y se dice ANTES de generar.
+    try:
+        from core import ausencias as _AU
+        _exc = _AU.excesos_por_decidir(grupo, desde, hasta)
+    except Exception:
+        _exc = []                  # es un AVISO: que falle no puede impedir generar la nómina
+    if _exc:
+        st.warning(t(":material/rule: **Sick leave over the balance with no decision:** {l}. Those "
+                     "days are not paid until you decide.",
+                     l=", ".join(sorted(f"{literal_md(x['nombre'])} ({len(x['dias'])} d)" for x in _exc))))
+        if st.button(t(":material/event_busy: Decide in Absences"), key="nom_gen_ir_aus"):
+            from core import home_ui
+            home_ui.navegar("planificacion", "🌴 Ausencias")
 
     if st.button(t(":material/payments: Generate payslips"), type="primary", disabled=not horas,
                  key="nom_do"):

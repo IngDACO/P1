@@ -1098,6 +1098,7 @@ def _ir_alerta(destino, grupo):
     elif destino[0] == "archivos":                # v625 · a los archivos de ESA obra
         st.session_state["_prjsel_pending"] = str(destino[1])
         st.session_state["_prj_sec_pending"] = "📎 Archivos"
+        st.session_state["_bajar_cpx_arch_espera"] = True    # v633 · al aviso, no arriba de la obra
         navegar("proyectos", "📊 Proyectos")
     elif destino[0] == "ficha":
         _u = str(destino[1])
