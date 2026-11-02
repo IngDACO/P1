@@ -10,6 +10,23 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO VISTO VERIFICANDO EL CHECKLIST DEL FALSE CAR (v637)
+
+- **Tocar un día de la lista baja al formulario.** Se abría debajo de la tabla, fuera de la vista, y parecía que el toque no
+  hacía nada (`cpx_ps_obra`, `_bajar_a`).
+- **El formulario, más corto en pantallas estrechas.** Con el contenedor a 700 px o menos, el texto a todo el ancho y ✓/X con
+  Remarks en una fila (`_CSS_PUNTOS`, mide el CONTENEDOR: también aplica con el menú abierto).
+- **La firma, a la medida de su casilla.** `prestart_pdf._celda_firma` admite `ancho` y `alto`; el checklist pide 60 × 18 mm y el
+  Pre-Start conserva sus 25 × 8. Sigue siendo una página.
+- ⚠️ **Un doble toque ya no firma dos veces**, ni en el checklist ni en el Pre-Start: `prestart.ya_firmo`, con el criterio de
+  `pendiente_de_firma` (el login manda y un homónimo con otro login sí firma). Añadía otra fila y otra hoja de anexo a un documento
+  de seguridad.
+- **El aviso de guardado, solo en su día:** con otro elegido decía «saved» encima de un formulario vacío.
+
+Sigue siendo `verif_v636` y `romper_v636`: son el mismo módulo.
+
+medido en producción como oficina: tocar una fila deja la obra a 68 px (estaba a 868) con el día tocado; a 375 px el formulario pasa de 4416 a 3818 px, con ✓/X y Remarks en la misma fila y sin desbordes; firmado de verdad en una obra de prueba, el PDF en una página y la firma ocupando su casilla; con otro día elegido el aviso verde desaparece y sale su formulario. El doble toque, ensayado contra la hoja y el Drive reales: una firma y el mismo PDF de 2 páginas; en el Pre-Start, solo por guardián. Datos de prueba borrados · verif_v636 253/253 · romper_v636 96/96 · suite 260/260
+
 ## DAILY FALSE CAR CHECKLIST (v636)
 
 Petición del usuario, con la foto del formato de CI Liftworx: digitalizarlo tal y como se ve y que, como el Pre-Start, lo
@@ -15519,7 +15536,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v636 = actual)
+## Versiones desplegadas (v637 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15527,6 +15544,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v637 | **Lo visto verificando el checklist del false car.** La lista de días baja al formulario; ✓/X y Remarks en una fila en pantalla estrecha; la firma a la medida de su casilla; ⚠️ un doble toque ya no firma dos veces, tampoco en el Pre-Start; el aviso de guardado, solo en su día. medido en producción como oficina: tocar una fila deja la obra a 68 px (estaba a 868) con el día tocado; a 375 px el formulario pasa de 4416 a 3818 px, con ✓/X y Remarks en la misma fila y sin desbordes; firmado de verdad en una obra de prueba, el PDF en una página y la firma ocupando su casilla; con otro día elegido el aviso verde desaparece y sale su formulario. El doble toque, ensayado contra la hoja y el Drive reales: una firma y el mismo PDF de 2 páginas; en el Pre-Start, solo por guardián. Datos de prueba borrados · verif_v636 253/253 · romper_v636 96/96 · suite 260/260 |
 | v636 | **Daily False Car Checklist.** Pregunta obligatoria al crear la obra; los 18 puntos del formato, literales, con firma y PDF calcado en Files; uno por obra y día, con firma del que llega después; una X abre una alarma y la pantalla dice que no se use; se exige desde que está montado hasta que se retira; avisos detrás del Pre-Start. También para el Pre-Start: Handover y lista de días sin registro. medido en producción como oficina, obra de prueba PRJ-0036: la pregunta sale sin marcar y sin contestar no crea; Yes sella las 3 actividades; al fichar, primero el diálogo del Pre-Start y, con la charla hecha (fila de prueba, sin enviar ninguno), el diálogo, la banda y el menú lateral del checklist; «Do it now» lleva a False car en esa obra; una X sin observaciones bloquea y dice cuál; firmado y guardado FC-0001 con 18 respuestas, firma y login; PDF en Files como «False car», mirado: calcado, firma dibujada y observación con * & < $ literal; la banda se va, historial e informe de entrega al día (14 ítems, FC 1 check); la lista dio 10 días reales y tocar el del 31/10 abrió Parramatta con esa fecha, aunque ⚠️ la vista no baja al formulario; a 375 px sin desbordes y 4416 px de alto. Una X (FC-0002) y firmar después (anexo de 2 páginas), ensayados contra la hoja y el Drive reales con la alarma sustituida; como campo, solo por guardián. Datos de prueba borrados · verif_v636 229/229 · romper_v636 84/84 (80 en la tanda y las 4 que escaparon, repetidas tras afinar el guardián), romper_v623 30/30, romper_v635 36/36, romper_v631 22/22, romper_v630 26/26, romper_v615 26/26, romper_v590 28/28, romper_v587 9/9, romper_v564 38/38, romper_v559 35/35, romper_v558 26/26, romper_v546 12/12, romper_v512 22/22 y romper_v506 12/12 · suite 260/260 |
 | v635 | **Comentarios en las tareas de To-do.** Cualquiera que vea la lista comenta, también en las hechas; borra su autor o la oficina, con confirmación; sin avisos, con el número a la vista. En su propia hoja, `TaskComments`. medido en producción como oficina, en PRJ-0027: comentario de dos líneas con asteriscos y $, literal, con autor y hora; la caja se vacía, el desplegable sigue abierto y dice Comments (1); Enter no envía; el comentario acompaña a la tarea a Done y ahí se puede seguir comentando; borrar pregunta y deja Active=NO con quién; a 375 px sin desbordes. La hoja `TaskComments` se creó sola. Como campo, solo por guardián. Datos de prueba borrados · verif_v635 56/56 · romper_v635 36/36, romper_v630 26/26, romper_v617 12/12, romper_v615 26/26 y romper_v610 26/26 · suite 259/259 |
 | v634 | **Lo visto verificando v633.** ⚠️ Bajar la vista en una página corta movía el contenedor 63 px (menú subido y franja blanca) → `overflow:clip`, en toda la app; también baja con la persona o fila ya abierta; saldo sin negativos. medido en producción: campana → Files con el menú en y=0, el contenedor en 0 y sin franja; tocar a la persona ya abierta baja a y=68 (se quedaba en 833); a 375 px el menú abre y se desplaza, sin desbordes. Datos de prueba borrados · verif_v633 125/125 · romper_v633 54/54 y romper_v627 60/60 · suite 258/258 |
