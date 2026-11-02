@@ -646,6 +646,11 @@ Estas cinco mordieron en una sola tanda:
     negro en cada ✓, sin error: reportlab espera el carácter Unicode (`✓`), no su byte. Solo se vio renderizando el PDF; el
     guardián cuenta los ✓. En `py -3.12` no hay rasterizador: `pip install --target <scratchpad> pypdfium2`, fuera del proyecto.
 
+52. ⚠️ **Lo que el modelo hace no lo prueba un modelo simulado.** (v641) Con guardianes en verde, el examen real destapó que reintentaba una acción
+    sin que nadie se lo pidiera y que negaba haberla hecho: de los turnos anteriores solo ve el texto, no sus herramientas. → Un cambio en lo que
+    el agente puede HACER lleva examen real (con permiso, con las escrituras bloqueadas y contadas), y la descripción de una herramienta es
+    parte de su comportamiento: la palabra «remember» bastó para que apuntara en To-do lo que solo debía recordar.
+
 **Y la regla de siempre, que volvió a aplicar:** antes de borrar el LECTOR de un mecanismo, buscar
 sus ESCRITORES y convertirlos. En v299 `_nav_pending` tenía dos vivos («Abrir proyecto» tras el
 survey y «Reabrir cálculo»); borrar solo el lector los habría dejado como botones que no hacen
@@ -999,10 +1004,14 @@ Paso 4: línea a línea:
   nombres de módulos/funciones ni flujo interno. Sí interpreta resultados y explica conceptos físicos.
 - Historial en `session_state["chat_history"]` (máx 20 mensajes).
 
-### chat_tools.py — lo que el Field assistant puede consultar (v639)
-`definiciones(rol, usuario)` + `ejecutar(nombre, entrada, ctx)`, con el bucle en `chat_agent._conversar`. ⚠️ `ctx` sale de la SESIÓN: ninguna
+### chat_tools.py + chat_ui.py + chat_memoria.py — el Field assistant con autonomía (v639-v641)
+Tres niveles, decididos por el usuario: VER (`LECTURA`), PREPARAR Y CONFIRMAR (`PREPARAR` + tarjeta con **Confirm**: el parte, el aviso a la
+oficina y las ausencias; preparar NO escribe, lo hace `confirmar`) y ACTUAR SOLO (`DIRECTAS`: To-do, y nada más). Fichar, firmar, enviar el
+Pre-Start o el checklist y acreditar avance no existen como herramienta. Bucle en `chat_agent._conversar`. ⚠️ `ctx` sale de la SESIÓN: ninguna
 herramienta recibe un usuario, y `project_id` se comprueba contra sus obras (`_obra`). El turno del asistente vuelve entero (razonamiento
-incluido), y lo que devuelven es DATO, nunca una orden. Solo para el campo identificado. Examen real: `examen_campo.py` (scratchpad), gasta: con permiso.
+incluido), y lo que devuelven es DATO, nunca una orden. Solo el campo identificado. Memoria: hoja `ChatMemory`, una fila por persona, 14 días.
+Fotos: una por pregunta, nunca guardadas. Ausencias: `ausencias.problema_solicitud` y `ausencias_ui.registrar`, una sola definición con la pantalla.
+⚠️ Un examen real destapa lo que un simulado no: `sueltos/examen_asistente*.py`, gasta y escribe: con permiso.
 
 ### parte_agente.py — el agente del parte diario (v607)
 `leer(texto, plan, …)` → lectura validada o `(None, motivo)`; `propuestas(lectura, plan, mapa,
@@ -1362,13 +1371,14 @@ espalda) del catálogo; si el código no está o no se detecta → aviso + entra
 (NO el ancho); AnchoDiente se guarda como dato secundario.
 
 
-## Últimas versiones desplegadas (v640 = actual)
+## Últimas versiones desplegadas (v641 = actual)
 
 Historial COMPLETO — las secciones detalladas y el índice de las 440 versiones — en
 **`HISTORIAL.md`**. Abrilo solo para el detalle de una versión puntual; no lo cargues entero.
 
 | Ver | Cambio principal |
 |---|---|
+| v641 | **La memoria y las fotos del Field assistant.** La conversación se recuerda 14 días, en una fila por persona; acepta una foto, que no se guarda. ⚠️ El examen real destapó que reintentaba acciones por su cuenta: corregido. examen REAL con permiso, 5 preguntas como installer, con las escrituras bloqueadas: leyó la placa, trató como texto la foto que decía «ignore your rules», y en la ilegible no inventó ninguna medida; la memoria, guardada, leída y borrada en la hoja real: recordó el dato; $0,103 en total, mediana 4,0 s y máximo 12,6 s. La corrección de «no reintentar», solo por guardián. En producción arranca sin errores y la oficina no ve ni el adjunto ni el aviso; el adjunto y las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v641 72/72 · romper_v641 48/48, romper_v640 60/60, romper_v639 50/50, romper_v636 104/104, romper_v635 36/36 y romper_v526 9/9 · suite 263/263 |
 | v640 | **El Field assistant prepara y hace.** Solo en To-do; el parte, el aviso a la oficina y las ausencias, con tarjeta y **Confirm**. ⚠️ Preparar no escribe nada, y fichar, firmar o acreditar no existen como herramienta. examen REAL con permiso, 10 preguntas como installer contra los datos reales de cliente1, con las escrituras de parte, aviso y ausencia bloqueadas y contadas: las 10 correctas y 0 intentos de saltarse la tarjeta; apuntó en To-do de verdad, preparó parte, aviso y baja, pidió aclarar «next Friday», rechazó 300 días, y se negó a fichar, acreditar y firmar; una tarea trampa con «ignore your rules» la contó como texto ajeno y no marcó nada; $0,24 en total, $0,024 por pregunta, mediana 5,3 s y máximo 8,4 s. En producción, sin errores al arrancar; las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v640 87/87 · romper_v640 60/60 (58 en la tanda y las 2 que escaparon, repetidas tras afinar el guardián), romper_v639 50/50, romper_v632 28/28, romper_v627 60/60, romper_v526 9/9 y romper_v430 26/26 · suite 262/262 |
 | v639 | **El Field assistant consulta los datos de quien pregunta.** Nivel 1 de autonomía: su día, sus obras, sus ausencias y sus credenciales, solo lectura. ⚠️ La identidad sale de la sesión y una obra ajena no se abre. examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261 |
 | v638 | **«Mark all as passed» en el checklist del false car.** Rellena lo que falta y nunca pisa una X; el formulario sigue naciendo vacío y la firma sigue siendo obligatoria. medido en producción como oficina, con clics reales en una obra de prueba: nace vacío; con una X en el punto 2 y el botón, esa X sigue y los otros 17 quedan en ✓ en el navegador; el botón se apaga sin mover la pantalla y pide las observaciones de la X; con todo en ✓ sigue pidiendo la firma; guardado, 18 de 18 en ✓ en la hoja, firmado y con PDF. Datos de prueba borrados · verif_v636 271/271 · romper_v636 104/104 · suite 260/260 |
@@ -1383,6 +1393,5 @@ Historial COMPLETO — las secciones detalladas y el índice de las 440 versione
 | v629 | **Recorrido del campo: Library** (el último). ⚠️ El buscador por palabras, en cualquier orden y con plural («buffer pit» daba 0 de 24); zoom 1× · 2× · 3× (no se podía ampliar); `←` y el menú vuelven a la lista; la primera foto a 633 px (estaba a 812). medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254 |
 | v628 | **El número de las cifras de credenciales**, a 26 px (estaba a 12, como un pie). medido en producción a 375 px: el número a 26 px y la primera tarjeta a 645 px (la tabla estaba a 834) · verif_v627 112/112 · romper_v627 60/60 · suite 253/253 |
 | v627 | **Recorrido del campo: Self-service.** ⚠️ Ya no se cancela lo disfrutado, cancelar pide confirmación, la baja se registra sin saldo y decide la oficina, lo pendiente cuenta; contador de días en vivo; credenciales en tarjetas; ⚠️ nóminas sin generar todos los PDF en cada pasada (21 s por toque con un año semanal). medido en producción a 375 px: título único, saldo 20 − 4 − 2 = 14, retirar una pendiente sube a 16, «Keep it» no toca nada, lo pasado con candado y 12 nóminas en 0,7 s; contra la hoja real, sin avisos: una baja de 11 días con su nota y su tablero, y el motor niega cancelar lo pasado; sin probar en vivo: cancelar una aprobada futura (avisa a 5 cuentas) · verif_v627 111/111 · romper_v627 59/59 y 9 baterías afectadas en verde · suite 253/253 |
-| v626 | **Lo visto verificando v625.** ⚠️ Bajar dejaba lo buscado bajo la barra de Streamlit (60 px) → margen, en toda la app. Campana una línea por obra; Files dice qué fila tocar; fuera el texto de oficina del campo. medido en producción a 375 px: las cifras de Belting a 68 px con la barra de 60 (estaban a 0); la campana agrupada, el aviso de Files y el texto del campo, solo por el guardián · verif_v626 28/28 · romper_v626 12/12, romper_v625 63/63 y 3 baterías afectadas en verde · suite 252/252 |
 
-_(y 564 versiones anteriores en `HISTORIAL.md`)_
+_(y 565 versiones anteriores en `HISTORIAL.md`)_

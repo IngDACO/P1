@@ -10,6 +10,22 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LA MEMORIA Y LAS FOTOS DEL FIELD ASSISTANT (v641)
+
+Lo que el usuario aprobó para después de los niveles de autonomía.
+
+- **Memoria (`core/chat_memoria.py`):** hoja `ChatMemory`, UNA fila por persona con sus últimos mensajes en JSON: con una por mensaje la hoja
+  crecería sin fin y el lote la lee entera. 14 días, 20 mensajes, y por usuario Y grupo. «Clear the conversation» la borra de verdad. Solo el campo.
+- **Fotos:** se adjuntan en el chat (`accept_file`), una por pregunta. ⚠️ No se guardan: la imagen va solo en esa llamada y el historial lleva una
+  marca 📷. Se giran según su EXIF, se reducen a 1568 px y van en JPEG (`chat_ui.foto_para_api`).
+- ⚠️ **La API rechaza una conversación que empieza por el asistente**, y al recortar, o con una tarjeta cancelada en medio, podía quedar así.
+- ⚠️ **Lo destapó el examen real, y ningún simulado:** ante «remember…» apuntó en To-do (lo invitaba la descripción de la herramienta), y en la
+  pregunta siguiente lo reintentó sin que nadie lo pidiera y dijo que antes no lo había intentado: de los turnos anteriores solo ve el texto, no
+  sus herramientas. La persona del asistente ya lo dice, y la herramienta no invita a recordar.
+- `verif_v299` no entendía `a, b = ...` y daba por indefinido lo que sí lo estaba (trampa 3).
+
+examen REAL con permiso, 5 preguntas como installer, con las escrituras bloqueadas: leyó la placa, trató como texto la foto que decía «ignore your rules», y en la ilegible no inventó ninguna medida; la memoria, guardada, leída y borrada en la hoja real: recordó el dato; $0,103 en total, mediana 4,0 s y máximo 12,6 s. La corrección de «no reintentar», solo por guardián. En producción arranca sin errores y la oficina no ve ni el adjunto ni el aviso; el adjunto y las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v641 72/72 · romper_v641 48/48, romper_v640 60/60, romper_v639 50/50, romper_v636 104/104, romper_v635 36/36 y romper_v526 9/9 · suite 263/263
+
 ## EL FIELD ASSISTANT PREPARA Y HACE (v640)
 
 Niveles 2 y 3 de autonomía, decididos por el usuario.
@@ -15579,7 +15595,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v640 = actual)
+## Versiones desplegadas (v641 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15587,6 +15603,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v641 | **La memoria y las fotos del Field assistant.** La conversación se recuerda 14 días, en una fila por persona; acepta una foto, que no se guarda. ⚠️ El examen real destapó que reintentaba acciones por su cuenta: corregido. examen REAL con permiso, 5 preguntas como installer, con las escrituras bloqueadas: leyó la placa, trató como texto la foto que decía «ignore your rules», y en la ilegible no inventó ninguna medida; la memoria, guardada, leída y borrada en la hoja real: recordó el dato; $0,103 en total, mediana 4,0 s y máximo 12,6 s. La corrección de «no reintentar», solo por guardián. En producción arranca sin errores y la oficina no ve ni el adjunto ni el aviso; el adjunto y las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v641 72/72 · romper_v641 48/48, romper_v640 60/60, romper_v639 50/50, romper_v636 104/104, romper_v635 36/36 y romper_v526 9/9 · suite 263/263 |
 | v640 | **El Field assistant prepara y hace.** Solo en To-do; el parte, el aviso a la oficina y las ausencias, con tarjeta y **Confirm**. ⚠️ Preparar no escribe nada, y fichar, firmar o acreditar no existen como herramienta. examen REAL con permiso, 10 preguntas como installer contra los datos reales de cliente1, con las escrituras de parte, aviso y ausencia bloqueadas y contadas: las 10 correctas y 0 intentos de saltarse la tarjeta; apuntó en To-do de verdad, preparó parte, aviso y baja, pidió aclarar «next Friday», rechazó 300 días, y se negó a fichar, acreditar y firmar; una tarea trampa con «ignore your rules» la contó como texto ajeno y no marcó nada; $0,24 en total, $0,024 por pregunta, mediana 5,3 s y máximo 8,4 s. En producción, sin errores al arrancar; las tarjetas en el navegador, sin probar: hace falta una sesión de campo. Datos de prueba borrados · verif_v640 87/87 · romper_v640 60/60 (58 en la tanda y las 2 que escaparon, repetidas tras afinar el guardián), romper_v639 50/50, romper_v632 28/28, romper_v627 60/60, romper_v526 9/9 y romper_v430 26/26 · suite 262/262 |
 | v639 | **El Field assistant consulta los datos de quien pregunta.** Nivel 1 de autonomía: su día, sus obras, sus ausencias y sus credenciales, solo lectura. ⚠️ La identidad sale de la sesión y una obra ajena no se abre. examen REAL con permiso, 9 preguntas con la API contra los datos reales de cliente1 como installer, desde local: las 9 correctas, también negarse a una obra ajena, al sueldo de un compañero y a fichar; $0,16 en total, $0,018 por pregunta, mediana 4,4 s y máximo 12,8 s. En producción, sin errores al arrancar; como campo no hay sesión para probarlo allí · verif_v639 79/79 · romper_v639 50/50 (47 en la tanda y las 3 que escaparon, repetidas tras afinar el guardián), romper_v633 54/54, romper_v632 28/28, romper_v631 22/22 y romper_v630 26/26 · suite 261/261 |
 | v638 | **«Mark all as passed» en el checklist del false car.** Rellena lo que falta y nunca pisa una X; el formulario sigue naciendo vacío y la firma sigue siendo obligatoria. medido en producción como oficina, con clics reales en una obra de prueba: nace vacío; con una X en el punto 2 y el botón, esa X sigue y los otros 17 quedan en ✓ en el navegador; el botón se apaga sin mover la pantalla y pide las observaciones de la X; con todo en ✓ sigue pidiendo la firma; guardado, 18 de 18 en ✓ en la hoja, firmado y con PDF. Datos de prueba borrados · verif_v636 271/271 · romper_v636 104/104 · suite 260/260 |
