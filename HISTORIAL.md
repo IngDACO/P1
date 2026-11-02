@@ -10,6 +10,24 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL ASISTENTE EN SONNET, LA BAJA PASO A PASO Y STRIKER (v632)
+
+Decisión del usuario: «Dale con todo incluido lo recomendado», «Es striker», «Pasalo a sonnet».
+
+- ⚠️ **Cambiar de modelo no era cambiar el nombre.** Sonnet 5.5 razona por defecto: la respuesta puede empezar por un
+  bloque `thinking` (sin `.text`), el razonamiento gasta del mismo `max_tokens` y un rechazo llega como respuesta normal
+  con el contenido vacío. Con `content[0].text` y 1024 tokens habría salido un error en el chat → `_texto_de` lee por
+  tipo y mira `stop_reason` antes, `max_tokens` 4096, esfuerzo `low` y el mismo respaldo del servidor que `parte_agente`.
+  El historial sigue siendo texto: no se reenvían bloques de razonamiento.
+- ⚠️ **El resumen de la oficina (`admin_briefing`) no es el asistente:** se queda en Haiku, en `MODEL_RESUMEN`.
+- ⚠️ **La baja:** con Haiku colocaba el atajo en My absences y decía que se enteraba la cuadrilla → los pasos, escritos
+  en la guía, y `verif_v632` compara cada uno con la pantalla y con quién avisa de verdad (`_admins_and_owners`).
+- **La regla crece:** no añadir pasos ni consecuencias, ni inventar en qué sección o página está un dato.
+- **Striker:** Buffers decía «car sticker» y Belting «striker»; el usuario lo confirma. En pantalla, diagrama y guía.
+- **El informe interno:** «Valor» y «SI» → «Value» y «YES». Se escapó al barrido de v448 porque ese busca frases.
+
+medido en producción con Sonnet: la baja, pasos correctos, atajo en Timeclock y nada inventado, en 3,6 s; LFKK, dice lo que sabe y lo que no, sin adivinar, en 2,2 s; Buffers dice «car striker» y ningún «sticker». El diagrama y el informe interno, solo por guardián (el informe exige un cálculo real) · verif_v632 40/40 · romper_v632 28/28, romper_v631 22/22, romper_v630 26/26, romper_v597 22/22, romper_v594 12/12, romper_v448 7/7 y romper_v438 12/12 · suite 257/257
+
 ## LO QUE DESTAPARON LAS PRUEBAS REALES DE v630 (v631)
 
 Decisión del usuario («Ok dale»), con permiso para repetir en producción las preguntas de LFKK y de la baja.
@@ -15421,7 +15439,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v631 = actual)
+## Versiones desplegadas (v632 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15429,6 +15447,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v632 | **El asistente en Sonnet 5.5.** ⚠️ No bastaba el nombre: razona, así que se lee por tipo de bloque, se mira `stop_reason` y `max_tokens` da para razonar y responder; el resumen de la oficina sigue en Haiku. La baja, paso a paso y comparada con la pantalla; striker en Buffers; informe interno en inglés. medido en producción con Sonnet: la baja, pasos correctos, atajo en Timeclock y nada inventado, en 3,6 s; LFKK, dice lo que sabe y lo que no, sin adivinar, en 2,2 s; Buffers dice «car striker» y ningún «sticker». El diagrama y el informe interno, solo por guardián (el informe exige un cálculo real) · verif_v632 40/40 · romper_v632 28/28, romper_v631 22/22, romper_v630 26/26, romper_v597 22/22, romper_v594 12/12, romper_v448 7/7 y romper_v438 12/12 · suite 257/257 |
 | v631 | **Lo que destaparon las pruebas reales de v630.** ⚠️ El asistente seguía inventando parte de LFKK → bloque de siglas comparado con cada pantalla y con el motor (solo LFKK y LFGK quedan sin definición, y lo dice); ⚠️ el atajo de la baja solo lleva a My absences; «Switch project» de 64 a 210 px; anexo de firmas en inglés y DD/MM/YYYY. medido en producción: 2 preguntas reales como campo. LFKK sale bien (no tiene la definición, solo lo de Rails y cabina, sin lo del primer riel), ⚠️ salvo que dice que está en «the shaft data section» del plano. ⚠️ La baja sale a medias: ya no dice que el atajo la registra y termina en Record the sick leave, pero pone el atajo dentro de My absences (está en Timeclock) y dice «your crew knows» (no consta). «Switch project» a 210 px con el menú abierto a 859 de ancho (era 64; ahí aún corta las últimas letras de la obra) y 353 a 375; cambia de obra y avisa del Pre-Start de la nueva. Firmar tarde: PDF de 2 páginas, anexo con «Project» y 02/11/2026. Datos de prueba borrados · verif_v631 50/50 · romper_v631 22/22, romper_v630 26/26, romper_v621 24/24, romper_v546 12/12 y romper_v439 8/8 · suite 256/256 |
 | v630 | **El asistente del campo.** ⚠️ Mandaba a pantallas que ya no existen, decía dos cosas falsas desde v625 y no conocía Absences, To-do, Daily log ni Library → la guía entera con los nombres de la app, y el menú comparado con `home_ui` por un guardián; regla de no inventar. medido en producción, 4 preguntas reales como campo: la baja, las nóminas y el saldo (sin inventar cifras) y Buffers sin fichar, con pantallas y botones correctos; ⚠️ fallan dos cosas: de LFKK admite que no tiene la definición y aun así inventa una parte, y dice que el atajo de Timeclock registra la baja (solo lleva a My absences). También cerradas dos pruebas pendientes: firmar tarde (PS-0003, PDF de 2 páginas con el anexo) y cambiar de obra (la anterior cierra y la nueva abre en el mismo segundo, con la jornada abierta); ⚠️ vistos ahí: «Switch project» a 64 px con el menú abierto a 859 de ancho (353 a 375) y el anexo con «Proyecto» y la fecha ISO. Datos de prueba borrados · verif_v630 85/85 · romper_v630 26/26 y romper_v621 24/24 · suite 255/255 |
 | v629 | **Recorrido del campo: Library** (el último). ⚠️ El buscador por palabras, en cualquier orden y con plural («buffer pit» daba 0 de 24); zoom 1× · 2× · 3× (no se podía ampliar); `←` y el menú vuelven a la lista; la primera foto a 633 px (estaba a 812). medido en producción a 375 px con las piezas reales: búsquedas 24 · 4 · 8 · 17 · 3 · 25, la primera foto a 633 px, 3× a 1058 px centrada, una fila de navegación, y `←` y el menú a la lista; sin probar con un dedo real: arrastrar la foto ampliada · verif_v629 54/54 · romper_v629 27/27 y 4 baterías afectadas en verde · suite 254/254 |
