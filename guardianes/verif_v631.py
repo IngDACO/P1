@@ -56,8 +56,8 @@ sec("1. Lo que dice el bloque de cada sigla es lo que dice su pantalla")
 for pantalla, rel, lineas in (
         ("RZ, RO = car rails · RF, RB = counterweight rails · in mm, measured on site.", "core/rail_cut_ui.py",
          ("- **RZ, RO:** rieles de cabina, en mm, medidos en obra", "- **RF, RB:** rieles de contrapeso, en mm, medidos en obra")),
-        ("HKP (mm) — car sticker ↔ buffer serving the 1st level", "core/buffer_cut_ui.py",
-         ("- **HKP:** car sticker ↔ buffer serving the 1st level",)),
+        ("HKP (mm) — car striker ↔ buffer serving the 1st level", "core/buffer_cut_ui.py",
+         ("- **HKP:** car striker ↔ buffer serving the 1st level",)),
         ("you enter the actual **HKPR** measured on each buffer", "core/buffer_cut_ui.py",
          ("- **HKPR:** esa misma distancia, la real, medida en obra en cada buffer",)),
         ("HQ — travel height (mm)", "core/belting_ui.py", ("- **HQ:** travel height",)),
@@ -125,7 +125,7 @@ _au = leer("core/ausencias_ui.py")
 chk("el botón que la registra existe", "Record the sick leave" in _au)
 _G = re.sub(r"\s+", " ", P)
 chk("⚠️ la guía dice que el atajo NO registra",
-    "Ese botón NO registra la baja: solo lo lleva a **My absences**, y es allí donde se registra, con **Record the sick leave**." in _G)
+    "es un botón de **Timeclock**, NO de My absences" in _G and "no registra nada y solo lo lleva a My absences" in _G)
 chk("sin frases que digan lo contrario", "tap it and confirm" not in _G.lower())
 
 # ─────────────────────────────────────────────────────────────────────────────

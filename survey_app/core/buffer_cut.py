@@ -1,7 +1,7 @@
 """
 Corte de buffers (buffer cutting).
 
-Del plano se lee HKP = distancia entre el sticker de la cabina y el buffer de la
+Del plano se lee HKP = distancia entre el striker de la cabina y el buffer de la
 cabina cuando la cabina sirve el primer nivel. El usuario mide en obra el valor
 real HKPR de cada buffer. El corte de cada buffer es:
 
@@ -52,19 +52,19 @@ def _m1(v) -> str:
 def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
     """Alzado esquemático del corte de cada buffer (v182, replanteado).
 
-    HKP y HKPR NO son alturas: son la HOLGURA (distancia) entre el sticker de la
+    HKP y HKPR NO son alturas: son la HOLGURA (distancia) entre el striker de la
     cabina y el borde superior del buffer — dos elementos que no se tocan. HKP es
     la de diseño (del plano) y HKPR la medida en obra. Cortar el buffer baja su
     borde superior y por tanto AGRANDA la holgura; el corte = HKP − HKPR es la
     rebanada que se quita del borde superior para pasar de HKPR a HKP.
 
-    Por eso el dibujo muestra, arriba, el sticker (barra fija) y, común a todos,
+    Por eso el dibujo muestra, arriba, el striker (barra fija) y, común a todos,
     la línea HKP (dónde debe quedar el borde superior del buffer tras cortar).
-    Por buffer: el borde real (a HKPR del sticker) y, si HKPR < HKP, la rebanada
+    Por buffer: el borde real (a HKPR del striker) y, si HKPR < HKP, la rebanada
     roja entre el borde real y la línea HKP = lo que se corta. Si HKPR > HKP la
     holgura ya es mayor que la de diseño: nada que cortar, se marca «revisar».
 
-    La holgura sticker↔buffer no va a escala (rótulo ≈); el corte sí, a escala
+    La holgura striker↔buffer no va a escala (rótulo ≈); el corte sí, a escala
     ampliada para que unos pocos mm se vean. Se declara en el pie.
     """
     bufs = (res or {}).get("buffers") or []
@@ -89,9 +89,9 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
              int(_fin_buf + 8 + texto_svg.ancho(_lbl_hkp, 8.5, True) + 20 + 1))
     VH = 300
 
-    y_stick = 60                 # borde inferior del sticker (referencia)
+    y_stick = 60                 # borde inferior del striker (referencia)
     STICK_H = 11
-    GAP_VIS = 72                 # holgura visual sticker→línea HKP (NO a escala)
+    GAP_VIS = 72                 # holgura visual striker→línea HKP (NO a escala)
     y_hkp = y_stick + GAP_VIS    # línea HKP: borde superior de diseño (común)
     CUT_BAND = 56                # px del mayor corte por encima de la línea HKP
     BUF_H = 58                   # alto esquemático del cuerpo del buffer
@@ -109,7 +109,7 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
          f'<text x="18" y="24" font-size="11" fill="{INK}" font-weight="bold">'
          f'{_d("BUFFER CUTTING")}</text>',
          f'<text x="18" y="37" font-size="8" fill="{MUT}">'
-         f'{_d("cutting the buffer lowers its edge and widens the sticker")}↔'
+         f'{_d("cutting the buffer lowers its edge and widens the striker")}↔'
          f'{_d("buffer clearance up to")} HKP = {_mm(hkp)} mm · '
          f'{_d("cut")} = HKP − HKPR</text>']
     if proyecto:
@@ -118,11 +118,11 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
         p.append(f'<text x="{VW-18}" y="24" text-anchor="end" font-size="9" '
                  f'fill="{INK}" font-weight="bold">{texto_svg.cabe(proyecto, _libre, 9, True)}</text>')
 
-    # ── Sticker de cabina (barra fija, referencia común) ──
+    # ── Striker de cabina (barra fija, referencia común) ──
     p.append(f'<rect x="{x0}" y="{y_stick-STICK_H}" width="{x1-x0}" height="{STICK_H}" '
              f'fill="{NAVY}"/>')
     p.append(f'<text x="{(x0+x1)/2:.0f}" y="{y_stick-2}" text-anchor="middle" '
-             f'font-size="8" fill="#ffffff" font-weight="bold">{_d("CAR STICKER")}</text>')
+             f'font-size="8" fill="#ffffff" font-weight="bold">{_d("CAR STRIKER")}</text>')
 
     # ── Línea HKP: borde superior de diseño (común a todos) ──
     p.append(f'<line x1="{x0}" y1="{y_hkp}" x2="{x1}" y2="{y_hkp}" '
@@ -183,7 +183,7 @@ def buffer_cut_svg(res: dict, proyecto: str = "") -> str:
                     yy = yreal + hslice * (k + 1) / (nb + 1)
                     p.append(f'<line x1="{xL:.1f}" y1="{yy:.1f}" x2="{cx+bw/2:.1f}" '
                              f'y2="{yy-5:.1f}" stroke="{RED}" stroke-width="0.5"/>')
-                # borde real (nivel medido, a HKPR del sticker)
+                # borde real (nivel medido, a HKPR del striker)
                 p.append(f'<line x1="{xL-4:.1f}" y1="{yreal:.1f}" x2="{cx+bw/2+4:.1f}" '
                          f'y2="{yreal:.1f}" stroke="{RED}" stroke-width="2"/>')
                 if hslice >= 13:

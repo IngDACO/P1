@@ -119,8 +119,9 @@ chk(f"el informe se genera ({len(_pdf) // 1024} KB)", len(_pdf) > 20000)
 # no revienta nada (el fallo real de v437). Se captura el log del módulo.
 chk("nada se cayó a un `except` (log vacío)", not _c.msgs, str(_c.msgs))
 _txt = " ".join(pg.extract_text() or "" for pg in PdfReader(io.BytesIO(_pdf)).pages)
+# v632 · «Value» y no «Valor», en el PDF de verdad: se escapó porque el barrido de abajo busca frases.
 for _i in ("INPUT PARAMETERS", "GEOMETRIC LIMITS", "SURVEY MATRIX",
-           "Interpretation", "Automatically generated report", "Omega side"):
+           "Interpretation", "Automatically generated report", "Omega side", "Value"):
     chk(f"el PDF dice «{_i}»", _i in _txt)
 
 # ── 2 ────────────────────────────────────────────────────────────

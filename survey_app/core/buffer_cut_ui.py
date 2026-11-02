@@ -76,7 +76,7 @@ def render_buffer_cut_tab():
             else:
                 st.warning(t("HKP was not found in the PDF. Enter it by hand."))
 
-    hkp = st.number_input(t("HKP (mm) — car sticker ↔ buffer serving the 1st level"),
+    hkp = st.number_input(t("HKP (mm) — car striker ↔ buffer serving the 1st level"),
                           value=float(st.session_state.get("bc_hkp", 0.0)),
                           step=0.5, key="bc_hkp")
 

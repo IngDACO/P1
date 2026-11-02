@@ -36,7 +36,7 @@ ROTURAS = [
     ("una etiqueta del corte de rieles vuelve al español",
      F["rail_cut"], '{_d("Counterweight")}', 'Contrapeso'),
     ("una etiqueta del corte de buffers vuelve al español",
-     F["buffer_cut"], '{_d("CAR STICKER")}', 'STICKER DE CABINA'),
+     F["buffer_cut"], '{_d("CAR STRIKER")}', 'STRIKER DE CABINA'),
     ("una etiqueta del belting vuelve al español",
      F["belting"], '_d("below FFL")', '"por debajo del FFL"'),
     ("un diagrama vuelve a usar <marker> (svglib lo tiraría del PDF)",

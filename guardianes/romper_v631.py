@@ -42,7 +42,7 @@ ROTURAS = [
     ("⚠️ cambia HGP en Belting", "core/belting_ui.py",
      [("HGP — design striker↔buffer (mm)", "HGP — design distance (mm)")]),
     ("⚠️ cambia HKP en Buffers", "core/buffer_cut_ui.py",
-     [("HKP (mm) — car sticker ↔ buffer serving the 1st level", "HKP (mm) — car striker ↔ buffer serving the 1st level")]),
+     [("HKP (mm) — car striker ↔ buffer serving the 1st level", "HKP (mm) — car plate ↔ buffer serving the 1st level")]),
     ("⚠️ el plano aporta una sigla que el bloque no explica", "core/plan_data.py",
      [("""("HQ", _v("hq")), ("HGP", _v("hgp"))]},""", """("HQ", _v("hq")), ("HGP", _v("hgp")), ("HXY", _v("hq"))]},""")]),
     # ── El motor deja de hacer lo que dice la guía ──
@@ -52,7 +52,7 @@ ROTURAS = [
      [("""            "CutRZ": float(lfkk) + sign * rz,\n""", """            "CutRZ": float(lfgk) + sign * rz,\n""")]),
     # ── La baja ──
     ("⚠️ la guía vuelve a callarse que el atajo no registra", C,
-     [(" ⚠️ Ese botón NO registra la baja: solo lo lleva a **My absences**, y es allí\n  donde se registra, con **Record the sick leave**.\n", "\n")]),
+     [("no registra nada y solo lo lleva a My\n  absences, donde sigue por el paso 2.\n", "y registra la baja.\n")]),
     ("⚠️ el botón pasa a registrar y la guía no lo sabe", T,
      [("""            navegar("autogestion", "🌴 Ausencias")\n""", """            navegar("autogestion", "🌴 Ausencias")\n            ausencias.registrar_baja(usuario, grupo)\n""")]),
     ("⚠️ el botón lleva a otra pantalla", T,

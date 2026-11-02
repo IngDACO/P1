@@ -9,8 +9,14 @@ try:
 except Exception:
     anthropic = None
 
-MODEL       = "claude-haiku-4-5"
-MAX_TOKENS  = 1024
+# v632 · Decisión del usuario: con Haiku el asistente rellenaba lo que no sabía (LFKK, quién se entera
+# de una baja). Esfuerzo bajo: es un chat, y en el móvil cada segundo cuenta (como `parte_agente`).
+MODEL       = "claude-sonnet-5-5"
+ESFUERZO    = "low"
+MODEL_RESUMEN = "claude-haiku-4-5"   # el resumen de la oficina no es el asistente: se queda como estaba
+MAX_TOKENS  = 4096                   # ⚠️ el razonamiento gasta de aquí, antes que la respuesta
+# Respaldo del servidor ante un rechazo del modelo (el mismo de `parte_agente`).
+_BETA_RESPALDO = "server-side-fallback-2026-07-01"
 MAX_HISTORY = 20   # máximo de mensajes guardados en memoria (evita tokens infinitos)
 
 # v630 · Las líneas de menú de la guía se comparan con los menús de `home_ui` (verif_v630): el
@@ -217,6 +223,9 @@ El paso encontrado indica cuánto hay que ampliar o corregir el shaft.
   di que no te consta. No supongas que existe ni describas pasos que no tienes.
 - **Sus datos:** si en el contexto no te llegan sus obras, horas, saldos o nóminas, no los tienes:
   dile en qué pantalla verlos, sin dar ninguna cifra.
+- **Pasos:** da los pasos tal como están en esta guía, en su orden y en su pantalla. No añadas pasos
+  ni digas quién se entera o qué pasa después si no está aquí.
+- **Dónde mirar:** di «en el plano» o «en el manual». No inventes en qué sección o página está un dato.
 - Esto no te impide responder preguntas generales de instalación con tu conocimiento.
 
 ## SIGLAS DE LAS HERRAMIENTAS
@@ -227,7 +236,7 @@ manual del contexto da más, úsalo y di que viene del manual.
 
 - **RZ, RO:** rieles de cabina, en mm, medidos en obra (Rails, Case 2).
 - **RF, RB:** rieles de contrapeso, en mm, medidos en obra (Rails, Case 2).
-- **HKP:** car sticker ↔ buffer serving the 1st level: el valor de diseño, que viene del plano.
+- **HKP:** car striker ↔ buffer serving the 1st level: el valor de diseño, que viene del plano.
 - **HKPR:** esa misma distancia, la real, medida en obra en cada buffer.
 - **HQ:** travel height.
 - **HGP:** striker ↔ buffer: el valor de diseño, que viene del plano.
@@ -401,9 +410,14 @@ cual, en inglés, sin traducirlos.
   ya descuenta de lo disponible, y en Annual leave no se puede pedir más de lo disponible. Los fines
   de semana no cuentan salvo que marque **Include weekends**. En **My requests** se puede
   cancelar lo pendiente o lo que aún no ha empezado; lo que ya empezó solo lo cambia la oficina.
-  Quien no puede ir hoy y aún no ha fichado tiene un atajo en Timeclock: **I cannot make it today —
-  report sick leave**. ⚠️ Ese botón NO registra la baja: solo lo lleva a **My absences**, y es allí
-  donde se registra, con **Record the sick leave**.
+- **Si hoy está enfermo y no puede ir:** solo estos pasos, en este orden.
+  1. **Self-service → My absences**.
+  2. En **What do you need?** elige **Sick leave**. **From** y **To** ya vienen con la fecha de hoy.
+  3. Pulsa **Record the sick leave**.
+  Queda registrada al momento, sin aprobación; sale en la planificación y la oficina recibe el aviso.
+  El atajo **I cannot make it today — report sick leave** es un botón de **Timeclock**, NO de My
+  absences: sale si aún no ha fichado ni ha trabajado hoy, no registra nada y solo lo lleva a My
+  absences, donde sigue por el paso 2.
 - **My credentials (Self-service):** cada usuario ve sus tickets (White Card, Forklift, Dogging/Rigging,
   EWP, trabajo en altura, primeros auxilios, licencia) con su vencimiento y semáforo. Es solo
   consulta: los gestiona el administrador, y la app avisa de los que vencen.
@@ -562,6 +576,22 @@ def _build_context_block(calc_results: dict | None, all_params: dict | None) -> 
     return "\n".join(lines)
 
 
+def _texto_de(r) -> str:
+    """Lo que el asistente le dice al usuario.
+
+    ⚠️ v632 · Por TIPO de bloque y con el motivo de parada delante: Sonnet 5.5 razona, así que la
+    respuesta puede empezar por un bloque `thinking` (sin `.text`), y un rechazo llega como una
+    respuesta normal con el contenido vacío. Con `content[0].text` los dos casos salían en el chat
+    como un error de la API.
+    """
+    if r.stop_reason == "refusal":
+        return "⚠️ I can't answer that one. Try asking it another way, or ask the office."
+    txt = "".join(b.text for b in r.content if getattr(b, "type", "") == "text").strip()
+    if txt and r.stop_reason == "max_tokens":
+        txt += "\n\n⚠️ That answer was cut short: ask me to continue."
+    return txt or "⚠️ I could not get an answer this time. Try again."
+
+
 def get_chat_response(
     user_message:  str,
     history:       list,
@@ -622,13 +652,16 @@ def get_chat_response(
     messages.append({"role": "user", "content": user_message})
 
     try:
-        response = client.messages.create(
-            model      = MODEL,
-            max_tokens = MAX_TOKENS,
-            system     = system,
-            messages   = messages,
+        response = client.beta.messages.create(
+            model         = MODEL,
+            max_tokens    = MAX_TOKENS,
+            betas         = [_BETA_RESPALDO],
+            fallbacks     = "default",
+            output_config = {"effort": ESFUERZO},
+            system        = system,
+            messages      = messages,
         )
-        return response.content[0].text
+        return _texto_de(response)
     except anthropic.AuthenticationError:
         return "⚠️ Invalid API key. Check ANTHROPIC_API_KEY in secrets.toml"
     except anthropic.RateLimitError:
@@ -661,7 +694,7 @@ def admin_briefing(grupo: str) -> str:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         resp = client.messages.create(
-            model=MODEL, max_tokens=600, system=system,
+            model=MODEL_RESUMEN, max_tokens=600, system=system,
             messages=[{"role": "user",
                        "content": "Group data today:\n\n" + facts
                                   + "\n\nGive me the summary of pending items."}])

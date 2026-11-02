@@ -530,14 +530,14 @@ def generate_report(project_params, calculated, survey_original,
     ctrl_s_    = p.get("CTRL_SIDE")
     ns_        = p.get("NS", "—")
 
-    def _yn(b):   return "SI" if b else "NO"
+    def _yn(b):   return "YES" if b else "NO"
     def _side(s): return str(s) if s else "—"
 
     cfg_rows = [
         [Paragraph(f"<b>{_d('Condition / Parameter')}</b>", styles["Normal2"]),
-         Paragraph("<b>Valor</b>",                 styles["Normal2"]),
+         Paragraph(f"<b>{_d('Value')}</b>",        styles["Normal2"]),
          Paragraph(f"<b>{_d('Condition / Parameter')}</b>", styles["Normal2"]),
-         Paragraph("<b>Valor</b>",                 styles["Normal2"])],
+         Paragraph(f"<b>{_d('Value')}</b>",        styles["Normal2"])],
         [Paragraph(_d("Number of stops (NS)"),        styles["Normal2"]),
          Paragraph(str(ns_),                        styles["Normal2"]),
          Paragraph(_d("Omega side"),                styles["Normal2"]),

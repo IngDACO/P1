@@ -203,7 +203,7 @@ ESPERA = {
     "schedule":   ["SCHEDULE AND PROGRESS", "Planned", "Actual", "days", "activities"],
     "rail_caso1": ["RAIL CUTTING", "standard stack", "trims the 1st rail"],
     "rail_caso2": ["Car", "Counterweight", "illustrative heights, not to scale"],
-    "buffer":     ["BUFFER CUTTING", "CAR STICKER", "no cut"],
+    "buffer":     ["BUFFER CUTTING", "CAR STRIKER", "no cut"],
     "belting":    ["top floor", "Car", "position at enlarged scale"],
 }
 # ⚠️ El SVG del cronograma lleva los NOMBRES DE ACTIVIDAD, que son DATO y siguen en

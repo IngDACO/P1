@@ -167,11 +167,13 @@ _vistos = []
 class _Msgs:
     def create(self, **kw):
         _vistos.append(kw)
-        return types.SimpleNamespace(content=[types.SimpleNamespace(text="ok")])
+        return types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text="ok")],
+                                     stop_reason="end_turn")
 
 
 _falso = types.SimpleNamespace(
-    Anthropic=lambda api_key=None: types.SimpleNamespace(messages=_Msgs()),
+    Anthropic=lambda api_key=None: types.SimpleNamespace(messages=_Msgs(),
+                                                         beta=types.SimpleNamespace(messages=_Msgs())),
     AuthenticationError=type("A", (Exception,), {}), RateLimitError=type("R", (Exception,), {}))
 _man = types.SimpleNamespace(is_available=lambda: False)
 _dig = types.SimpleNamespace(group_snapshot_text=lambda g: "VIVO DEL GRUPO",
