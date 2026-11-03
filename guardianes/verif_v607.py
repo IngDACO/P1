@@ -517,10 +517,12 @@ chk("cuatro tarjetas «What the assistant read» y una «What the app read» (la
 chk("⚠️ la que falló LO DICE (no se toma la lista de palabras por el agente)",
     any("The assistant could not read this log (it took too long)" in x for x in _md))
 _a1 = _cb(at, "fld_pp_LOG-9101_PRJ-9001_a_")
-chk("las 4 actividades hechas, como casillas, TODAS sin marcar",
+# ⚠️ v646 · CADUCADO por decisión del usuario: lo que el agente leyó como hecho, sin aviso, viene MARCADO; el
+# autor lo desmarca si no, y nada se acredita sin Confirm (verif_v646). Lo de abajo sigue: solo lo marcado.
+chk("las 4 actividades hechas, como casillas, TODAS marcadas de antes",
     sorted(k.split("_a_", 1)[1].split("_", 1)[1] for k in _a1) == sorted(
         ["Install yoke/base, level it", "Install platform (cradle)", "Build cabin (walls)",
-         "Install cabin ceiling (roof)"]) and not any(c.value for c in _a1.values()), list(_a1))
+         "Install cabin ceiling (roof)"]) and all(c.value for c in _a1.values()), list(_a1))
 chk("⚠️ lo empezado NO es una casilla", not [k for k in _cb(at, "fld_pp_LOG-9101") if "rings to top" in k])
 chk("...pero se enseña, con sus palabras", any("Started, not finished" in x and "start climbing the shaft" in x
                                                for x in _md))
@@ -544,6 +546,9 @@ chk("⚠️ una recarga NO vuelve a llamar (lectura de la sesión) ni reintenta 
     len(AG._llam) == 5, len(AG._llam))
 
 # ── confirmar: solo lo marcado, con el lector en el registro ──
+# v646 · primero se desmarca lo que vino marcado: así se ve que se acredita lo que QUEDA marcado, ni una más
+for _c0 in _cb(at, "fld_pp_LOG-9101_PRJ-9001_a_").values():
+    _c0.uncheck()
 for _k in ("fld_pp_LOG-9101_PRJ-9001_a_%d_Install yoke/base, level it" % COD[C["Install yoke/base, level it"]][0],
            "fld_pp_LOG-9101_PRJ-9001_a_%d_Build cabin (walls)" % COD[C["Build cabin (walls)"]][0]):
     _c = _cb(at, _k).get(_k)

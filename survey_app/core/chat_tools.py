@@ -328,6 +328,98 @@ def _preparar_ausencia(entrada, ctx) -> dict:
                     {"tipo": tipo, "from": d0.isoformat(), "to": d1.isoformat(), "reason": motivo, "weekends": findes})
 
 
+def _seguras(reg, plan, mapa, texto) -> list:
+    """Lo que la pantalla deja MARCADO de antes (`daily_log_ui._pintar`): hechos que leyó el agente, sin aviso y sin
+    acreditar. ⚠️ La misma regla en los dos sitios: lo que el chat acredita es lo que Daily log enseña marcado."""
+    from core import parte_agente as AG
+    return [f for f in AG.propuestas(reg, plan, mapa, texto)["actividades"]
+            if not f["hecha"] and f.get("fuente") == "agente" and not f.get("aviso")]
+
+
+def _queda_algo(reg, plan, mapa, texto, acreditadas) -> bool:
+    """¿Queda en el parte algo que su autor tiene que mirar, además de lo que acredita la tarjeta? Dudas, pendientes,
+    problemas, lo empezado, lo que no entendió o un hecho con aviso: entonces el parte sigue sin revisar."""
+    from core import parte_agente as AG
+    p = AG.propuestas(reg, plan, mapa, texto)
+    _ya = {(f["orden"], f["actividad"]) for f in acreditadas}
+    return bool(p["preguntas"] or p["pendientes"] or p.get("problemas") or p.get("empezadas") or AG.sin_entender(reg)
+                or any(not f["hecha"] and (f["orden"], f["actividad"]) not in _ya for f in p["actividades"]))
+
+
+def _ofrecer_credito(lid, prj, texto, dia, ctx) -> str:
+    """v646 · Tras guardar un parte desde el chat, el agente del parte lo LEE (la misma lectura que la pantalla, que queda
+    guardada) y, si hay hechos sin dudas, deja una tarjeta para acreditarlos. Devuelve lo que se le dice, o "".
+    ⚠️ Nunca tumba el guardado: el parte ya está en la hoja. Con más de un ascensor no se ofrece: a qué obra va cada
+    trozo lo elige la persona en **Daily log**."""
+    try:
+        from core import daily_log_ui as DLU, parte_agente as AG, stage_progress as SP, vocabulario as V
+        from core.i18n import idioma
+        pid = str(prj.get("ID", ""))
+        plan = DLU._plan_de(pid)
+        if not plan or ctx.get("acciones") is None:
+            return ""
+        _a = V.ascensores(texto)
+        if _a.get("separar") or _a.get("dudosos"):
+            return t("It names more than one lift: choose where each part goes in **Daily log**.")
+        _k = AG.clave_api()
+        if not AG.disponible(_k):
+            return ""
+        mapa = SP.acreditado(pid)
+        reg, _m = AG.leer(texto, plan, dia, mapa, None, None, idioma(), _k, memoria=DLU._memoria())
+        if not reg:
+            return ""
+        DLU._apuntar({str(lid): reg}, {})
+        seguras = _seguras(reg, plan, mapa, texto)
+        if not seguras:
+            return ""
+        _tarjeta(ctx, "credito", t("Credit from your log · {o}", o=prj.get("Name", "")),
+                 "\n".join("· " + f["actividad"] for f in seguras)
+                 + ("\n" + t("The rest of the log waits for you in **Daily log**.")
+                    if _queda_algo(reg, plan, mapa, texto, seguras) else ""),
+                 {"log_id": str(lid), "project_id": pid, "creditos": [[f["orden"], f["actividad"]] for f in seguras]})
+        return t("The assistant read it: confirm the card below to credit {n} activities.", n=len(seguras))
+    except Exception as e:
+        logger.warning("chat_tools._ofrecer_credito(%s): %r", lid, e)
+        return ""
+
+
+def _confirmar_credito(d, ctx) -> tuple:
+    """Acredita lo de la tarjeta, como **Confirm** en Daily log y con la fecha del parte. ⚠️ Lo vuelve a mirar todo: que
+    el parte sea suyo y siga sin revisar (leído FRESCO), que la lectura siga valiendo, y lo ya acreditado se salta. Si no
+    queda nada más que mirar, el parte queda revisado y la memoria aprende, como en la pantalla."""
+    from core import daily_log as DL, daily_log_ui as DLU, parte_propuestas as PP, stage_progress as SP
+    prj = _obra(d, ctx)
+    pid, lid = str(prj.get("ID", "")), str(d.get("log_id", ""))
+    r = next((x for x in DL.partes(pid) if str(x.get("ID", "")) == lid), None)
+    if r is None or str(r.get("Author", "")) != str(ctx["usuario"]):
+        return False, t("That daily log is not yours.")
+    if not DL.sin_revisar_aun(lid):
+        return False, t("That daily log was already reviewed.")
+    plan = DLU._plan_de(pid)
+    reg = DLU._lectura(r, plan) if plan else {}
+    if not reg:
+        return False, t("Open it in **Daily log** to confirm what it proposes.")
+    texto, mapa = str(r.get("Text", "")), SP.acreditado(pid)
+    _vale = {(f["orden"], f["actividad"]): f for f in _seguras(reg, plan, mapa, texto)}
+    elegidas = [_vale[(int(o), str(a))] for o, a in d.get("creditos") or [] if (int(o), str(a)) in _vale]
+    if not elegidas:
+        return False, t("Nothing left to credit: it is already done. Check **Daily log**.")
+    ticks = [(f["orden"], f["actividad"]) for f in elegidas]
+    ok, msg = SP.acreditar(pid, ctx["grupo"], prj, PP.creditos(ticks, lid), quien=ctx["usuario"], origen=SP.PARTE,
+                           fecha=str(r.get("Date", "") or ""))
+    if not ok:
+        return False, str(msg)
+    if _queda_algo(reg, plan, mapa, texto, elegidas):
+        return True, t("Credited {n} activities. The rest of the log waits for you in **Daily log**.", n=len(ticks))
+    por = {pid: {"ofrecidas": [["a", f["orden"], f["actividad"], f.get("termino", "")] for f in elegidas],
+                 "marcadas": ticks, "hechas": [], "premarcadas": ticks}}
+    ok2, _m = DL.marcar_revisado(lid, ctx["usuario"], propuestas=PP.registro(
+        por, app=DLU._version_app(), lector="%s/p%s/chat" % (reg.get("modelo", ""), reg.get("prompt", ""))))
+    if ok2:
+        DLU._aprender(reg, por, ctx["grupo"], ctx["usuario"], lid)
+    return True, t("Credited {n} activities from your log.", n=len(ticks))
+
+
 def confirmar(accion, ctx) -> tuple:
     """Hace lo que la tarjeta dice: `(ok, mensaje)`. Solo lo llama el toque de Confirm (`chat_ui`).
     ⚠️ Con la identidad de la SESIÓN, y la obra se vuelve a comprobar: la cuadrilla pudo cambiar."""
@@ -344,7 +436,12 @@ def confirmar(accion, ctx) -> tuple:
             from core import daily_log as DL
             prj = _obra(d, ctx)
             ok, r = DL.crear(str(prj.get("ID", "")), g, d.get("text"), u, dia=d.get("date"))
-            return (True, t("Daily log saved. Open it in **Daily log** to confirm what it proposes.")) if ok else (False, str(r))
+            if not ok:
+                return False, str(r)
+            # v646 · Y lo lee el agente del parte: lo que tenga claro, en una tarjeta para acreditar (decisión del usuario)
+            _mas = _ofrecer_credito(str(r), prj, str(d.get("text") or ""), str(d.get("date") or ""), ctx)
+            return True, (t("Daily log saved.") + " " + _mas if _mas
+                          else t("Daily log saved. Open it in **Daily log** to confirm what it proposes."))
         if tipo == "aviso":
             from core import alerts
             prj = _obra(d, ctx)
@@ -358,6 +455,8 @@ def confirmar(accion, ctx) -> tuple:
             _m = (t("{x} recorded ({i}).", x=AU.nombre_tipo(d.get("tipo")), i=r) if not AU.TIPOS[d.get("tipo")]["aprobacion"]
                   else t("Request sent ({i}). We will let you know when it is resolved.", i=r))
             return True, _m + (" " + aviso if aviso else "")
+        if tipo == "credito":
+            return _confirmar_credito(d, ctx)
         if tipo in _CONFIRMAR_OFICINA:
             return _CONFIRMAR_OFICINA[tipo](d, ctx)
     except _Negado as e:
@@ -449,6 +548,8 @@ def _bandejas(entrada, ctx) -> dict:
     _dias = FC.dias_sin_registro(g)
     _als = _alarmas_abiertas(g)
     _cors = CO.list_group(g)
+    from core import daily_log as DL, daily_log_ui as DLU
+    _partes = DLU.partes_para_la_oficina(g)
     _obras = {str(o.get("ID", "")): o.get("Name", "") for o in _mis_obras(ctx)}
     return {
         "absences_to_approve": [{"id": r.get("ID", ""), "who": _quien(r), "type": AU.nombre_tipo(str(r.get("Type", ""))),
@@ -465,7 +566,13 @@ def _bandejas(entrada, ctx) -> dict:
                          "from": nom.get(str(r.get("CreatedBy", "")), r.get("CreatedBy", "")), "date": dmy(r.get("Date", ""))}
                         for r in _als[:MAX_LISTA]],
         "days_worked_without_records": {"count": len(_dias), "latest": [
-            {"date": dmy(x["fecha"]), "job": x["nombre"], "project_id": x["pid"], "missing": x["falta"]} for x in _dias[:MAX_LISTA]]}}
+            {"date": dmy(x["fecha"]), "job": x["nombre"], "project_id": x["pid"], "missing": x["falta"]} for x in _dias[:MAX_LISTA]]},
+        # v646 · Los partes que su autor no revisó en 2 días: la oficina los confirma por él (decisión del usuario)
+        "daily_logs_waiting_review": {"count": len(_partes), "after_days": DL.DIAS_OFICINA,
+                                      "where": "Projects → the job → Status, at the bottom (Daily logs)", "latest": [
+            {"log_id": r.get("ID", ""), "job": _obras.get(str(r.get("ProjectID", "")), r.get("ProjectID", "")),
+             "project_id": r.get("ProjectID", ""), "author": nom.get(str(r.get("Author", "")), r.get("Author", "")),
+             "date": dmy(r.get("Date", "")), "days_waiting": DL.dias_sin_revisar(r, clock.today(g))} for r in _partes[:MAX_LISTA]]}}
 
 
 def _dinero(entrada, ctx) -> dict:
@@ -836,7 +943,8 @@ PREPARAR = [
                       "properties": {"project_id": _ID_OBRA, "text": {"type": "string", "description": "What they said they did, in their own words."},
                                      "date": {"type": "string", "description": "YYYY-MM-DD, only if it is not for today."}}},
      "description": "Prepare the person's daily log for a job. It shows them a card to confirm and saves nothing yet. Call "
-                    "it when they tell you what they did and ask you to write it up. Add nothing they did not say."},
+                    "it when they tell you what they did and ask you to write it up. Add nothing they did not say. Once it is "
+                    "saved, the app reads it and may offer a second card to credit what it clearly says."},
     {"name": "prepare_office_alert", "fn": _preparar_aviso,
      "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "message"],
                       "properties": {"project_id": _ID_OBRA, "message": {"type": "string", "description": "The problem, clear and short."}}},
@@ -869,7 +977,7 @@ LECTURA_OFICINA = [
                     "working, who is off, who is free."},
     {"name": "get_inbox", "fn": _bandejas, "input_schema": _SIN_ENTRADA,
      "description": "What is waiting for the office: absences to approve, time fixes to review, sick days over balance to decide, open "
-                    "alerts, and days worked with no Pre-Start or false car check. Call it for anything about what is pending."},
+                    "alerts, daily logs their author has not reviewed in 2 days, and days worked with no Pre-Start or false car check. Call it for anything about what is pending."},
     {"name": "get_money", "fn": _dinero,
      "input_schema": {"type": "object", "additionalProperties": False,
                       "properties": {"project_id": {"type": "string", "description": "One job, like PRJ-0027. Without it, the whole company."},
@@ -921,7 +1029,7 @@ PREPARAR_OFICINA = [
 OFICINA = LECTURA_OFICINA + DIRECTAS + PREPARAR_OFICINA
 _POR_ROL = {"field": TODAS, "administrator": OFICINA}
 # ⚠️ v644 · Lo que cada rol puede confirmar: `confirmar` lo mira antes de nada
-_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia"), "administrator": tuple(_CONFIRMAR_OFICINA)}
+_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia", "credito"), "administrator": tuple(_CONFIRMAR_OFICINA)}
 
 
 def definiciones(rol, usuario="") -> list:

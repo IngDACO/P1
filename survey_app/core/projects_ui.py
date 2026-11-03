@@ -492,6 +492,10 @@ def _resumen_del_dia(grupo: str):
         ("sobrep", ":material/payments:", "Over budget", False, len(d.get("sobre_presupuesto", [])),
          "finanzas", "💰 Gastos", "Expenses",
          lambda: f"{len(d.get('sobre_presupuesto', []))} project(s) over budget"),
+        # v646 · Los partes que su autor no revisó en 2 días: se confirman por él en la obra → Status, abajo.
+        ("partes", ":material/rate_review:", "Logs to review", False, len(d.get("partes_por_revisar", [])),
+         "proyectos", "📊 Proyectos", "Projects",
+         lambda: ", ".join(f"{x['nombre']} · {x['autor']} ({x['dias']}d)" for x in d.get("partes_por_revisar", [])[:15])),
     ]
     _urg = sum(c for (_s, _i, _l, u, c, *_r) in inds if u)
     _tot = sum(c for (_s, _i, _l, _u, c, *_r) in inds)
@@ -583,7 +587,8 @@ def _resumen_del_dia(grupo: str):
                     # schedule → Go to Projects» la abría en «All» (visto en v544). Retraso
                     # es un filtro de la cartera; el resto, la lista de esas obras.
                     _solo_ids = {"vencidos": d["vencidos"], "porvencer": d["por_vencer"],
-                                 "sinasig": d["sin_asignar"], "alarmas": d["alarmas"]}.get(slug)
+                                 "sinasig": d["sin_asignar"], "alarmas": d["alarmas"],
+                                 "partes": d.get("partes_por_revisar", [])}.get(slug)
                     if slug == "retrasos":
                         st.session_state["_cart_pending"] = {"filtro": "🔴 Retraso"}
                     elif _solo_ids:

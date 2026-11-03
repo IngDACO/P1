@@ -177,6 +177,9 @@ ALS = [{"ID": "ALR-1", "Group": "cliente1", "Status": "abierta", "ProjectID": "P
        {"ID": "ALR-2", "Group": "cliente1", "Status": "resuelta", "ProjectID": "PRJ-1", "Message": "Vieja", "CreatedBy": "x", "Date": "2026-10-01"},
        {"ID": "ALR-3", "Group": "otro", "Status": "abierta", "ProjectID": "PRJ-9", "Message": "De otra", "CreatedBy": "x", "Date": "2026-11-01"}]
 AL._alarmas_visibles = lambda: list(ALS)
+# v646 · la bandeja mira también los partes que esperan a la oficina (verif_v646): sin leer la hoja
+from core import daily_log_ui as _DLU                             # noqa: E402
+_DLU.partes_para_la_oficina = lambda g: []
 
 
 def octx(**k):

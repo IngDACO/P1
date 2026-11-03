@@ -81,10 +81,10 @@ _fn = next(n for n in ast.walk(_arb) if isinstance(n, ast.FunctionDef)
 _t = ast.get_source_segment(_src, _fn) or ""
 check("...dentro del bloque de canales", "_ACTIVE_OK" in _t)
 
-print("\n== 4) la rejilla del resumen sigue siendo de NUEVE ==")
+print("\n== 4) la rejilla del resumen sigue siendo de DIEZ (v646: el décimo, los partes sin revisar) ==")
 check("`avisos_sin_canal` NO entra en _PENDING_KEYS",
       "avisos_sin_canal" in AD._PENDING_KEYS, False)
-check("siguen siendo 9 claves", len(AD._PENDING_KEYS), 9)
+check("siguen siendo 10 claves", len(AD._PENDING_KEYS), 10)
 # y un grupo cuyo ÚNICO 'pendiente' fuera este no debe marcarse como pendiente
 _fake = {k: [] for k in AD._PENDING_KEYS}
 _fake["avisos_sin_canal"] = [{"usuario": "x", "rol": "administrator"}]

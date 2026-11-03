@@ -83,6 +83,8 @@ def apunta(nombre, res):
 # ⚠️ v643 · Confirmar guarda la conversación: sin esto, cada suite escribía en la hoja `ChatMemory` real de cliente1
 from core import chat_memoria as _CM                              # noqa: E402
 _CM.guardar = lambda *a, **k: True
+# v646 · Guardar un parte desde el chat lo LEE el agente del parte (API de pago): eso lo prueba verif_v646, aquí no
+CT._ofrecer_credito = lambda *a, **k: ""
 TA.crear = apunta("TA.crear", (True, "TSK-9"))
 TA.marcar = apunta("TA.marcar", (True, "ok"))
 DL.crear = apunta("DL.crear", (True, "DL-9"))
@@ -115,7 +117,12 @@ _mal = ("clock", "sign", "firm", "submit", "credit", "progress", "prestart", "pr
 chk("⚠️ fichar, firmar, enviar o acreditar no existen como herramienta", not [n for n in _nom if any(x in n.lower() for x in _mal)], _nom)
 _s = leer("core/chat_tools.py")
 _ll = {n.func.attr for n in ast.walk(ast.parse(_s)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
-chk("⚠️ y el módulo no llama a nada de eso", not (_ll & {"clock_in", "clock_out", "fichar_proyecto", "cerrar_jornada", "firmar", "submit", "acreditar", "save_field_progress", "borrar", "cancelar"}), _ll)
+# ⚠️ v646 · CADUCADO EN PARTE por decisión del usuario: acreditar desde el chat SÍ, pero solo desde la tarjeta que
+# confirma su autor tras guardar un parte (`_confirmar_credito`). Lo demás sigue sin existir.
+chk("⚠️ y el módulo no llama a nada de eso", not (_ll & {"clock_in", "clock_out", "fichar_proyecto", "cerrar_jornada", "firmar", "submit", "save_field_progress", "borrar", "cancelar"}), _ll)
+_quien_acredita = {f.name for f in ast.walk(ast.parse(_s)) if isinstance(f, ast.FunctionDef)
+                   and any(isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "acreditar" for n in ast.walk(f))}
+chk("⚠️ acreditar, solo desde la tarjeta que confirma su autor", _quien_acredita == {"_confirmar_credito"}, _quien_acredita)
 # ⚠️ v643 · El P&L de la oficina dice «payroll_cost», que es un total: lo que no debe entrar es el módulo
 chk("sigue sin nóminas", "import payroll" not in _s and "payroll as" not in _s and ", payroll" not in _s)
 chk("⚠️ cada una dice si guarda o no", all(("no confirmation" in h["description"]) or ("card to confirm" in h["description"]) for h in CT.definiciones("field", "x")[5:]), [h["name"] for h in CT.definiciones("field", "x")[5:]])

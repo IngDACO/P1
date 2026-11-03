@@ -416,8 +416,12 @@ def _llama(fn, attr):
             and (getattr(n.func, "attr", "") == attr or getattr(n.func, "id", "") == attr)]
 
 
-chk("la vista del admin NO pinta la tarjeta (no confirma por el autor)",
-    "render_admin" in _fn and not _llama(_fn["render_admin"], "_propuestas"))
+# ⚠️ v646 · CADUCADO por decisión del usuario: la oficina confirma por el autor, pero SOLO lo que ya espera a la
+# oficina (`DL.para_la_oficina`, 2 días sin revisar) y con la tarjeta en modo oficina (verif_v646).
+_pa = _llama(_fn["render_admin"], "_propuestas") if "render_admin" in _fn else []
+chk("la vista del admin solo pinta la tarjeta de lo que ya espera a la oficina, en modo oficina",
+    len(_pa) == 1 and any(k.arg == "oficina" and getattr(k.value, "value", None) is True for k in _pa[0].keywords)
+    and bool(_llama(_fn["render_admin"], "para_la_oficina")))
 # ⚠️ Al confirmar se vuelve a mirar que cada destino sea una obra SUYA, y ANTES de acreditar.
 _pr = _fn.get("_propuestas")
 _ok_dest = False

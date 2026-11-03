@@ -125,9 +125,9 @@ ROTURAS = [
 
     ("el admin pasa a poder BORRAR partes ajenos",
      "core/daily_log_ui.py",
-     "        _linea(r, False, key_prefix, extra=lambda r=r: _estado_revision(r, pid))",
-     "        _linea(r, True, key_prefix, extra=lambda r=r: _estado_revision(r, pid))\n"
-     "        DL.borrar(r.get('ID'), 'admin') if False else None"),
+     "        _linea(r, False, key_prefix,\n               extra=(lambda r=r: _propuestas(",
+     "        DL.borrar(r.get('ID'), 'admin') if False else None\n"
+     "        _linea(r, True, key_prefix,\n               extra=(lambda r=r: _propuestas("),
 
     # v615 · re-anclada: detrás de «Parte» va ahora «Tareas» (la rotura es la MISMA).
     ("el campo pierde su seccion (la pantalla deja de existir)",

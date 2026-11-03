@@ -137,7 +137,8 @@ def atender() -> None:
         memorizar()
         return
     with st.spinner(t("Saving…")):
-        ok, msg = CT.confirmar(a, _contexto())
+        # v646 · con la lista: confirmar un parte puede dejar la tarjeta para acreditar lo que dice
+        ok, msg = CT.confirmar(a, {**_contexto(), "acciones": lista})
     if not ok:
         lista.append(a)
     _hist.append({"role": "assistant", "content": ("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})

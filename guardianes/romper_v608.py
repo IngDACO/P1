@@ -35,13 +35,12 @@ ROTURAS = [
      [('            if not (_sig and (_sig.get("pruebas") or []) == (f.get("pruebas") or [])\n',
        '            if True or not (_sig and (_sig.get("pruebas") or []) == (f.get("pruebas") or [])\n')]),
     ("los problemas de un parte SIN tarjeta no se enseñan", DLU,
-     [('        _nada_que_confirmar(_prev)      # v586 · antes, nada debajo\n        if reg:\n'
-       '            _problemas(reg, r, kp)\n',
-       '        _nada_que_confirmar(_prev)      # v586 · antes, nada debajo\n        if reg:\n')]),
+     [('        elif reg:\n            _problemas(reg, r, kp)\n',
+       '        elif reg:\n')]),
     ("los problemas de la tarjeta no se enseñan", DLU,
-     [('        n = sum(len(v["marcadas"]) for v in por_destino.values())\n        if reg:\n'
+     [('        n = sum(len(v["marcadas"]) for v in por_destino.values())\n        if reg and not oficina:\n'
        '            _problemas(reg, r, kp)\n',
-       '        n = sum(len(v["marcadas"]) for v in por_destino.values())\n        if reg:\n')]),
+       '        n = sum(len(v["marcadas"]) for v in por_destino.values())\n        if reg and not oficina:\n')]),
     ("⚠️ lo ya enviado vuelve a ofrecer el botón", DLU,
      [('        if tx in _ya:\n', '        if False:\n')]),
     ("⚠️ lo enviado no se apunta en la lectura (se avisaría dos veces)", DLU,

@@ -97,7 +97,8 @@ for n in ast.walk(_fn):
                 and isinstance(e5.value, str) and isinstance(e6.value, str):
             _saltos.append(("projects_ui.py:inds", n.lineno, e5.value, e6.value))
             _inds += 1
-check("los 9 indicadores del resumen se pudieron LEER", _inds, 9)   # no pasar en vacio
+# v646 · el décimo, los partes sin revisar (decisión del usuario): 2 filas de 5
+check("los 10 indicadores del resumen se pudieron LEER", _inds, 10)   # no pasar en vacio
 
 # ⚠️ v305: el reparto en filas usa `zip(st.columns(N), fila)`, y `zip` TRUNCA: si una
 # fila tiene mas elementos que columnas, los sobrantes desaparecen SIN ERROR. Se
@@ -106,15 +107,15 @@ _cols = [c.args[0].value for c in ast.walk(_fn) if isinstance(c, ast.Call)
          and getattr(c.func, "attr", "") == "columns" and c.args
          and isinstance(c.args[0], ast.Constant)]
 _cortes = [(s.slice.lower.value if s.slice.lower else 0,
-            s.slice.upper.value if s.slice.upper else 9)
+            s.slice.upper.value if s.slice.upper else 10)
            for s in ast.walk(_fn) if isinstance(s, ast.Subscript)
            and isinstance(s.slice, ast.Slice)
            and isinstance(s.value, ast.Name) and s.value.id == "inds"]
 check("el reparto en filas se pudo LEER", bool(_cols) and bool(_cortes), True)
 check("ninguna fila tiene mas indicadores que columnas (zip truncaria)",
       [(a, b) for (a, b) in _cortes if (b - a) > max(_cols)], [])
-check("las filas cubren los 9 indicadores, sin huecos ni solapes",
-      sorted({i for a, b in _cortes for i in range(a, b)}), list(range(9)))
+check("las filas cubren los 10 indicadores, sin huecos ni solapes",
+      sorted({i for a, b in _cortes for i in range(a, b)}), list(range(10)))
 print(f"         filas={_cortes} · columnas={_cols}")
 check("hay saltos que revisar (no es una lista vacia)", len(_saltos) >= 12, True)
 

@@ -99,6 +99,9 @@ CR.expiring = lambda g, days=30: [{"usuario": "helper", "tipo": "EWP", "vencimie
 AU.pendientes = lambda g: [{"ID": "AUS-1", "User": "helper", "Name": "x", "Type": "libre", "From": "2026-11-10", "To": "2026-11-11", "Days": "2", "Reason": "Family"}]
 # v644 · la bandeja mira también si otra posterior la sustituyó: sin esto leería la hoja real
 CO.list_group = lambda g, estado=None, usuario=None: CO.pendientes(g)
+# v646 · la bandeja mira también los partes que esperan a la oficina (verif_v646): sin leer la hoja
+from core import daily_log_ui as _DLU                             # noqa: E402
+_DLU.partes_para_la_oficina = lambda g: []
 CO.pendientes = lambda g: [{"ID": "COR-1", "User": "campo000", "Name": "x", "Project": "Bondi", "Field": "Clock In", "OldValue": "07:00", "NewValue": "06:30", "Reason": "forgot", "PayslipCovers": "NOM-3"}]
 AU.excesos_por_decidir = lambda g: [{"id": "AUS-2", "usuario": "u9", "nombre": "Nueve", "dias": [1, 2, 3]}]
 AL._alarmas_visibles = lambda: [{"ID": "AL-1", "Group": "cliente1", "Status": "abierta", "ProjectID": "PRJ-1", "Message": "Door jammed", "CreatedBy": "helper", "Date": "2026-11-02"},

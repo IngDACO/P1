@@ -258,7 +258,7 @@ def reparto(texto, asignacion, tambien=(), sin_responder=()) -> dict:
 # ═════════════════════════════════════════════════════════════════
 # v524 · El registro de la revisión: lo ofrecido y lo marcado
 # ═════════════════════════════════════════════════════════════════
-def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False, lector="") -> str:
+def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False, lector="", en_nombre_de="") -> str:
     """Lo que la pantalla ENSEÑÓ y lo que el usuario MARCÓ al revisar un parte, en JSON.
 
     `por_destino` = `{obra: {"ofrecidas": [[tipo, orden, actividad, termino]],
@@ -281,10 +281,16 @@ def registro(por_destino, respuestas=None, ascensores=None, app="", nada=False, 
             "marcadas": [] if nada else [[int(o), str(a)] for o, a in x.get("marcadas") or []],
             "hechas": [[int(o), str(a)] for o, a in x.get("hechas") or []],
         }
+        # v646 · Las que el agente dejó MARCADAS de antes: sin esto, lo que marcó el autor y lo que no desmarcó
+        # serían lo mismo, y el acierto del agente saldría inflado.
+        if x.get("premarcadas"):
+            dest[str(d)]["premarcadas"] = [[int(o), str(a)] for o, a in x.get("premarcadas") or []]
     out = {"v": REGISTRO_V, "app": str(app or ""), "nada": bool(nada), "destinos": dest,
            "dudosos": dict(respuestas or {}), "ascensores": dict(ascensores or {})}
     if lector:
         out["lector"] = str(lector)
+    if en_nombre_de:
+        out["en_nombre_de"] = str(en_nombre_de)      # v646 · lo confirmó la oficina por su autor
 
     def _js(o):
         return json.dumps(o, ensure_ascii=False, separators=(",", ":"))

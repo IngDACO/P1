@@ -130,6 +130,19 @@ def group_digest(grupo) -> dict:
     except Exception:
         pass
 
+    # v646 · Los partes que su autor no revisó en 2 días: la oficina los puede confirmar por él (decisión del usuario)
+    partes = []
+    try:
+        from core import daily_log as _DL, daily_log_ui as _DLU
+        _nm = nombres_usuarios()
+        for r in _DLU.partes_para_la_oficina(grupo):
+            _pid = str(r.get("ProjectID", ""))
+            partes.append({"id": _pid, "nombre": name.get(_pid, _pid), "log": str(r.get("ID", "")),
+                           "autor": _nm.get(str(r.get("Author", "")), str(r.get("Author", ""))),
+                           "desde": str(r.get("Created", ""))[:10], "dias": _DL.dias_sin_revisar(r, hoy)})
+    except Exception as e:
+        logger.warning("digest: no se pudieron mirar los partes sin revisar: %s", e)
+
     avances = [P._num(p.get("Progress")) for p in proys]
     return {
         "grupo": grupo,
@@ -141,17 +154,17 @@ def group_digest(grupo) -> dict:
         "vencidos": sorted(vencidos, key=lambda x: x["dias"]),
         "near_miss": near, "campo_sin_contacto": campo_sin, "sin_asignar": sin_asig,
         "cred_venc": cred_venc, "sobre_presupuesto": sobre_pres,
-        "avisos_sin_canal": avisos_sin_canal,
+        "avisos_sin_canal": avisos_sin_canal, "partes_por_revisar": partes,
     }
 
 
 # ⚠️ `avisos_sin_canal` NO entra aquí: `has_pending` decide si el resumen del día
-# tiene algo que decir, y su rejilla es de NUEVE indicadores fijos en 2 filas (v305).
-# Meter un décimo rompería ese reparto y su guardián. El dato se muestra donde se
+# tiene algo que decir, y su rejilla es de DIEZ indicadores fijos en 2 filas de 5 (v305; el décimo, los partes
+# sin revisar, en v646). Meter un undécimo rompería ese reparto y su guardián. El dato se muestra donde se
 # arregla —Planificación · Usuarios— y el agente lo conoce por `digest_text`.
 _PENDING_KEYS = ("retrasos", "alarmas", "por_vencer", "vencidos",
                  "near_miss", "campo_sin_contacto", "sin_asignar", "cred_venc",
-                 "sobre_presupuesto")
+                 "sobre_presupuesto", "partes_por_revisar")
 
 
 def has_pending(d) -> bool:
@@ -237,6 +250,9 @@ def digest_text(d) -> str:
     if d.get("sobre_presupuesto"):
         L.append(t("Over budget:") + " "
                  + "; ".join(f"{x['nombre']} ({x['pct']}%)" for x in d["sobre_presupuesto"]))
+    if d.get("partes_por_revisar"):
+        L.append(t("Daily logs their author has not reviewed for 2 days or more (the office can confirm them):") + " "
+                 + "; ".join(f"{x['nombre']} · {x['autor']} ({x['dias']} d)" for x in d["partes_por_revisar"]))
     if len(L) == 1:
         L.append(t("No urgent items."))
     return "\n".join(L)

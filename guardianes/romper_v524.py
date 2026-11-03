@@ -64,15 +64,15 @@ ROTURAS = [
      PPR, '"marcadas": [] if nada else [[int(o), str(a)] for o, a in x.get("marcadas") or []],',
      '"marcadas": [[int(o), str(a)] for o, a in x.get("marcadas") or []],'),
 
-    ("«Confirm» se registra como «nada»", UI, "propuestas=_registro(False))",
-     "propuestas=_registro(True))"),
+    ("«Confirm» se registra como «nada»", UI, "propuestas=_registro(False),\n",
+     "propuestas=_registro(True),\n"),
 
-    ("«Nothing to credit» se registra como confirmado", UI, "propuestas=_registro(True))",
-     "propuestas=_registro(False))"),
+    ("«Nothing to credit» se registra como confirmado", UI, "propuestas=_registro(True),\n",
+     "propuestas=_registro(False),\n"),
 
     ("al confirmar no se pasa el registro (se revisa sin el)",
-     UI, "DL.marcar_revisado(lid, usuario, propuestas=_registro(False))",
-     "DL.marcar_revisado(lid, usuario)"),
+     UI, "DL.marcar_revisado(lid, usuario, propuestas=_registro(False),\n",
+     "DL.marcar_revisado(lid, usuario,\n"),
 
     # ── (c) donde y como se escribe ──────────────────────────────────────────
     ("el registro no se escribe (se revisa sin guardarlo)",

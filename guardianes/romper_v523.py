@@ -42,8 +42,8 @@ ROTURAS = [
     # asi que `elif st.checkbox` paso a `if st.checkbox` en un bloque propio. Mismas roturas;
     # sus anclas murieron y NADIE avisaba: check_anclas_roturas no leia las tuplas con el
     # fichero en una constante (UI, PPR...). Arreglado alli tambien.
-    ("las casillas nacen MARCADAS (confirmar de un toque acreditaria todo lo leido)",
-     UI, 'if st.checkbox(f["actividad"], key=',
+    ("las casillas nacen MARCADAS todas, tambien sin el agente (v646: solo lo que el agente tiene claro)",
+     UI, 'if st.checkbox(f["actividad"], value=_seg, key=',
      'if st.checkbox(f["actividad"], value=True, key='),
 
     ("se acredita lo NO marcado de la lista de una etapa (la casilla al reves)",
@@ -147,10 +147,8 @@ ROTURAS = [
 
     ("cualquiera puede revisar el parte de OTRO",
      DLG,
-     '        if str(r.get("Author", "")) != str(quien):\n'
-     '            return False, t("Only the person who wrote it can review its proposals.")',
-     '        if False:\n'
-     '            return False, t("Only the person who wrote it can review its proposals.")'),
+     '        if str(r.get("Author", "")) != str(quien) and not (\n',
+     '        if False and not (\n'),
 
     ("la fecha de revision se escribe en OTRA columna (pisa `Created`)",
      DLG, 'col_letter(_COL["Reviewed"]), i + 2)', 'col_letter(_COL["Created"]), i + 2)'),

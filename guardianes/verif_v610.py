@@ -337,9 +337,12 @@ chk("la pantalla se pinta sin excepción", not at.exception, [e.value for e in a
 chk("la lectura recibe la memoria", at.session_state["_mem_llamadas"][:1] == [
     "CREW MEMORY — test\n- «zz» → Install sills (confirmed 2×)"], at.session_state["_mem_llamadas"])
 _c = [c for c in at.checkbox if c.key.startswith("fld_pp_LOG-9301_PRJ-9001_a_")]
+# v646 · lo que el agente vio claro viene MARCADO: se deja solo «Install headers», y lo otro queda sin marcar
 for c in _c:
     if c.key.endswith("Install headers"):
         c.check()
+    else:
+        c.uncheck()
 at.run()
 _bt(at, "fld_pp_LOG-9301_ok").click()
 at.run()
@@ -369,7 +372,9 @@ chk("lo leído por el VOCABULARIO no enseña (sus términos no son frases)",
 at4 = AppTest.from_string(APP, default_timeout=90)
 at4.session_state["_mem_falla"] = True
 at4.run()
-[c for c in at4.checkbox if c.key.endswith("Install headers")][0].check()
+for c in at4.checkbox:                      # v646 · solo «Install headers», como arriba
+    if c.key.startswith("fld_pp_LOG-9301_PRJ-9001_a_"):
+        (c.check() if c.key.endswith("Install headers") else c.uncheck())
 at4.run()
 _bt(at4, "fld_pp_LOG-9301_ok").click()
 at4.run()

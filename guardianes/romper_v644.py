@@ -29,8 +29,8 @@ ROTURAS = [
     ("⚠️ confirmar no mira el rol", T,
      [("""    if tipo not in _TARJETAS_DE.get(str(ctx.get("rol", "")), ()):\n        return False, t("This action is not recognised.")\n""", "")]),
     ("⚠️ el campo puede confirmar las de la oficina", T,
-     [("""_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia"), "administrator": tuple(_CONFIRMAR_OFICINA)}\n""",
-       """_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia") + tuple(_CONFIRMAR_OFICINA), "administrator": tuple(_CONFIRMAR_OFICINA)}\n""")]),
+     [("""_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia", "credito"), "administrator": tuple(_CONFIRMAR_OFICINA)}\n""",
+       """_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia", "credito") + tuple(_CONFIRMAR_OFICINA), "administrator": tuple(_CONFIRMAR_OFICINA)}\n""")]),
     # ── Preparar no hace nada ──
     ("⚠️ preparar una decisión ya decide", T,
      [("""    aprobar = _decision(entrada, ("approve", "reject")) == "approve"\n""",

@@ -11,6 +11,7 @@ caso normal —escribo hoy lo de hoy— no paga el precio de un widget más, y e
 invitado a tocarlo, y un parte con fecha equivocada es peor que uno sin fecha.
 """
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -153,15 +154,17 @@ def _prueba(item) -> None:
         st.caption("  \n".join([x for x in [_txt] + _extra if x]))
 
 
-def _pintar(p, k, titulo=True) -> dict:
+def _pintar(p, k, titulo=True, todo=None) -> dict:
     """Las propuestas de UN destino. Devuelve lo MARCADO y, desde v524, lo que se ENSEÑÓ:
     `{"marcadas": [(orden, actividad)], "ofrecidas": [[tipo, orden, actividad, termino]],
     "hechas": [(orden, actividad)]}` — el registro que mide el acierto.
     ⚠️ Se anota AL PINTAR cada casilla, no se deduce después de `p`: lo que se guarda tiene
     que ser exactamente lo que vio quien confirmó, y dos listas armadas por separado
     acabarían diciendo cosas distintas (regla v361).
-    `titulo=False` cuando encima ya va «→ obra»: repetir el rótulo en cada trozo es ruido."""
-    tick, ofr, hechas = [], [], []
+    `titulo=False` cuando encima ya va «→ obra»: repetir el rótulo en cada trozo es ruido.
+    v646 · `todo` = `(parte, obra)`: lo pendiente lleva «Add to To-do» en esa obra; y vuelve también `premarcadas`, lo
+    que el agente dejó marcado de antes."""
+    tick, ofr, hechas, pre = [], [], [], []
 
     def _ya(o):
         st.markdown(":green[:material/check_circle:] %s · %s"
@@ -178,7 +181,13 @@ def _pintar(p, k, titulo=True) -> dict:
                 _ya(f)
             else:
                 ofr.append(["a", f["orden"], f["actividad"], f.get("termino", "")])
-                if st.checkbox(f["actividad"], key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
+                # ⚠️ v646 · Marcada de antes lo que el AGENTE leyó como hecho sin ningún aviso (decisión del
+                # usuario): el autor la desmarca si no es así, y nada se acredita hasta que confirma. Las dudas y
+                # lo de la lista de palabras, sin marcar.
+                _seg = f.get("fuente") == "agente" and not f.get("aviso")
+                if _seg:
+                    pre.append((f["orden"], f["actividad"]))
+                if st.checkbox(f["actividad"], value=_seg, key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
                                help=_et):
                     tick.append((f["orden"], f["actividad"]))
             # ⚠️ v608 · Dos casillas seguidas que salen del MISMO trozo («Finished with rails
@@ -214,10 +223,13 @@ def _pintar(p, k, titulo=True) -> dict:
                            key="%s_q_%s_%d_%s" % (k, q["termino"], o["orden"], o["actividad"])):
                 tick.append((o["orden"], o["actividad"]))
     if p["pendientes"]:
+        # v646 · con clave: lleva «Add to To-do» dentro (trampa 35, verif_v547)
         with st.expander(t(":material/pending: Pending in your log — not credited ({n})",
-                           n=len(p["pendientes"]))):
-            for x in p["pendientes"]:
+                           n=len(p["pendientes"])), key="%s_exp_pend" % k):
+            for _ip, x in enumerate(p["pendientes"]):
                 st.caption("  ·  ".join("“%s”" % y for y in x["pruebas"]) or x["termino"])
+                if todo:
+                    _boton_tarea(x, todo, "%s_td%d" % (k, _ip))         # v646
     for x in p["retiradas"]:
         st.caption(":material/help: %s  \n%s" % (t(x["motivo"]), "  ·  ".join(
             "“%s”" % y for y in x["pruebas"])))
@@ -228,7 +240,70 @@ def _pintar(p, k, titulo=True) -> dict:
     # ⚠️ Sin repetidos: la misma actividad puede salir en una etapa Y en una pregunta
     # («Lights»), y marcada en las dos el botón decía «3 marcadas» para 2 créditos.
     return {"marcadas": list(dict.fromkeys(tick)), "ofrecidas": ofr,
-            "hechas": list(dict.fromkeys(hechas))}
+            "hechas": list(dict.fromkeys(hechas)), "premarcadas": list(dict.fromkeys(pre))}
+
+
+# ═════════════════════════════════════════════════════════════════
+# v646 · «Add to To-do»: lo PENDIENTE del parte, a la lista de la obra con un toque
+# ═════════════════════════════════════════════════════════════════
+_TAREA = "_dl_tarea"            # lo que pidió «Add to To-do», atendido arriba (trampa 37)
+
+
+def _tarea_de(x) -> str:
+    """El texto de la tarea: las palabras del parte, sin la cabecera «Pending:» delante."""
+    tx = str(((x.get("pruebas") or [""])[0]) or x.get("termino") or "").strip()
+    return re.sub(r"^\s*(?:pendings?|issues?|to ?do)\s*[:\-–]\s*", "", tx, flags=re.I).strip()
+
+
+def _boton_tarea(x, todo, kb) -> None:
+    """El botón, o que ya está en la lista (pendiente, con el mismo texto): no se apunta dos veces."""
+    lid, pid = todo
+    tx = _tarea_de(x)
+    if not tx:
+        return
+    from core import tareas as TA
+    if any(TA.normaliza(r.get("Text")) == TA.normaliza(tx) for r in TA.pendientes(pid)):
+        st.caption(t(":material/check: In the job's To-do."))
+        return
+    st.button(t(":material/add_task: Add to To-do"), key=kb, type="tertiary", on_click=_pedir_tarea,
+              args=(lid, pid, tx))
+
+
+def _pedir_tarea(lid, pid, texto) -> None:
+    st.session_state[_TAREA] = {"lid": str(lid), "pid": str(pid), "texto": str(texto)}
+
+
+def _apuntar_tarea(grupo, usuario, mias) -> None:
+    """Atiende «Add to To-do». ⚠️ Solo en una obra que puede tocar quien pulsa (`mias`), y con él de autor."""
+    pet = st.session_state.pop(_TAREA, None)
+    if not pet or pet.get("pid") not in mias:
+        return
+    from core import tareas as TA
+    with st.spinner(t("Saving…")):
+        ok, r = TA.crear(pet["pid"], grupo, pet["texto"], usuario)
+    (flash.exito if ok else flash.error)(t("Added to the job's To-do ({x}).", x=r) if ok else str(r))
+    st.rerun()
+
+
+def _pendientes_a_todo(p, todo, kp) -> None:
+    """Lo pendiente de un parte SIN nada que acreditar, cada uno con su «Add to To-do» (con tarjeta va en `_pintar`)."""
+    for i, x in enumerate(p.get("pendientes") or []):
+        if _tarea_de(x):
+            st.caption("“%s”" % literal_md(_tarea_de(x)))
+            _boton_tarea(x, todo, "%s_tdn%d" % (kp, i))
+
+
+def partes_para_la_oficina(grupo) -> list:
+    """v646 · Los partes que ya esperan a la oficina y que se PUEDEN confirmar: los de obras con plan. En una sin plan, o
+    interna, no hay nada que acreditar, y se quedarían en su bandeja para siempre."""
+    _con_plan, out = {}, []
+    for r in DL.esperan_a_la_oficina(grupo):
+        pid = str(r.get("ProjectID", ""))
+        if pid not in _con_plan:
+            _con_plan[pid] = bool(_plan_de(pid))
+        if _con_plan[pid]:
+            out.append(r)
+    return out
 
 
 def _resto_agente(p) -> None:
@@ -325,7 +400,7 @@ def _plan_de(pid) -> list:
     return SP.plan_de_obra(prj)
 
 
-def _leer_pendientes(pid, usuario, partes) -> None:
+def _leer_pendientes(pid, usuario, partes, oficina=False) -> None:
     """Lee con el agente los partes PROPIOS sin revisar que aún no tienen lectura.
 
     ⚠️ El primero SOLO y el resto en paralelo: llamadas simultáneas no comparten la caché del
@@ -341,8 +416,12 @@ def _leer_pendientes(pid, usuario, partes) -> None:
     plan = _plan_de(pid)
     if not plan:
         return
+    # v646 · `oficina`: los que ya esperan a la oficina. Su autor no abrió la pantalla, y sin lectura saldrían con la
+    # lista de palabras.
+    _hoy = clock.today()
     falta = [r for r in partes
-             if str(r.get("Author", "")) == str(usuario) and not DL.revisado(r)
+             if (DL.para_la_oficina(r, _hoy) if oficina
+                 else str(r.get("Author", "")) == str(usuario) and not DL.revisado(r))
              and str(r.get("Text", "")).strip() and not _lectura(r, plan)
              and not _fallo(r.get("ID"))]
     if not falta:
@@ -617,8 +696,12 @@ def _nada_que_confirmar(p) -> None:
                      "in this log. If something advanced, mark it in «Progress»."))
 
 
-def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
-    """La tarjeta de UN parte propio y sin revisar."""
+def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
+    """La tarjeta de UN parte propio y sin revisar. v646 · `oficina`: la de un parte que ya espera a la oficina, que
+    lo confirma en nombre de su autor: con las obras del AUTOR, y `ReviewedBy` = quien confirma. Sin «Tell the
+    office» ni «Read it again» (son del autor), y la memoria no aprende de ella."""
+    _autor = str(r.get("Author", "") or "")
+    _de = _autor if oficina else usuario
     from core import parte_agente as AG
     from core import parte_propuestas as PP
     from core import projects as P
@@ -655,7 +738,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     dudosos = [d for d in asc["dudosos"] if _propone(PP.lineas_de(texto, d))]
     partir = asc["separar"] or bool(dudosos)
     tambien, asignacion = [], {"": str(pid)}
-    ops = _asignables(usuario, grupo, pid) if partir else None
+    ops = _asignables(_de, grupo, pid) if partir else None
     # Vista previa: ¿hay algo que confirmar? Si no, no se pinta tarjeta. ⚠️ Si la nota se
     # va a repartir, sin lo acreditado: lo hecho depende de la obra de DESTINO, y con lo
     # de esta, un ascensor ya terminado aquí escondería el trabajo de otro.
@@ -663,7 +746,16 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
     # ⚠️ v607 · Con algo SIN ENTENDER también hay tarjeta: es donde se le contesta al agente.
     if not _prev["hay_algo"] and not (reg and AG.sin_entender(reg)):
         _nada_que_confirmar(_prev)      # v586 · antes, nada debajo
-        if reg:
+        _pendientes_a_todo(_prev, (lid, str(pid)), kp)        # v646
+        if oficina:
+            # v646 · Sin nada que acreditar, la oficina lo cierra: si no, esperaría en su bandeja para siempre.
+            if st.button(t("Nothing to credit"), key="%s_no" % kp, type="tertiary"):
+                with st.spinner(t("Saving…")):
+                    ok, msg = DL.marcar_revisado(lid, usuario, propuestas=PP.registro({}, nada=True, en_nombre_de=_autor),
+                                                 oficina=grupo)
+                (flash.exito if ok else flash.error)(msg)
+                st.rerun()
+        elif reg:
             _problemas(reg, r, kp)
             _hablar(reg, lid, kp)
         else:
@@ -671,9 +763,19 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
         return
 
     with st.container(border=True):
-        st.markdown(t("##### :material/auto_awesome: What the assistant read in your log") if reg
-                    else t("##### :material/auto_awesome: What the app read in your log"))
-        st.caption(t("Tick only what is true. Nothing is credited until you confirm."))
+        if oficina:
+            # v646 · La oficina confirma por el autor: se dice de quién es el parte y cuánto lleva esperando.
+            st.markdown(t("##### :material/rate_review: {who}'s log, {n} days without review", who=_nombre(_autor),
+                          n=DL.dias_sin_revisar(r, clock.today(grupo))))
+            st.caption(t("You can confirm it on their behalf: it is recorded with your name. Nothing is credited "
+                         "until you confirm."))
+        else:
+            st.markdown(t("##### :material/auto_awesome: What the assistant read in your log") if reg
+                        else t("##### :material/auto_awesome: What the app read in your log"))
+        # v646 · Con el agente, lo que tiene claro ya viene marcado: se dice, para que se mire antes de confirmar.
+        st.caption(t("The assistant ticked what it is sure of: untick anything that is not right. Nothing is "
+                     "credited until you confirm.") if reg
+                   else t("Tick only what is true. Nothing is credited until you confirm."))
         if not reg:
             _sin_agente(lid)
         destinos = {str(pid): texto}
@@ -779,10 +881,10 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             _cab = len(destinos) > 1 or d != str(pid)
             if _cab:
                 st.markdown("**→ %s**" % (ops or {}).get(d, d))
-            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab)
+            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab, todo=(lid, str(d)))
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
-        if reg:
+        if reg and not oficina:
             _problemas(reg, r, kp)
             _hablar(reg, lid, kp)
 
@@ -793,18 +895,21 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
             return PP.registro(por_destino, respuestas, elegidas, app=_version_app(),
                                nada=nada, lector=("%s/p%s" % (reg.get("modelo", ""),
                                                               reg.get("prompt", "")))
-                               if reg else "")
+                               if reg else "", en_nombre_de=_autor if oficina else "")
 
         c1, c2 = st.columns([3, 2])
         if c1.button(t(":material/done_all: Confirm the {n} ticked", n=n) if n
                      else t(":material/done_all: Confirm"), key="%s_ok" % kp,
                      type="primary", disabled=(n == 0), width="stretch"):
-            _mias = _asignables(usuario, grupo, pid)
+            _mias = _asignables(_de, grupo, pid)
             errores = []
+            # v646 · La oficina, sobre lo que hay AHORA: su autor pudo revisarlo hace un momento.
+            if oficina and not DL.sin_revisar_aun(lid):
+                errores.append(t("This log was already reviewed."))
             # ⚠️ v528 · Se VE que está guardando (unos segundos con la pantalla quieta
             # hacían creer que el clic no había entrado).
             with st.spinner(t("Saving…")):
-                for d, res in por_destino.items():
+                for d, res in ({} if errores else por_destino).items():
                     ticks = res["marcadas"]
                     if not ticks:
                         continue
@@ -820,9 +925,11 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
                     if not ok:
                         errores.append(msg)
                 if not errores:
-                    ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False))
-                    if ok:
-                        # v610 · y de ahí aprende la memoria (solo si lo leyó el agente).
+                    ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(False),
+                                                 **({"oficina": grupo} if oficina else {}))
+                    if ok and not oficina:
+                        # v610 · y de ahí aprende la memoria (solo si lo leyó el agente). v646 · Y solo del AUTOR:
+                        # lo que confirma la oficina no es lo que la cuadrilla quiso decir.
                         _aprender(reg, por_destino, grupo, usuario, lid)
             if errores:
                 # ⚠️ No se marca revisado: si algo falló, la tarjeta tiene que seguir ahí.
@@ -834,7 +941,8 @@ def _propuestas(r, pid, grupo, usuario, key_prefix) -> None:
         if c2.button(t("Nothing to credit"), key="%s_no" % kp, type="tertiary",
                      width="stretch"):
             with st.spinner(t("Saving…")):
-                ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(True))
+                ok, msg = DL.marcar_revisado(lid, usuario, propuestas=_registro(True),
+                                             **({"oficina": grupo} if oficina else {}))
             (flash.exito if ok else flash.error)(msg)
             st.rerun()
 
@@ -849,8 +957,11 @@ def _estado_revision(r, pid) -> None:
     except Exception:
         n = 0
     _q = str(r.get("ReviewedBy", "") or "")
+    # v646 · Si lo confirmó la oficina, se dice que fue por su autor.
+    _por = (" " + t("(on behalf of {a})", a=_nombre(r.get("Author")))
+            if _q and _q != str(r.get("Author", "")) else "")
     st.caption(t(":material/task_alt: Proposals reviewed by {q} · {n} activities credited "
-                 "from this log", q=_nombre(_q) if _q else "—", n=n))
+                 "from this log", q=(_nombre(_q) if _q else "—") + _por, n=n))
 
 
 def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
@@ -925,6 +1036,7 @@ def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
     # el agente todavía no leyó (solo los que se van a enseñar).
     _relectura(pid, usuario, _mios[:10])
     _avisar(pid, grupo, usuario, _mios[:10])
+    _apuntar_tarea(grupo, usuario, set(_asignables(usuario, grupo, pid)))      # v646 · «Add to To-do»
     _leer_pendientes(pid, usuario, _mios[:10])
     _hoy_txt = _hoy.strftime("%Y-%m-%d")
     for r in _mios[:10]:
@@ -1094,9 +1206,12 @@ def _panel_memoria(grupo, kp) -> None:
 
 
 def render_admin(pid, grupo, key_prefix="adm") -> None:
-    """Lo que ve quien lleva la obra desde la oficina. Solo lectura: el parte es de
-    quien lo escribió, y un admin corrigiéndolo destruiría lo único que lo hace valer."""
+    """Lo que ve quien lleva la obra desde la oficina. El parte es de quien lo escribió: la oficina no lo cambia,
+    y un admin corrigiéndolo destruiría lo único que lo hace valer.
+    v646 · Decisión del usuario: el que su autor no revisa en `DL.DIAS_OFICINA` días, la oficina lo puede CONFIRMAR
+    en su nombre, con la tarjeta de siempre y lo que leyó el agente; queda apuntado quién."""
     _atender_memoria(grupo)
+    _u = str((st.session_state.get("auth") or {}).get("usuario", ""))
     _p = DL.partes(pid)
     theme.section(t("Daily logs"),
                   t("What the crew reported, in their own words."))
@@ -1116,9 +1231,16 @@ def render_admin(pid, grupo, key_prefix="adm") -> None:
         st.caption(t("The crew has not written any daily log for this job yet."))
         return
     st.caption(_cuantos(len(_p), DL.dias_cubiertos(pid)))
+    # v646 · ANTES de pintar: «Add to To-do», y la lectura de los que ya esperan a la oficina.
+    from core import projects as P
+    _apuntar_tarea(grupo, _u, {str(o.get("ID", "")) for o in P.list_projects(grupo=grupo, incluir_internos=True)})
+    _leer_pendientes(pid, _u, _p[:25], oficina=True)
+    _hoy = clock.today(grupo)
     for r in _p[:25]:
-        # v523 · El admin ve si el autor revisó las propuestas y cuánto acreditó desde el
-        # parte. No confirma por él: quien no escribió el parte no sabe si fue así.
-        _linea(r, False, key_prefix, extra=lambda r=r: _estado_revision(r, pid))
+        # v523 · El admin ve si el autor revisó las propuestas y cuánto acreditó desde el parte. v646 · Y si lleva
+        # `DL.DIAS_OFICINA` días sin revisar, su tarjeta, para confirmarlo por él (decisión del usuario).
+        _linea(r, False, key_prefix,
+               extra=(lambda r=r: _propuestas(r, pid, grupo, _u, key_prefix, oficina=True))
+               if DL.para_la_oficina(r, _hoy) else (lambda r=r: _estado_revision(r, pid)))
     if len(_p) > 25:
         st.caption(t("…and {n} older ones.", n=len(_p) - 25))

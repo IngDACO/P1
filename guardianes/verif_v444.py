@@ -186,8 +186,9 @@ for _esp, _ing in (("Vencidos", "Overdue"), ("Credenciales", "Credentials"),
 chk("el nombre visible de sección va en inglés",
     '"📊 Proyectos", "Projects",' in _ind and '"👷 Usuarios", "Users",' in _ind
     and '"💰 Gastos", "Expenses",' in _ind)
+# v646 · el séptimo que lleva a Projects: «Logs to review» (los partes sin revisar)
 chk("...y el ID de sub-pestaña NO se tocó (lo compara `sub ==`)",
-    _ind.count('"📊 Proyectos"') == 6 and _ind.count('"👷 Usuarios"') == 2)
+    _ind.count('"📊 Proyectos"') == 7 and _ind.count('"👷 Usuarios"') == 2)
 chk("el botón de navegar ya no dice «Ir a»", "→ Ir a {secn}" not in _pu)
 
 _hu = (RAIZ / "core/home_ui.py").read_text(encoding="utf-8")

@@ -274,7 +274,47 @@ def revisado(r) -> bool:
     return bool(str((r or {}).get("Reviewed", "") or "").strip())
 
 
-def marcar_revisado(log_id, quien, propuestas="") -> tuple:
+# v646 · Decisión del usuario: el parte que su autor no revisa en tantos días pasa a la OFICINA, que lo puede
+# confirmar en su nombre (queda apuntado quién). Antes no se acreditaba nada, y nadie se enteraba.
+DIAS_OFICINA = 2
+
+
+def dias_sin_revisar(r, hoy) -> int:
+    """Días desde que se GUARDÓ (no desde el día que cuenta): lo que lleva esperando a su autor."""
+    from core.num import parse_date
+    d = parse_date(str((r or {}).get("Created", "") or "")[:10]) or parse_date((r or {}).get("Date"))
+    return (hoy - d).days if d else 0
+
+
+def para_la_oficina(r, hoy) -> bool:
+    """¿Lleva `DIAS_OFICINA` días o más sin revisar, con texto? Entonces la oficina lo ve y puede confirmarlo."""
+    return (not revisado(r) and bool(str((r or {}).get("Text", "") or "").strip())
+            and dias_sin_revisar(r, hoy) >= DIAS_OFICINA)
+
+
+def esperan_a_la_oficina(grupo) -> list:
+    """Los partes de ESTE grupo que ya esperan a la oficina, del más viejo al más nuevo."""
+    hoy = clock.today(grupo)
+    out = [r for r in _records() if str(r.get("Group", "")) == str(grupo) and para_la_oficina(r, hoy)]
+    return sorted(out, key=lambda r: (str(r.get("Created", "")), str(r.get("ID", ""))))
+
+
+def sin_revisar_aun(log_id) -> bool:
+    """¿Sigue sin revisar, leído FRESCO? Antes de acreditar desde otro sitio que la tarjeta del autor (la oficina, el
+    chat): otro pudo revisarlo hace un momento, y acreditar dos veces no se deshace solo. Sin poder leer, no."""
+    w = _ws()
+    if w is None:
+        return False
+    try:
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("daily_log.sin_revisar_aun(%s): %s", log_id, e)
+        return False
+    r = next((x for x in recs if str(x.get("ID", "")) == str(log_id)), None)
+    return bool(r) and not revisado(r)
+
+
+def marcar_revisado(log_id, quien, propuestas="", oficina="") -> tuple:
     """El autor revisó las propuestas de su parte (confirmó lo que era, o que nada).
 
     `propuestas` (v524) = el registro de lo ofrecido y lo marcado
@@ -282,6 +322,8 @@ def marcar_revisado(log_id, quien, propuestas="") -> tuple:
     llamada más contra la cuota, y no puede quedar un parte revisado sin su registro.
     ⚠️ Solo el AUTOR: el parte es de quien lo escribió (v516), y las propuestas salen de
     SUS palabras — quien no estuvo no sabe si «installed headers» fue en este ascensor.
+    v646 · O la OFICINA de su grupo (`oficina` = ese grupo), solo cuando el parte ya espera a la oficina
+    (`para_la_oficina`, decisión del usuario): entonces `ReviewedBy` dice quién lo confirmó.
     ⚠️ La fila se busca leyendo FRESCO: decidir dónde escribir con una caché es como se
     corrompen los datos (v323).
     """
@@ -296,7 +338,12 @@ def marcar_revisado(log_id, quien, propuestas="") -> tuple:
     for i, r in enumerate(recs):
         if str(r.get("ID", "")) != str(log_id):
             continue
-        if str(r.get("Author", "")) != str(quien):
+        if revisado(r):
+            # v646 · ya lo revisó otro (su autor o la oficina): no se pisa quién ni lo acreditado
+            return False, t("This log was already reviewed.")
+        if str(r.get("Author", "")) != str(quien) and not (
+                oficina and str(r.get("Group", "")) == str(oficina)
+                and para_la_oficina(r, clock.today(r.get("Group")))):
             return False, t("Only the person who wrote it can review its proposals.")
         from core.num import col_letter
         _ahora = clock.now(r.get("Group")).strftime("%Y-%m-%d %H:%M:%S")
