@@ -1,0 +1,74 @@
+name: Morning summary
+
+# v648 · El resumen del día, cada mañana, a quien lo pidió en Home («Every morning too»). Corre cada hora y el script
+# decide, empresa por empresa, si en SU hora local toca (de 7 a 11, una vez al día por persona): core/resumen_envio.py.
+# ⚠️ El repositorio es PÚBLICO: el registro de este trabajo lo ve cualquiera, así que el script solo imprime cuentas.
+# ⚠️ Necesita el secreto STREAMLIT_SECRETS_TOML (Settings → Secrets and variables → Actions). Sin él no hace nada.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      ignorar_hora:
+        description: "Send it now, without waiting for 7-11 local time (still once a day per person)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: morning-summary
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Is the secret there?
+        id: sec
+        env:
+          SECRETS_TOML: ${{ secrets.STREAMLIT_SECRETS_TOML }}
+        run: |
+          if [ -z "$SECRETS_TOML" ]; then
+            echo "::notice::STREAMLIT_SECRETS_TOML is not set: nothing to send."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.sec.outputs.ok == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.sec.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: survey_app/requirements.txt
+
+      - name: Install
+        if: steps.sec.outputs.ok == 'true'
+        run: pip install -q -r survey_app/requirements.txt
+
+      - name: Send
+        if: steps.sec.outputs.ok == 'true'
+        working-directory: survey_app
+        env:
+          SECRETS_TOML: ${{ secrets.STREAMLIT_SECRETS_TOML }}
+          IGNORAR: ${{ github.event_name == 'workflow_dispatch' && inputs.ignorar_hora }}
+        run: |
+          umask 077
+          mkdir -p .streamlit
+          printf '%s\n' "$SECRETS_TOML" > .streamlit/secrets.toml
+          if [ "$IGNORAR" = "true" ]; then
+            python resumen_manana.py --ignorar-hora
+          else
+            python resumen_manana.py
+          fi
+
+      - name: Remove the secrets file
+        if: always()
+        run: rm -f survey_app/.streamlit/secrets.toml

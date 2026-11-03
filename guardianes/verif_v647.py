@@ -213,6 +213,8 @@ def _del_dia(g, u, idi, rehacer=False):
     E["llamadas"].append((g, u, idi, rehacer))
     return E.get("res"), E.get("mot", "")
 RD.del_dia = _del_dia
+from core import resumen_envio as RE                  # v648 · el interruptor «Every morning», sin leer la hoja
+RE.suscrito = lambda g, u: False
 notify.notify_user = lambda u, asunto, lineas: (E["enviado"].append((u, asunto, list(lineas))) or {"email": True, "telegram": False})
 _slot = PU._resumen_del_dia("G")
 st.write("ABAJO DE TODO")

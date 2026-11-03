@@ -70,9 +70,11 @@ else:
 # ⚠️ v636 · `FalseCarChecks` (el checklist diario del false car), por la MISMA razon: nace en
 # ingles el 02/11/2026 y nunca tuvo nombre español.
 # ⚠️ v641 · `ChatMemory` (la memoria del Field assistant), por la MISMA razon.
+# ⚠️ v648 · `DailySummary` (quién recibe el resumen cada mañana), por la MISMA razon: nace en
+# ingles el 03/11/2026 y nunca tuvo nombre español.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
        "xeroconnections", "stageprogress", "dailylogs", "agentmemory", "tasks",
-       "falsecarchecks", "chatmemory"}
+       "falsecarchecks", "chatmemory", "dailysummary"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:

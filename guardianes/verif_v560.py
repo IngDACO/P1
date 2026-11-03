@@ -278,6 +278,8 @@ def _del_dia(g, u, idi, rehacer=False):
     st.session_state["_rehacer"] = rehacer
     return st.session_state["_brief_G"], ""
 RD.del_dia = _del_dia
+from core import resumen_envio as RE                  # v648 · el interruptor «Every morning», sin leer la hoja
+RE.suscrito = lambda g, u: False
 with PU._resumen_del_dia("G"):
     PU.lectura_ia("G")
 '''

@@ -667,6 +667,34 @@ def lectura_ia(grupo: str):
                 st.warning(t("Your user has no email/Telegram configured."))
         except Exception as e:
             st.error(f"It could not be sent: {e}")
+    _cada_manana(grupo, _u, _id)
+
+
+def _cada_manana(grupo, usuario, idioma):
+    """v648 · «Every morning too»: cada persona lo pide PARA SÍ (`resumen_envio`); lo manda GitHub Actions, de 7 a 11
+    hora de la empresa. ⚠️ El cambio va en `on_change`, que corre ANTES del guion: el aviso de `flash` sale en esta misma
+    pasada, y si no se pudo guardar, el interruptor vuelve a como estaba (en un callback sí se puede asignar)."""
+    from core import resumen_envio as RE
+    _k = f"brief_cada_dia_{grupo}"
+
+    def _cambiar():
+        _si = bool(st.session_state.get(_k))
+        ok, msg = RE.suscribir(grupo, usuario, idioma, _si)
+        if ok:
+            flash.exito(msg)
+        else:
+            st.session_state[_k] = not _si
+            flash.error(msg)
+
+    _on = st.toggle(t(":material/schedule_send: Every morning too, by email or Telegram"), value=RE.suscrito(grupo, usuario),
+                    key=_k, on_change=_cambiar,
+                    help=t("Around {h}:00 your company's time, once a day, in the language the app is in when you tick it.",
+                           h=RE.HORA_DESDE))
+    if _on:
+        _r = auth.get_user(usuario)
+        if not (str(_r.get("Email", "")).strip() or str(_r.get("TelegramChatID", "")).strip()):
+            st.caption(t(":material/warning: Your user has no email or Telegram, so nothing can reach you: ask the "
+                         "office to add one in Users."))
 
 
 # Documentos: tipos y permisos por rol
