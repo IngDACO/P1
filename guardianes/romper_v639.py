@@ -153,7 +153,7 @@ ROTURAS = [
      [("""{"usuario": usuario, "nombre": nombre or usuario, "grupo": grupo, "rol": rol,\n""", """{"usuario": "", "nombre": "", "grupo": grupo, "rol": rol,\n""")]),
     ("⚠️ el historial de la app se contamina", A,
      [("""    trimmed = history[-(MAX_HISTORY):]
-    messages = [{"role": m["role"], "content": m["content"]} for m in trimmed]
+    messages = [_para_el_modelo(m) for m in trimmed]
 """, """    messages = history
 """)]),
     # ── La explicación ──

@@ -183,16 +183,16 @@ ROTURAS = [
         a = _contexto()
         CM.guardar(""")]),
     ("cancelar no queda en la memoria", U,
-     [("""x=literal_md(a["titulo"]))})
+     [("""                      "app": "cancel", "card": a["titulo"]})
         memorizar()
         return
-""", """x=literal_md(a["titulo"]))})
+""", """                      "app": "cancel", "card": a["titulo"]})
         return
 """)]),
     ("confirmar no queda en la memoria", U,
-     [("""("✅ " if ok else "⚠️ ") + str(msg)})
+     [("""("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})
     memorizar()
-""", """("✅ " if ok else "⚠️ ") + str(msg)})
+""", """("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})
 """)]),
     # ── app.py ──
     ("⚠️ se pinta antes de recordar", "app.py",

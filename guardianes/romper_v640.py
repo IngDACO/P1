@@ -164,7 +164,9 @@ def _una_directa(ctx) -> None:\n""")]),
 """)]),
     ("⚠️ Cancel ejecuta", U,
      [("""    if not pet.get("si"):
-        _hist.append({"role": "assistant", "content": t("Cancelled: {x}. Nothing was sent.", x=literal_md(a["titulo"]))})
+        # v645 · `app`: lo escribe la APP, no el asistente; así le llega al modelo (`chat_agent._para_el_modelo`)
+        _hist.append({"role": "assistant", "content": t("Cancelled: {x}. Nothing was sent.", x=literal_md(a["titulo"])),
+                      "app": "cancel", "card": a["titulo"]})
         memorizar()
         return
 """, "")]),
@@ -173,7 +175,7 @@ def _una_directa(ctx) -> None:\n""")]),
         lista.append(a)
 """, "")]),
     ("⚠️ el resultado no queda en la conversación", U,
-     [("""    _hist.append({"role": "assistant", "content": ("✅ " if ok else "⚠️ ") + str(msg)})\n""", "")]),
+     [("""    _hist.append({"role": "assistant", "content": ("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})\n""", "")]),
     ("⚠️ el fallo se pinta como éxito", U,
      [("""("✅ " if ok else "⚠️ ")""", """"✅ \"""")]),
     ("⚠️ confirmar con la identidad de la tarjeta", U,

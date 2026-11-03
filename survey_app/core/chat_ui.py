@@ -131,14 +131,16 @@ def atender() -> None:
     lista.remove(a)
     _hist = st.session_state.setdefault("chat_history", [])
     if not pet.get("si"):
-        _hist.append({"role": "assistant", "content": t("Cancelled: {x}. Nothing was sent.", x=literal_md(a["titulo"]))})
+        # v645 · `app`: lo escribe la APP, no el asistente; así le llega al modelo (`chat_agent._para_el_modelo`)
+        _hist.append({"role": "assistant", "content": t("Cancelled: {x}. Nothing was sent.", x=literal_md(a["titulo"])),
+                      "app": "cancel", "card": a["titulo"]})
         memorizar()
         return
     with st.spinner(t("Saving…")):
         ok, msg = CT.confirmar(a, _contexto())
     if not ok:
         lista.append(a)
-    _hist.append({"role": "assistant", "content": ("✅ " if ok else "⚠️ ") + str(msg)})
+    _hist.append({"role": "assistant", "content": ("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})
     memorizar()
 
 

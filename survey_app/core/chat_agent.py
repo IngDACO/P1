@@ -525,6 +525,9 @@ _PERSONA = {
         "tarifas, ni marcar avance: lo hace la persona, y le dices dónde. Puedes redactarle los mensajes.\n"
         "- De los turnos anteriores solo ves el texto, no las herramientas que usaste: eso no significa que no las "
         "usaras, así que no te corrijas por ello.\n"
+        "- Las notas entre corchetes que empiezan por «[I pressed Confirm» o «[I pressed Cancel» las escribe la APP "
+        "cuando la persona toca una tarjeta: lo que dicen pasó de verdad. No las niegues ni digas que fueron tuyas; si "
+        "dicen que falló, no lo reintentes por tu cuenta.\n"
         "- Si te pide que recuerdes algo, ya queda en esta conversación: no lo apuntes en To-do salvo que te lo pida.\n"
         "- La conversación puede venir de otros días, y lo que se dijo entonces puede estar viejo: para los datos de "
         "hoy vuelve a mirar, no repitas lo de antes.\n"
@@ -557,6 +560,9 @@ _PERSONA = {
         "falló, dilo y que decida la persona.\n"
         "- De los turnos anteriores solo ves el texto, no las herramientas que usaste: eso no significa que no las "
         "usaras, así que no te corrijas por ello.\n"
+        "- Las notas entre corchetes que empiezan por «[I pressed Confirm» o «[I pressed Cancel» las escribe la APP "
+        "cuando la persona toca una tarjeta: lo que dicen pasó de verdad. No las niegues ni digas que fueron tuyas; si "
+        "dicen que falló, no lo reintentes por tu cuenta.\n"
         "- Si te pide que recuerdes algo, ya queda en esta conversación: no lo apuntes en To-do salvo que te lo pida.\n"
         "- NO puedes fichar, firmar, enviar el Pre-Start o el checklist del false car, ni marcar avance: lo hace la "
         "persona, y le dices dónde.\n"
@@ -672,6 +678,22 @@ def _build_context_block(calc_results: dict | None, all_params: dict | None) -> 
 
     lines.append("---")
     return "\n".join(lines)
+
+
+def _para_el_modelo(m) -> dict:
+    """Un mensaje del historial, como le llega al modelo.
+
+    ⚠️ v645 · Lo que escribe la APP al tocar Confirm o Cancel (`chat_ui.atender`, marcado con `app`) va como nota
+    de la PERSONA, no como turno del asistente. Como turno suyo, el modelo lo leyó como algo que había dicho sin
+    hacerlo, y en la pregunta siguiente lo negó: «I hadn't confirmed that», con la asignación ya hecha (2 de 2 en
+    producción, v644). En pantalla sigue saliendo igual."""
+    if m.get("role") == "assistant" and m.get("app"):
+        _c = str(m.get("card") or "")
+        if m.get("app") == "cancel":
+            return {"role": "user", "content": f"[I pressed Cancel on the card «{_c}». Nothing was done.]"}
+        return {"role": "user", "content": f"[I pressed Confirm on the card «{_c}». The app, not you, handled it and "
+                                           f"replied: {m['content']}]"}
+    return {"role": m["role"], "content": m["content"]}
 
 
 def _texto_de(r) -> str:
@@ -808,7 +830,7 @@ def get_chat_response(
 
     # Construir historial (limitar para no saturar tokens)
     trimmed = history[-(MAX_HISTORY):]
-    messages = [{"role": m["role"], "content": m["content"]} for m in trimmed]
+    messages = [_para_el_modelo(m) for m in trimmed]
     # ⚠️ v641 · La API rechaza una conversación que empieza por el asistente, y al cortar por el
     # principio, o con una tarjeta cancelada en medio, puede quedar así.
     while messages and messages[0]["role"] != "user":

@@ -89,7 +89,9 @@ def recortar(mensajes, hoy) -> list:
     """Lo que merece quedarse. ⚠️ Siempre empezando por una pregunta: la API rechaza una conversación
     que empieza por el asistente, y al cortar por el principio puede quedar así."""
     _lim = (hoy - _dt.timedelta(days=MAX_DIAS)).isoformat()
-    out = [{"role": m["role"], "content": str(m["content"]), "at": str(m.get("at") or hoy.isoformat())}
+    out = [{"role": m["role"], "content": str(m["content"]), "at": str(m.get("at") or hoy.isoformat()),
+            # v645 · lo que escribió la app al tocar una tarjeta lo sigue siendo mañana (`chat_agent._para_el_modelo`)
+            **({"app": str(m["app"]), "card": str(m.get("card") or "")} if m.get("app") else {})}
            for m in (mensajes or [])
            if isinstance(m, dict) and m.get("role") in ("user", "assistant") and str(m.get("content") or "").strip()]
     out = [m for m in out if m["at"] >= _lim][-MAX_MENSAJES:]
