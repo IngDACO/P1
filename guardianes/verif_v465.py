@@ -72,9 +72,10 @@ else:
 # ⚠️ v641 · `ChatMemory` (la memoria del Field assistant), por la MISMA razon.
 # ⚠️ v648 · `DailySummary` (quién recibe el resumen cada mañana), por la MISMA razon: nace en
 # ingles el 03/11/2026 y nunca tuvo nombre español.
+# ⚠️ v649 · `DailyBriefs` (el resumen de cada día, para no pagar dos), por la MISMA razon.
 _YA = {"login", "prestarts", "roster", "sheet1", "library", "librarymodels",
        "xeroconnections", "stageprogress", "dailylogs", "agentmemory", "tasks",
-       "falsecarchecks", "chatmemory", "dailysummary"}
+       "falsecarchecks", "chatmemory", "dailysummary", "dailybriefs"}
 huerfanas = [k for k, v in consts.items()
              if v.lower() not in LEGADO and v.lower() not in _YA]
 if huerfanas:

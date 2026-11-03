@@ -155,7 +155,8 @@ def preparar(filas=FILAS, gen_ok=True):
         E["gen"].append((g, u, idi))
         return ({"titular": "TITULAR " + idi, "puntos": [{"texto": "PUNTO", "urgente": False, "ir": "none", "obra": ""}], "hora": "07:20"}, "")\
             if gen_ok else (None, "api")
-    RD.generar = _gen
+    # v649 · el envío pide `del_dia` (que reutiliza lo de Home): se sustituye ESE, con el mismo apunte
+    RD.del_dia = lambda g, u, idi, rehacer=False: _gen(g, u, idi)
     notify.notify_user = lambda u, asunto, lineas, link=None: (E["env"].append((u, asunto, list(lineas), link)),
                                                                  {"email": u != "Otra", "telegram": False})[1]
     notify._sec = lambda k, d="": "https://APP" if k == "APP_URL" else d

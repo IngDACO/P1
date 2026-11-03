@@ -44,6 +44,10 @@ TIEMPO = 45.0
 MAX_PUNTOS = 7
 ESPERA_FALLO = 600          # s sin volver a intentarlo tras un fallo: cada intento hace esperar a Home
 _BETA_RESPALDO = "server-side-fallback-2026-07-01"
+# v649 · El de cada día, en el libro de la empresa, para que el otro proceso no pague otro (`_de_la_hoja`).
+SHEET = "DailyBriefs"
+# ⚠️ Regla v363: columnas NUEVAS siempre al FINAL.
+HEADERS = ["Group", "Date", "Language", "Prepared", "Model", "Brief"]
 # Adónde lleva cada punto: (sección, ID de sub-pestaña de `home_ui._SUBSECCIONES`). «project» abre además la obra.
 DESTINOS = {"project": ("proyectos", "📊 Proyectos"), "absences": ("planificacion", "🌴 Ausencias"),
             "time_fixes": ("planificacion", "⏱ Correcciones"), "panel": ("planificacion", "🎛 Panel"),
@@ -206,13 +210,58 @@ def guardado(grupo, idioma):
     return _almacen()["datos"].get(_clave(grupo, idioma))
 
 
+def _de_la_hoja(grupo, idioma):
+    """v649 · El de hoy que ya preparó OTRO proceso (el envío de la mañana, o Home antes de un despliegue), o `None`.
+    El último del día manda («Refresh» añade uno). ⚠️ SIN cabeceras: leer no crea la hoja (regla v145), y por eso va en
+    `hojas.HOJAS_LECTURA`. Lo que no tenga la forma de siempre no se usa."""
+    from core import clock, hojas
+    try:
+        _hoy = clock.today(grupo).isoformat()
+        filas = [r for r in (hojas.registros(SHEET) or [])
+                 if str(r.get("Group", "")).strip().lower() == str(grupo).strip().lower()
+                 and str(r.get("Date", "")).strip() == _hoy and str(r.get("Language", "")).strip() == str(idioma)]
+        if not filas:
+            return None
+        d = json.loads(filas[-1].get("Brief") or "")
+        puntos = [{"texto": str(p.get("texto", ""))[:400], "urgente": bool(p.get("urgente")),
+                   "ir": p.get("ir") if p.get("ir") in DESTINOS else "none",
+                   "obra": str(p.get("obra", "")) if p.get("ir") == "project" else ""}
+                  for p in (d.get("puntos") or []) if isinstance(p, dict) and str(p.get("texto", "")).strip()]
+        if not puntos and not str(d.get("titular", "")).strip():
+            return None
+        return {"titular": str(d.get("titular", ""))[:300], "puntos": puntos[:MAX_PUNTOS], "hora": str(d.get("hora", "")),
+                "modelo": str(d.get("modelo", "")), "uso": d.get("uso") or {}}
+    except Exception as e:
+        logger.warning("resumen_dia._de_la_hoja(%s): %r", grupo, e)
+        return None
+
+
+def _a_la_hoja(grupo, idioma, res) -> None:
+    """v649 · Lo deja para el otro proceso. Si falla, no pasa nada: cada uno prepararía el suyo."""
+    from core import clock, hojas, timeclock
+    try:
+        w = timeclock.get_sheet(SHEET, tuple(HEADERS))
+        w.append_row([str(grupo), clock.today(grupo).isoformat(), str(idioma), str(res.get("hora", "")),
+                      str(res.get("modelo", "")), json.dumps(res, ensure_ascii=False)], value_input_option="RAW")
+        hojas.invalidar(SHEET)
+    except Exception as e:
+        logger.warning("resumen_dia._a_la_hoja(%s): %r", grupo, e)
+
+
 def del_dia(grupo, usuario, idioma, rehacer=False) -> tuple:
     """El de hoy: el guardado, o lo prepara UNA vez (quien lo pida a la vez espera y se lo encuentra hecho).
     `rehacer` = «Refresh». Un fallo se recuerda `ESPERA_FALLO` s: sin eso, cada vez que se abre Home se esperaría otra
-    vez a la API. `(resumen, motivo)`."""
+    vez a la API. `(resumen, motivo)`.
+    v649 · «Una vez al día» también ENTRE procesos: el envío de la mañana (GitHub) y Home (Streamlit) no comparten
+    memoria, así que lo hecho se deja en la hoja de la empresa y el que llega después lo usa."""
     a, k = _almacen(), _clave(grupo, idioma)
     if not rehacer and k in a["datos"]:
         return a["datos"][k], ""
+    if not rehacer:
+        _h = _de_la_hoja(grupo, idioma)
+        if _h:
+            a["datos"][k] = _h
+            return _h, ""
     _f = a["fallos"].get(k)
     if not rehacer and _f and time.time() - _f[0] < ESPERA_FALLO:
         return None, _f[1]
@@ -223,6 +272,7 @@ def del_dia(grupo, usuario, idioma, rehacer=False) -> tuple:
         if res:
             a["datos"][k] = res
             a["fallos"].pop(k, None)
+            _a_la_hoja(grupo, idioma, res)
             for _v in [x for x in a["datos"] if x[1] != k[1]]:      # lo de otros días, fuera: no crece sin fin
                 a["datos"].pop(_v, None)
         else:

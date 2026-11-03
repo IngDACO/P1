@@ -91,6 +91,8 @@ HOJAS_LECTURA = (
     "ChatMemory",
     # v648: quién recibe el resumen cada mañana (`resumen_envio`), lector SIN cabeceras: la misma regla.
     "DailySummary",
+    # v649: el resumen de cada día (`resumen_dia._de_la_hoja`), lector SIN cabeceras: la misma regla.
+    "DailyBriefs",
 )
 
 

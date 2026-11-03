@@ -45,7 +45,8 @@ ROTURAS = [
     ("⚠️ sin el día en la clave (ayer vale hoy)", RD, [("""    return (str(grupo), clock.today(grupo).isoformat(), str(idioma))\n""", """    return (str(grupo), "", str(idioma))\n""")]),
     ("⚠️ sin la empresa en la clave", RD, [("""    return (str(grupo), clock.today(grupo).isoformat(), str(idioma))\n""", """    return ("", clock.today(grupo).isoformat(), str(idioma))\n""")]),
     ("sin el idioma en la clave", RD, [("""    return (str(grupo), clock.today(grupo).isoformat(), str(idioma))\n""", """    return (str(grupo), clock.today(grupo).isoformat(), "")\n""")]),
-    ("⚠️ se prepara cada vez", RD, [("""    if not rehacer and k in a["datos"]:\n        return a["datos"][k], ""\n    _f = a["fallos"].get(k)\n""", """    _f = a["fallos"].get(k)\n"""),
+    # v649 · re-anclada: entre la memoria y los fallos va ahora la hoja (`_de_la_hoja`)
+    ("⚠️ se prepara cada vez", RD, [("""    if not rehacer and k in a["datos"]:\n        return a["datos"][k], ""\n    if not rehacer:\n        _h = _de_la_hoja""", """    if not rehacer:\n        _h = _de_la_hoja"""),
                                    ("""        if not rehacer and k in a["datos"]:\n            return a["datos"][k], ""\n        res, mot = generar""", """        res, mot = generar""")]),
     ("lo de otros días se acumula", RD, [("""            for _v in [x for x in a["datos"] if x[1] != k[1]]:      # lo de otros días, fuera: no crece sin fin\n                a["datos"].pop(_v, None)\n""", "")]),
     ("⚠️ un fallo se reintenta en cada recarga", RD, [("""    if not rehacer and _f and time.time() - _f[0] < ESPERA_FALLO:\n        return None, _f[1]\n""", "")]),

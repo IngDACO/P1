@@ -62,7 +62,9 @@ ESFUERZO = "low"
 # ⚠️ Súbelo si cambian las instrucciones, el esquema o cómo se arma el plan: va en la CLAVE
 # de la lectura guardada, así que los partes sin revisar se releen con la versión nueva.
 # v610 · 2: las instrucciones hablan de la memoria (CREW MEMORY) y el mensaje la lleva.
-PROMPT_V = 2
+# v649 · 3: una actividad de varias partes con solo una nombrada es una PREGUNTA, no «hecha» (visto en producción en
+# v647: «the CW buffer» premarcaba «Install/trim buffers (car + CW)» entera).
+PROMPT_V = 3
 LECTURA_V = 1
 TIEMPO = 20.0            # s por intento
 REINTENTOS = 1
@@ -120,7 +122,8 @@ line; one line can hold several fragments. Put the author's own words for the fr
 - Give each fragment one class:
   - done: finished work that matches plan activities. `codes` = those activities (one or more).
   - question: finished work that could be two to four different activities and the log does \
-not decide. `codes` = the candidates; `question` = a short question to the author.
+not decide, or that covers only part of one activity (see below). `codes` = the candidates; \
+`question` = a short question to the author.
   - started: work begun but not finished ("started", "half done", "climbing the shaft", \
 "continued with"). `codes` = the activities it is heading to, if any. Never credited.
   - pending: still to do, listed under "Issues"/"Pending"/"To do", or planned for later.
@@ -133,6 +136,11 @@ waiting, travel, helping with no task named). Say why in `reason`.
 - Use only codes from the JOB PLAN, exactly as written there.
 - A removal verb (remove, dismantle, rip out, take out) never maps to an installation \
 activity, and an installation verb never maps to a rip-out activity.
+- An activity whose NAME joins two or more parts ("buffers (car + CW)", "LH and RH") is done \
+only when the log covers each of them. When the log names only some ("installed the CW buffer" \
+for "Install/trim buffers (car + CW)"), class question with that one activity in `codes`, and ask \
+whether the rest is done too ("Is the car buffer done too?"). This is only about the parts the \
+name lists: "finished the rails" still finishes a rails activity.
 - Read the log against where the job is (the PROGRESS block): it tells you which of two \
 similar activities is plausible now.
 - `line` is the number of the log line the fragment comes from. `lift` is the lift the \

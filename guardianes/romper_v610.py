@@ -65,7 +65,7 @@ ROTURAS = [
        '                              memoria=memoria)\n',
        '        crudo, info = _llamar(_k, texto, fecha, plan, mapa, previa, respuestas, idioma)\n')]),
     ("`PROMPT_V` sin subir (los partes sin revisar se leerían con otras instrucciones)", PA,
-     [('PROMPT_V = 2\n', 'PROMPT_V = 1\n')]),
+     [('PROMPT_V = 3\n', 'PROMPT_V = 1\n')]),       # v649 · re-anclada: PROMPT_V es 3
     # ── global y fuera de los guardianes ──
     ("⚠️ la memoria deja de ser global (cada cliente aprendería solo)", TC,
      [('                   "agentmemory"}\n', '                   }\n')]),

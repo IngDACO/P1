@@ -6,8 +6,9 @@
 - Cada persona de la oficina lo activa PARA SÍ, en Home («Every morning too»): nadie lo recibe sin haberlo pedido.
 - Lo manda un trabajo de GitHub Actions (`.github/workflows/resumen_manana.yml`, cada hora) que lanza
   `resumen_manana.py`: a cada empresa cuando en SU hora local son entre las 7 y las 11, una vez al día por persona.
-- Es el resumen de Home (`resumen_dia.generar`), con los mismos datos y las mismas reglas: UNA llamada por empresa e
-  idioma, y la reciben todos los suscritos de ese idioma.
+- Es el resumen de Home (`resumen_dia.del_dia`), con los mismos datos y las mismas reglas: UNA llamada por empresa e
+  idioma, y la reciben todos los suscritos de ese idioma. v649 · Y el MISMO del día: lo que prepara uno lo deja en la
+  hoja de la empresa (`DailyBriefs`) y el otro lo reutiliza.
 
 ## ⚠️ El repositorio es PÚBLICO
 
@@ -183,7 +184,8 @@ def enviar_empresa(grupo, ignorar_hora=False) -> dict:
             por_idioma.setdefault(_i if _i in IDIOMAS else IDIOMAS[0], []).append((n, r))
     lote = []
     for idi, gente in por_idioma.items():
-        res, _mot = RD.generar(grupo, gente[0][1].get("User", ""), idi)      # UNA vez por idioma
+        # UNA vez por idioma; v649 · y si Home ya lo preparó hoy, ese (`del_dia` mira la hoja de la empresa)
+        res, _mot = RD.del_dia(grupo, gente[0][1].get("User", ""), idi)
         if not res:
             cuenta["fallos"] += len(gente)
             continue

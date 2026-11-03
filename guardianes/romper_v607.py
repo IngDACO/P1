@@ -137,7 +137,7 @@ ROTURAS = [
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",
-           PA, [('PROMPT_V = 2\n', 'PROMPT_V = 2   # (control)\n')])
+           PA, [('PROMPT_V = 3\n', 'PROMPT_V = 3   # (control)\n')])
 
 
 def aplica(rel, cambios):

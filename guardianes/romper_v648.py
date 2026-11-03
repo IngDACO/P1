@@ -47,7 +47,7 @@ ROTURAS = [
     # ── Qué y cómo ──
     ("⚠️ una llamada al modelo por persona", RE, [("""            por_idioma.setdefault(_i if _i in IDIOMAS else IDIOMAS[0], []).append((n, r))\n""",
                                                   """            por_idioma.setdefault(n, []).append((n, r))\n""")]),
-    ("todos en inglés", RE, [("""        res, _mot = RD.generar(grupo, gente[0][1].get("User", ""), idi)""", """        res, _mot = RD.generar(grupo, gente[0][1].get("User", ""), "en")""")]),
+    ("todos en inglés", RE, [("""        res, _mot = RD.del_dia(grupo, gente[0][1].get("User", ""), idi)""", """        res, _mot = RD.del_dia(grupo, gente[0][1].get("User", ""), "en")""")]),
     ("⚠️ se marca a quien no le llegó", RE, [("""            if rr.get("email") or rr.get("telegram"):\n""", """            if True:\n""")]),
     ("⚠️ se marca en otra columna", RE, [("""_col_letter(_COL["LastSent"]), n)""", """_col_letter(_COL["Since"]), n)""")]),
     ("⚠️ si el modelo falla, se manda igual", RE, [("""        if not res:\n            cuenta["fallos"] += len(gente)\n            continue\n""",

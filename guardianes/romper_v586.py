@@ -25,7 +25,7 @@ ROTURAS = [
      [('    _sp = _sin_plan(pid)\n    if _sp:\n        st.caption(t(":material/info: This job has no stage plan, so the crew\'s daily logs "',
        '    _sp = _sin_plan(pid)\n    if False:\n        st.caption(t(":material/info: This job has no stage plan, so the crew\'s daily logs "')]),
     ("⚠️ un parte sin nada que confirmar vuelve a callarse", DU,
-     [("        _nada_que_confirmar(_prev)      # v586 · antes, nada debajo\n", "        pass\n")]),
+     [("        _nada_que_confirmar(_prev, oficina)      # v586 · antes, nada debajo\n", "        pass\n")]),
     ("«Go to Progress» deja de llevar", DU,
      [('                      type="tertiary", on_click=ir_avance)\n', '                      type="tertiary")\n')]),
     ("una localización interna pasa a decir que no tiene plan", DU,
@@ -62,7 +62,7 @@ ROTURAS = [
      [('        self.spreadsheet.intentos.append("%s.%s" % (self.title, n))\n', "")]),
 ]
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", DU,
-           [("def _nada_que_confirmar(p) -> None:\n", "def _nada_que_confirmar(p) -> None:   # (control)\n")])
+           [("def _nada_que_confirmar(p, oficina=False) -> None:\n", "def _nada_que_confirmar(p, oficina=False) -> None:   # (control)\n")])
 
 
 def corre():

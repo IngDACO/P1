@@ -380,7 +380,8 @@ _bt(at4, "fld_pp_LOG-9301_ok").click()
 at4.run()
 chk("⚠️ si la memoria falla, el parte queda confirmado igual",
     "LOG-9301" in at4.session_state["_rev"] and not at4.exception
-    and any("Credited 1 activities" in x for x in _todo(at4)), _todo(at4)[-3:])
+    # ⚠️ v649 · CADUCADO por decisión del usuario: «1 activity», en singular (antes exigía el «1 activities» de siempre)
+    and any("Credited 1 activity from your log." in x for x in _todo(at4)), _todo(at4)[-3:])
 
 # ── el panel ──
 at5 = AppTest.from_string(APP, default_timeout=90)

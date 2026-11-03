@@ -164,6 +164,10 @@ def _gen(grupo, usuario, idioma, api_key=None):
 
 
 RD.generar = _gen
+# v649 · `del_dia` mira también la hoja de la empresa (lo de OTRO proceso) y deja allí lo suyo: aquí, sin hoja
+_hoja_v649 = []
+RD._de_la_hoja = lambda g, idi: None
+RD._a_la_hoja = lambda g, idi, res: _hoja_v649.append((g, idi))
 RD._almacen().update(datos={}, fallos={})
 a, _m = RD.del_dia("cliente1", "Admin2", "en")
 b, _m = RD.del_dia("cliente1", "otro_admin", "en")

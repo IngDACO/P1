@@ -109,6 +109,11 @@ _AVISO = {
     "bajo_pendiente": ":material/pending: Your log lists this under «Issues/Pending». Tick it "
                       "only if it was finished.",
 }
+# v649 · En la tarjeta de la OFICINA el parte no es suyo: «this log» (visto en producción en v647).
+_AVISO_OFICINA = {
+    "bajo_pendiente": ":material/pending: This log lists this under «Issues/Pending». Tick it only if it was "
+                      "finished.",
+}
 _OTRA = "__otra__"
 
 
@@ -142,19 +147,19 @@ def _version_app() -> str:
         return ""
 
 
-def _prueba(item) -> None:
+def _prueba(item, oficina=False) -> None:
     """La línea del parte que respalda la propuesta, y sus avisos."""
     _txt = "  ·  ".join("“%s”" % p for p in (item.get("pruebas") or [])[:2])
     _extra = []
     if item.get("aviso") in _AVISO:
-        _extra.append(t(_AVISO[item["aviso"]]))
+        _extra.append(t(((oficina and _AVISO_OFICINA.get(item["aviso"])) or _AVISO[item["aviso"]])))
     if item.get("cuenta") is False:
         _extra.append(t(":material/info: For the record only — it does not change the progress."))
     if _txt or _extra:
         st.caption("  \n".join([x for x in [_txt] + _extra if x]))
 
 
-def _pintar(p, k, titulo=True, todo=None) -> dict:
+def _pintar(p, k, titulo=True, todo=None, oficina=False) -> dict:
     """Las propuestas de UN destino. Devuelve lo MARCADO y, desde v524, lo que se ENSEÑÓ:
     `{"marcadas": [(orden, actividad)], "ofrecidas": [[tipo, orden, actividad, termino]],
     "hechas": [(orden, actividad)]}` — el registro que mide el acierto.
@@ -163,7 +168,8 @@ def _pintar(p, k, titulo=True, todo=None) -> dict:
     acabarían diciendo cosas distintas (regla v361).
     `titulo=False` cuando encima ya va «→ obra»: repetir el rótulo en cada trozo es ruido.
     v646 · `todo` = `(parte, obra)`: lo pendiente lleva «Add to To-do» en esa obra; y vuelve también `premarcadas`, lo
-    que el agente dejó marcado de antes."""
+    que el agente dejó marcado de antes.
+    v649 · `oficina`: la tarjeta de la oficina, que confirma un parte AJENO («this log»)."""
     tick, ofr, hechas, pre = [], [], [], []
 
     def _ya(o):
@@ -173,7 +179,7 @@ def _pintar(p, k, titulo=True, todo=None) -> dict:
 
     if p["actividades"]:
         if titulo:
-            st.markdown(t("**Activities your log mentions**"))
+            st.markdown(t("**Activities this log mentions**") if oficina else t("**Activities your log mentions**"))
         _acts = p["actividades"]
         for j, f in enumerate(_acts):
             _et = "#%d · %s" % (f["orden"], f["etapa"])
@@ -197,11 +203,13 @@ def _pintar(p, k, titulo=True, todo=None) -> dict:
             _sig = _acts[j + 1] if j + 1 < len(_acts) else None
             if not (_sig and (_sig.get("pruebas") or []) == (f.get("pruebas") or [])
                     and _sig.get("aviso") == f.get("aviso") and _sig.get("cuenta") == f.get("cuenta")):
-                _prueba(f)
+                _prueba(f, oficina)
     for _ie, e in enumerate(p["etapas"]):
-        with st.expander(t(":material/checklist: Your log names «{e}» — which of these did "
+        with st.expander(t(":material/checklist: This log names «{e}» — which of these were finished?", e=e["termino"])
+                         if oficina else
+                         t(":material/checklist: Your log names «{e}» — which of these did "
                            "you finish?", e=e["termino"]), expanded=True, key="%s_exp_%d" % (k, _ie)):
-            _prueba(e)
+            _prueba(e, oficina)
             for o in e["opciones"]:
                 if o["hecha"]:
                     _ya(o)
@@ -211,9 +219,12 @@ def _pintar(p, k, titulo=True, todo=None) -> dict:
                                key="%s_e_%d_%s" % (k, o["orden"], o["actividad"])):
                     tick.append((o["orden"], o["actividad"]))
     for q in p["preguntas"]:
-        st.markdown(t("**«{x}» can mean several things — which one was it?**", x=q["termino"]))
+        # v649 · UNA opción = el agente duda de que esté entera («the CW buffer» para «buffers (car + CW)»): no es
+        # «puede ser varias cosas», es «¿está toda hecha?».
+        st.markdown(t("**«{x}» — tick it only if all of it is done.**", x=q["termino"]) if len(q["opciones"]) == 1
+                    else t("**«{x}» can mean several things — which one was it?**", x=q["termino"]))
         st.caption(q.get("regla", ""))
-        _prueba(q)
+        _prueba(q, oficina)
         for o in q["opciones"]:
             if o["hecha"]:
                 _ya(o)
@@ -224,8 +235,9 @@ def _pintar(p, k, titulo=True, todo=None) -> dict:
                 tick.append((o["orden"], o["actividad"]))
     if p["pendientes"]:
         # v646 · con clave: lleva «Add to To-do» dentro (trampa 35, verif_v547)
-        with st.expander(t(":material/pending: Pending in your log — not credited ({n})",
-                           n=len(p["pendientes"])), key="%s_exp_pend" % k):
+        with st.expander(t(":material/pending: Pending in this log — not credited ({n})", n=len(p["pendientes"]))
+                         if oficina else t(":material/pending: Pending in your log — not credited ({n})",
+                                           n=len(p["pendientes"])), key="%s_exp_pend" % k):
             for _ip, x in enumerate(p["pendientes"]):
                 st.caption("  ·  ".join("“%s”" % y for y in x["pruebas"]) or x["termino"])
                 if todo:
@@ -673,7 +685,7 @@ def _sin_plan(pid) -> str:
     return SP.version_desfasada(prj) or ("" if SP.plan_de_obra(prj) else "sin")
 
 
-def _nada_que_confirmar(p) -> None:
+def _nada_que_confirmar(p, oficina=False) -> None:
     """v586 · Un parte sin nada que CONFIRMAR lo dice: antes no salía nada debajo y no se
     sabía si la app lo había leído. `p` = `parte_propuestas.propuestas`."""
     if p["actividades"] or p["etapas"] or p["preguntas"]:
@@ -683,8 +695,9 @@ def _nada_que_confirmar(p) -> None:
         st.caption(t(":material/block: Mentioned, but not in this job's plan: {x}",
                      x=", ".join(sorted({f["actividad"] for f in p["fuera"]}))))
     if p["pendientes"]:
-        st.caption(t(":material/pending: What your log lists as still to do is not credited ({n}).",
-                     n=len(p["pendientes"])))
+        st.caption(t(":material/pending: What this log lists as still to do is not credited ({n}).", n=len(p["pendientes"]))
+                   if oficina else t(":material/pending: What your log lists as still to do is not credited ({n}).",
+                                     n=len(p["pendientes"])))
     for x in p["retiradas"]:
         st.caption(":material/help: %s" % t(x["motivo"]))
     for x in p["no_avance"]:
@@ -745,7 +758,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
     _prev = _props(texto, plan0, {} if partir else SP.acreditado(pid))
     # ⚠️ v607 · Con algo SIN ENTENDER también hay tarjeta: es donde se le contesta al agente.
     if not _prev["hay_algo"] and not (reg and AG.sin_entender(reg)):
-        _nada_que_confirmar(_prev)      # v586 · antes, nada debajo
+        _nada_que_confirmar(_prev, oficina)      # v586 · antes, nada debajo
         _pendientes_a_todo(_prev, (lid, str(pid)), kp)        # v646
         if oficina:
             # v646 · Sin nada que acreditar, la oficina lo cierra: si no, esperaría en su bandeja para siempre.
@@ -881,7 +894,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
             _cab = len(destinos) > 1 or d != str(pid)
             if _cab:
                 st.markdown("**→ %s**" % (ops or {}).get(d, d))
-            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab, todo=(lid, str(d)))
+            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab, todo=(lid, str(d)), oficina=oficina)
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
         if reg and not oficina:
@@ -935,8 +948,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
                 # ⚠️ No se marca revisado: si algo falló, la tarjeta tiene que seguir ahí.
                 st.error(" · ".join(str(e) for e in errores))
             else:
-                (flash.exito if ok else flash.error)(
-                    t("Credited {n} activities from your log.", n=n) if ok else msg)
+                (flash.exito if ok else flash.error)(_acreditadas(n, _nombre(_autor) if oficina else "") if ok else msg)
                 st.rerun()
         if c2.button(t("Nothing to credit"), key="%s_no" % kp, type="tertiary",
                      width="stretch"):
@@ -945,6 +957,14 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
                                              **({"oficina": grupo} if oficina else {}))
             (flash.exito if ok else flash.error)(msg)
             st.rerun()
+
+
+def _acreditadas(n, de="") -> str:
+    """v649 · Lo que se dice al confirmar: «1 activity» en singular, y para la oficina, de QUIÉN era el parte."""
+    if de:
+        return (t("Credited 1 activity from {who}'s log, on their behalf.", who=de) if n == 1
+                else t("Credited {n} activities from {who}'s log, on their behalf.", n=n, who=de))
+    return t("Credited 1 activity from your log.") if n == 1 else t("Credited {n} activities from your log.", n=n)
 
 
 def _estado_revision(r, pid) -> None:
@@ -960,8 +980,9 @@ def _estado_revision(r, pid) -> None:
     # v646 · Si lo confirmó la oficina, se dice que fue por su autor.
     _por = (" " + t("(on behalf of {a})", a=_nombre(r.get("Author")))
             if _q and _q != str(r.get("Author", "")) else "")
-    st.caption(t(":material/task_alt: Proposals reviewed by {q} · {n} activities credited "
-                 "from this log", q=(_nombre(_q) if _q else "—") + _por, n=n))
+    _q2 = (_nombre(_q) if _q else "—") + _por
+    st.caption(t(":material/task_alt: Proposals reviewed by {q} · 1 activity credited from this log", q=_q2) if n == 1
+               else t(":material/task_alt: Proposals reviewed by {q} · {n} activities credited from this log", q=_q2, n=n))
 
 
 def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
