@@ -10,6 +10,17 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE ESCRIBE LA APP AL TOCAR UNA TARJETA YA NO LO LEE EL MODELO COMO SUYO (v645)
+
+Visto en producción con v644, 2 de 2: tras pulsar Confirm, la app escribe «✅ …» en el chat como turno del asistente, y en la pregunta siguiente el modelo lo negó («I hadn't confirmed that»): dijo que campo000 no estaba en PRJ-0030 con la asignación ya hecha, y que el aviso a la cuadrilla quizá no había salido. Pasaba igual en el Field assistant.
+
+- `chat_ui.atender` marca esas líneas (`app` = confirm o cancel, y la tarjeta en `card`), y `chat_memoria.recortar` conserva la marca: mañana siguen siendo de la app.
+- `chat_agent._para_el_modelo` se las pasa al modelo como nota de la PERSONA: «[I pressed Confirm on the card «…». The app, not you, handled it and replied: …]», o «[I pressed Cancel …]». A la API no le llegan claves de más; en pantalla sale igual.
+- Las dos guías (campo y oficina) dicen que esas notas las escribe la app, que lo que dicen pasó de verdad, y que no se niegan ni se reintentan.
+- Examen real corto con permiso (en local, toda escritura vetada y contada): 3 conversaciones con Confirm ya pulsado, ninguna lo negó; $0,132, 0 intentos de escribir. Las conversaciones guardadas antes de v645 no traen la marca: sus líneas «✅» siguen yendo como antes hasta que caduquen (14 días).
+
+medido en producción como oficina, chip v645, sin errores: el asistente se abre con «Your conversation is kept for 14 days» y la conversación vacía. Sin preguntas nuevas en producción (gastan y escriben): lo medido es el examen real · verif_v645 21/21 · romper_v645 13/13 y las 5 afectadas, 298/298 (v639 50, v640 60, v641 50, v643 67, v644 71), 3138 anclas vivas · suite 266/266
+
 ## EL MANAGEMENT ASSISTANT ACTÚA CON TARJETA, Y ASIGNAR YA NO LLENA EL TABLERO DE DÍAS PASADOS (v644)
 
 Decisiones del usuario: cinco acciones que solo pasan con **Confirm**, To-do directo y memoria como el campo, sin fotos; nunca, ni confirmado: facturar, cobros, nóminas, Xero, borrar, usuarios, roles o tarifas, ni avance. El propietario, con su recorrido.
@@ -15642,7 +15653,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v644 = actual)
+## Versiones desplegadas (v645 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15650,6 +15661,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v645 | **Lo que escribe la app al tocar una tarjeta ya no lo lee el modelo como suyo**: tras Confirm lo negaba («I hadn't confirmed that»); va marcado, se recuerda marcado y llega como nota de la persona. medido en producción como oficina, chip v645, sin errores: el asistente se abre con «Your conversation is kept for 14 days» y la conversación vacía. Sin preguntas nuevas en producción (gastan y escriben): lo medido es el examen real · verif_v645 21/21 · romper_v645 13/13 y las 5 afectadas, 298/298 (v639 50, v640 60, v641 50, v643 67, v644 71), 3138 anclas vivas · suite 266/266 |
 | v644 | **El Management assistant actúa con tarjeta**: decide ausencias y correcciones, cierra avisos, asigna y avisa a la cuadrilla con la función de su pantalla, solo con Confirm; To-do directo y memoria. ⚠️ **Asignar ya no llena el tablero de días pasados**, tampoco en Save changes. medido en producción como oficina, chip v644, sin errores, 3 preguntas reales: «Your conversation is kept for 14 days», sin foto; asignar a campo000 en PRJ-0030 (cancelada y vacía), con su aviso de otra obra y el tablero del 16/11 al 11/12, y Confirm: asignado, avisado y 20 días en el tablero; aviso a la cuadrilla y Confirm: 1 persona y ALR-0005; To-do directo; cerrar ALR-0005 y Confirm: resuelto; la memoria guardó 9 mensajes y Clear la dejó en 0; PRJ-0030 devuelta a como estaba (cuadrilla vacía, 20 días limpiados, To-do borrado) sin avisar a nadie. ⚠️ Destapó que el asistente niega la línea «✅» que escribe la app tras Confirm y dice que no lo hizo: arreglo propuesto para v645 · verif_v644 138/138 · romper_v644 71/71 y las 13 afectadas, 367/367 (v430 26, v498 4, v555 14, v556 14, v559 35, v573 4, v581 29, v613 14, v639 50, v640 60, v641 50, v643 67), 3124 anclas vivas · suite 265/265 |
 | v643 | **El Management assistant consulta los datos de la empresa**: cartera, equipo, bandejas y dinero, solo lectura, atados a su rol y su empresa; ya no paga la cartera en cada pregunta. Sabe qué día es y responde en el idioma de la pregunta también con datos delante. ⚠️ **Una prueba ya no escribe de verdad**: una batería dejó 4 alarmas reales y avisos; el arnés lo para. medido en producción como oficina, sin errores: Home con 6 activas, 5 atrasadas, 181 h, retrasos 51/15/12/8 y los 3 planificados de hoy; Finance → Summary sin facturas ni costes este mes, Not invoiced $82,901 y 0 sobre presupuesto; Profitability, Parramatta 9.932,45 de coste e ingreso y 0 de ganancia: lo mismo que respondió el asistente. 4 exámenes REALES con permiso, en local contra los datos reales de cliente1 con toda escritura bloqueada: 34 preguntas, 0 intentos de escribir y $0,876; el aviso trampa, sin obedecer las 4 veces que salió; en el último, 7 de 7 en inglés desde la primera palabra, $0,026 por pregunta, mediana 7,1 s y máximo 17,7 s. ⚠️ Sin probar: una pregunta real desde la app desplegada. Hoja revisada tras la tanda: nada nuevo · verif_v643 98/98 · romper_v643 67/67, romper_arnes 36/36, romper_v623 30/30, romper_v630 26/26, romper_v632 28/28, romper_v639 50/50 y romper_v640 60/60 · suite 264/264 |
 | v642 | **El asistente responde en el idioma en que le preguntan**, con los nombres de las pantallas tal cual. Tarjetas y adjunto probados en un navegador real, con doble clic incluido. examen REAL con permiso, 5 preguntas como installer, con todas las escrituras bloqueadas: «remember» ya no va a To-do, no reintentó nada, contestó en español a lo español y en inglés a lo inglés con los nombres de pantalla tal cual, y 0 intentos de escribir; $0,092. En producción arranca sin errores; como campo no hay sesión allí · verif_v641 75/75 · romper_v641 50/50, romper_v640 60/60, romper_v469 9/9, romper_v449 7/7 y romper_v448 7/7 · suite 263/263 |
