@@ -165,7 +165,10 @@ with ThreadPoolExecutor(PROCESOS) as _varios:
 
 _dur = time.time() - t0
 _lect = [n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] == ["GET"]]
-_escr = sorted({n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] != ["GET"]})
+_escr = sorted({n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] != ["GET"] and "BLOQUEADA" not in m})
+# ⚠️ v643 · Lo paró el arnés, pero un guardián no debe ni intentarlo: es lo que dejó 4 alarmas reales en cliente1
+for _n in sorted({n for n, v in salidas.items() for h, *m in v if "BLOQUEADA" in m}):
+    rojo.append((_n, "intentó escribir de verdad o avisar a alguien (lo paró el arnés)"))
 _ritmo = len(_lect) / max(_dur / 60, 1)
 if _ritmo > TECHO_HOJA:
     rojo.append(("hoja real", f"{_ritmo:.0f} lecturas/min, por encima de {TECHO_HOJA}: mirar qué se dejó de guardar"))

@@ -80,6 +80,9 @@ def apunta(nombre, res):
     return f
 
 
+# ⚠️ v643 · Confirmar guarda la conversación: sin esto, cada suite escribía en la hoja `ChatMemory` real de cliente1
+from core import chat_memoria as _CM                              # noqa: E402
+_CM.guardar = lambda *a, **k: True
 TA.crear = apunta("TA.crear", (True, "TSK-9"))
 TA.marcar = apunta("TA.marcar", (True, "ok"))
 DL.crear = apunta("DL.crear", (True, "DL-9"))
@@ -113,7 +116,8 @@ chk("⚠️ fichar, firmar, enviar o acreditar no existen como herramienta", not
 _s = leer("core/chat_tools.py")
 _ll = {n.func.attr for n in ast.walk(ast.parse(_s)) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
 chk("⚠️ y el módulo no llama a nada de eso", not (_ll & {"clock_in", "clock_out", "fichar_proyecto", "cerrar_jornada", "firmar", "submit", "acreditar", "save_field_progress", "borrar", "cancelar"}), _ll)
-chk("sigue sin nóminas", "payroll" not in _s)
+# ⚠️ v643 · El P&L de la oficina dice «payroll_cost», que es un total: lo que no debe entrar es el módulo
+chk("sigue sin nóminas", "import payroll" not in _s and "payroll as" not in _s and ", payroll" not in _s)
 chk("⚠️ cada una dice si guarda o no", all(("no confirmation" in h["description"]) or ("card to confirm" in h["description"]) for h in CT.definiciones("field", "x")[5:]), [h["name"] for h in CT.definiciones("field", "x")[5:]])
 
 sec("2. Nivel 3: To-do, directo")

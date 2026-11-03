@@ -214,7 +214,7 @@ def _una_directa(ctx) -> None:\n""")]),
      [("""                chat_ui.olvidar()\n""", "")]),
     # ── El agente ──
     ("⚠️ las acciones no llegan a las herramientas", A,
-     [("""                           "acciones": acciones})\n""", """                           "acciones": []})\n""")]),
+     [("""                           "acciones": acciones, "pregunta": user_message})\n""", """                           "acciones": [], "pregunta": user_message})\n""")]),
     ("⚠️ no dice que no está hecho", A,
      [("""**Confirm**: hasta entonces NO se ha guardado ni enviado nada, y nunca digas que sí.""", """**Confirm**.""")]),
     ("⚠️ puede inventar en el parte", A,

@@ -17,11 +17,15 @@ A = "core/chat_agent.py"
 ROTURAS = [
     # ── A quién ──
     ("⚠️ la oficina recibe las herramientas del campo", T,
-     [("""    if rol != "field" or not str(usuario or "").strip():\n""", """    if not str(usuario or "").strip():\n""")]),
+     [("""_POR_ROL = {"field": TODAS, "administrator": LECTURA_OFICINA}\n""", """_POR_ROL = {"field": TODAS, "administrator": TODAS}\n""")]),
     ("⚠️ sin persona identificada también", T,
-     [("""    if rol != "field" or not str(usuario or "").strip():\n""", """    if rol != "field":\n""")]),
+     [("""    if not str(usuario or "").strip():
+        return []
+    return [{k: v for k, v in h.items() if k != "fn"} for h in _POR_ROL.get(rol, [])]
+""", """    return [{k: v for k, v in h.items() if k != "fn"} for h in _POR_ROL.get(rol, [])]
+""")]),
     ("⚠️ a la API le llega la función", T,
-     [("""    return [{k: v for k, v in h.items() if k != "fn"} for h in TODAS]\n""", """    return [dict(h) for h in TODAS]\n""")]),
+     [("""    return [{k: v for k, v in h.items() if k != "fn"} for h in _POR_ROL.get(rol, [])]\n""", """    return [dict(h) for h in _POR_ROL.get(rol, [])]\n""")]),
     # ── La identidad ──
     ("⚠️ el usuario lo dice el modelo", T,
      [("""    g, u = ctx["grupo"], ctx["usuario"]
@@ -57,7 +61,7 @@ ROTURAS = [
     etapas, siguiente = [], None
 """)]),
     ("⚠️ se enseñan documentos que el campo no ve", T,
-     [("""        if str(d.get("Type", "")) in _CAMPO_VER:\n""", """        if True:\n""")]),
+     [("""        if _oficina or str(d.get("Type", "")) in _CAMPO_VER:\n""", """        if True:\n""")]),
     # ── Los datos ──
     ("⚠️ hecha sin mi firma cuenta como hecha", T,
      [("""        ps = "needs_your_signature" if PS.pendiente_de_firma(pid, g, n, usuario=u) else "done"\n""", """        ps = "done"\n""")]),
@@ -129,7 +133,7 @@ ROTURAS = [
     ("⚠️ cada resultado en su mensaje", A,
      [("""                resultados.append({"type": "tool_result", "tool_use_id": b.id, "content": _txt,
                                    **({"is_error": True} if _mal else {})})
-        messages.append({"role": "user", "content": resultados})
+        messages.append({"role": "user", "content": resultados + [{"type": "text", "text": _idioma_tras_datos(ctx.get("pregunta", ""))}]})
 """, """                messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": b.id, "content": _txt}]})
 """)]),
     ("⚠️ el error no se marca", A,
@@ -161,7 +165,7 @@ ROTURAS = [
 """, "")]),
     ("⚠️ la oficina recibe la explicación", A,
      [("""    if herramientas:
-        _fijo = SYSTEM_PROMPT + "\\n\\n" + persona + _PERSONA["field_tools"]
+        _fijo = SYSTEM_PROMPT + "\\n\\n" + persona + _PERSONA["field_tools" if rol == "field" else "office_tools"]
         system = _fijo + context_block
 """, """    _fijo = SYSTEM_PROMPT + "\\n\\n" + persona + _PERSONA["field_tools"]
     system = _fijo + context_block

@@ -19,6 +19,11 @@ valen para los 400 ficheros de guardianes y baterías sin tocar ni uno.
    ⚠️ Una batería NUEVA va SIN corte (`tanda.py`): es donde se prueba que el guardián SALE con
    código de error. Con el corte, uno que imprimiera «FALLO» y saliera con 0 —verde en la suite—
    parecería cazar la rotura.
+4. Siempre: ⚠️ una prueba no escribe de verdad ni avisa a nadie. Escribir en Sheets o Drive, Telegram y correo se
+   paran aquí, y cada intento queda en `COPEX_RED` como BLOQUEADA (`run_suite.py` lo pone en ROJO). Lo destapó
+   el examen del Management assistant (v643): una rotura de `romper_v623` quitaba una validación y el guardián
+   llegaba a `alerts.report_problem` real. 4 pasadas, 4 alarmas en cliente1 y aviso a 5 cuentas.
+   ⚠️ Solo donde entra el arnés: una batería suelta sin este PYTHONPATH no lo lleva.
 """
 import os
 import sys
@@ -99,6 +104,45 @@ def _guardar_lecturas(carpeta):
     requests.adapters.HTTPAdapter.send = send
 
 
+def _es_escritura(metodo, url) -> bool:
+    """¿Cambia algo de verdad o avisa a alguien? Las lecturas y el token de acceso, no: sin ellos no arranca nada."""
+    u = str(url)
+    if "api.telegram.org" in u:
+        return True
+    if str(metodo).upper() in ("GET", "HEAD"):
+        return False
+    return "sheets.googleapis.com" in u or "googleapis.com/drive" in u or "googleapis.com/upload" in u
+
+
+def _sin_escrituras():
+    import smtplib
+    import requests.adapters
+    import requests.exceptions
+    _real = requests.adapters.HTTPAdapter.send
+    _fichero = os.environ.get("COPEX_RED")
+
+    def _parar(host, metodo):
+        if _fichero:
+            try:
+                with open(_fichero, "a", encoding="utf-8") as f:
+                    f.write("%s %s BLOQUEADA\n" % (host, metodo))
+            except OSError:
+                pass
+        return "arnés: una prueba no escribe de verdad ni avisa a nadie (%s %s)" % (metodo, host)
+
+    def send(self, request, *a, **k):
+        if _es_escritura(request.method, request.url):
+            raise requests.exceptions.ConnectionError(_parar(str(request.url).split("/")[2], request.method))
+        return _real(self, request, *a, **k)
+
+    def correo(self, *a, **k):
+        raise OSError(_parar("smtp", "SMTP"))
+
+    requests.adapters.HTTPAdapter.send = send
+    smtplib.SMTP.__init__ = correo
+    smtplib.SMTP_SSL.__init__ = correo
+
+
 def _compilar_en_memoria():
     """`py_compile.compile` SIEMPRE escribe el .pyc y, a diferencia de un `import`, revienta si no
     puede: con varios procesos a la vez, Windows rechaza reemplazarlo si otro lo tiene abierto
@@ -149,3 +193,4 @@ if os.environ.get("COPEX_CACHE_HOJA"):
     _guardar_lecturas(os.environ["COPEX_CACHE_HOJA"])
 if os.environ.get("COPEX_CORTE"):
     _cortar_en_fallo()
+_sin_escrituras()         # ⚠️ El último: envuelve a `_guardar_lecturas`, y lo parado no le llega

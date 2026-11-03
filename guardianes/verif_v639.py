@@ -120,7 +120,8 @@ chk("las cinco consultas", [h["name"] for h in _d][:5] == ["get_my_day", "get_my
 chk("⚠️ a la API no le llega la función", all(set(h) == {"name", "description", "input_schema"} for h in _d), [set(h) for h in _d][:1])
 chk("cada una dice cuándo usarla", all(len(h["description"]) > 60 and "Call it" in h["description"] for h in _d), [h["name"] for h in _d if "Call it" not in h["description"]])
 chk("⚠️ se pueden serializar", bool(json.dumps(_d)))
-chk("⚠️ a la oficina, ninguna por ahora", CT.definiciones("administrator", "Admin2") == [] and CT.definiciones("owner", "x") == [])
+# ⚠️ v643 · CADUCADO por decisión del usuario: la oficina ya tiene las suyas (verif_v643). El principio sigue: no las del campo.
+chk("⚠️ la oficina no recibe las del campo, y el propietario ninguna", "get_my_day" not in [h["name"] for h in CT.definiciones("administrator", "Admin2")] and CT.definiciones("owner", "x") == [])
 chk("⚠️ sin persona identificada, ninguna", CT.definiciones("field", "") == [] and CT.definiciones("field", "  ") == [])
 
 sec("2. ⚠️ La identidad sale de la sesión")
@@ -143,10 +144,11 @@ chk("un espacio de más no la cierra", not m and x["project_id"] == "PRJ-1")
 _llamadas["obras"].clear()
 ej("get_my_jobs")
 chk("las obras, con su grupo y las internas, como su Pre-Start", _llamadas["obras"] == [("campo000", "cliente1", True)], _llamadas["obras"])
-for _c in ({"usuario": "", "grupo": "cliente1"}, {"usuario": "x", "grupo": ""}, {}):
+# ⚠️ v643 · El rol se mira antes: sin él sale «Unknown tool» y esto pasaba sin probar la identidad (lo vio romper_v639)
+for _c in ({"rol": "field", "usuario": "", "grupo": "cliente1"}, {"rol": "field", "usuario": "x", "grupo": ""}, {"rol": "field"}):
     x, m = CT.ejecutar("get_my_jobs", {}, _c)
-    if not m:
-        chk("⚠️ sin identidad no se responde", False, _c)
+    if not (m and "could not be identified" in x):
+        chk("⚠️ sin identidad no se responde", False, (_c, x))
         break
 else:
     chk("⚠️ sin identidad no se responde", True)
@@ -164,7 +166,9 @@ chk("se encontraron las funciones que consultan", {f.name for f in _fns} == _con
 _llama = {n.func.attr for f in _fns for n in ast.walk(f) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
 chk("⚠️ lo que consulta no llama a nada que escriba", not (_llama & _prohibidas), _llama & _prohibidas)
 _imp = {a.name for n in ast.walk(_arbol) if isinstance(n, ast.ImportFrom) for a in n.names}
-chk("⚠️ las nóminas no están", not ({"payroll", "invoices", "expenses"} & _imp), _imp)
+# ⚠️ v643 · `invoices` y `expenses` son del dinero de la oficina (verif_v643): lo del campo se mira donde aplica
+_imp_c = {a.name for f in _fns for n in ast.walk(f) if isinstance(n, ast.ImportFrom) for a in n.names}
+chk("⚠️ las nóminas y el dinero no están en lo del campo", not ({"payroll", "invoices", "expenses", "finance"} & _imp_c) and "payroll" not in _imp, _imp_c)
 x, m = ej("get_job_details", {"project_id": "PRJ-1"})
 chk("⚠️ los documentos pasan el filtro del campo", "plano" in x["documents"] and "prestart" in x["documents"] and "informe_admin" not in x["documents"], x["documents"])
 
@@ -303,7 +307,8 @@ chk("⚠️ las herramientas no cambian entre vueltas (la API lo comprueba)", _v
 _u2 = [bloque("tool_use", id="a", name="get_my_day", input={}), bloque("text", text="miro"), bloque("tool_use", id="b", name="get_job_details", input={"project_id": "PRJ-2"})]
 r = pregunta(respuesta(_u2, stop="tool_use"), respuesta([bloque("text", text="listo")]))
 _res = _vistos[1]["messages"][-1]["content"]
-chk("⚠️ varias a la vez: todos los resultados en UN mensaje, en orden", [x["tool_use_id"] for x in _res] == ["a", "b"], _res)
+# ⚠️ v643 · Detrás va el recordatorio del idioma (verif_v643): los resultados siguen juntos y primero
+chk("⚠️ varias a la vez: todos los resultados en UN mensaje, en orden", [x.get("tool_use_id") for x in _res if x["type"] == "tool_result"] == ["a", "b"] and _res[0]["type"] == "tool_result", _res)
 chk("⚠️ la obra ajena vuelve marcada como error", _res[1].get("is_error") is True and "is_error" not in _res[0], _res)
 _w = [respuesta([bloque("tool_use", id="t%d" % i, name="get_my_jobs", input={})], stop="tool_use") for i in range(20)]
 r = pregunta(*_w)
@@ -323,8 +328,10 @@ chk("⚠️ el historial de la app no se contamina con las vueltas internas", _h
 
 sec("7. Quién recibe qué")
 pregunta(respuesta([bloque("text", text="x")]), rol="administrator", usuario="Admin2")
-chk("⚠️ la oficina no recibe herramientas", "tools" not in _vistos[0] and "TUS HERRAMIENTAS" not in _vistos[0]["system"] and isinstance(_vistos[0]["system"], str), _vistos[0].keys())
-chk("...y sigue con su estado del grupo", "VIVO" in _vistos[0]["system"])
+# ⚠️ v643 · Con persona identificada la oficina mira lo que necesita: sin ella, el resumen de siempre
+chk("⚠️ a la oficina no le llegan las del campo", "get_my_day" not in json.dumps(_vistos[0].get("tools", [])), _vistos[0].keys())
+pregunta(respuesta([bloque("text", text="x")]), rol="administrator", usuario="")
+chk("...y sin persona, su estado del grupo de siempre", "tools" not in _vistos[0] and "VIVO" in _vistos[0]["system"])
 pregunta(respuesta([bloque("text", text="x")]), rol="owner", usuario="own")
 chk("el propietario tampoco", "tools" not in _vistos[0])
 pregunta(respuesta([bloque("text", text="x")]), usuario="")

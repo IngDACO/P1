@@ -73,7 +73,7 @@ ROTURAS = [
     ("⚠️ la persona no llega al modelo", C,
      [("""    system = SYSTEM_PROMPT + "\\n\\n" + persona + context_block\n""", """    system = SYSTEM_PROMPT + context_block\n""")]),
     ("⚠️ el campo recibe el estado del grupo", C,
-     [("""    if rol == "administrator" and grupo:\n""", """    if grupo:\n""")]),
+     [("""    if rol == "administrator" and grupo and not herramientas:\n""", """    if grupo:\n""")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", C,

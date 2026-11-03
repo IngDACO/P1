@@ -84,7 +84,11 @@ def monta(filas=None):
     return h
 
 
-from core import drive_store, projects as P                       # noqa: E402
+from core import alerts as _AL, drive_store, projects as P         # noqa: E402
+
+# ⚠️ v643 · Sin esto, la rotura «near miss sin descripción» de romper_v623 llegaba a la alarma REAL: cada pasada dejó una
+# fila en cliente1 y un aviso a 5 cuentas (ALR-0005..0008, las destapó el examen del Management assistant).
+_AL.report_problem = lambda *a, **k: (True, "ALR-X")
 
 sec("1. ⚠️ El motor")
 h = monta()
