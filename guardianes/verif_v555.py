@@ -254,6 +254,12 @@ at.run()
 chk("⚠️ una acción apuntada a la de OTRA empresa no llega a `resolver`",
     len([x for x in log(at) if x[0] == "resolver"]) == _n, log(at)[-2:])
 chk("…y se dice", any("Request not found" in m for _t2, m in flashes(at)), flashes(at))
+# ⚠️ v644 · Aprobar lo vuelve a mirar `decidir` (la comparte el Management assistant), así que la de arriba ya no
+# prueba sola la de la bandeja. Cancelar solo pasa por esta: se prueba también.
+_c = len([x for x in log(at) if x[0] == "cancelar"])
+at.session_state["_aus_accion"] = {"aid": "AUS-6", "cancelar": True}
+at.run()
+chk("⚠️ …ni cancelar la de OTRA empresa", len([x for x in log(at) if x[0] == "cancelar"]) == _c, log(at)[-2:])
 chk("sin excepción en todo el recorrido", not at.exception, [e.value for e in at.exception][:1])
 
 print("\n" + "=" * 70)

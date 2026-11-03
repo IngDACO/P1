@@ -20,6 +20,12 @@ de SU grupo. ⚠️ El rol se comprueba en `ejecutar`, no solo al ofrecerlas: qu
 herramienta de otro rol no la abre. El propietario, ninguna: ve varias empresas a la vez, y va con su
 recorrido (decisión del usuario).
 
+v644 · La oficina, con los mismos tres niveles: To-do directo, y cinco que prepara y confirma
+(`PREPARAR_OFICINA`): aprobar o rechazar una ausencia, aprobar o revertir una corrección de fichaje,
+cerrar un aviso, asignar a alguien a una obra y mandar un aviso a la cuadrilla. Hacen lo MISMO que su
+pantalla, con sus funciones (`ausencias_ui.decidir`, `correcciones_ui.hacer`, `projects_ui.avisos_asignacion`).
+⚠️ Nunca, ni confirmado: facturar, cobros, nóminas, Xero, borrar, usuarios, roles o tarifas, ni avance.
+
 ## ⚠️ La identidad no la dice el modelo
 
 Ninguna herramienta recibe un usuario: sale de `ctx`, que la app arma con la SESIÓN. El modelo solo
@@ -40,6 +46,7 @@ por el mismo filtro que Files (`_CAMPO_VER`).
 """
 import json
 import logging
+import re
 import uuid
 
 from core import clock
@@ -56,6 +63,7 @@ MAX_LISTA = 15            # de cada lista de la oficina: lo que cabe en una resp
 MAX_DIRECTAS = 5          # apuntar o marcar, por pregunta: un error del modelo no vacía la lista
 MAX_TARJETAS = 3          # esperando un toque a la vez
 MAX_AVISO = 1000          # lo mismo que manda la pantalla del parte a la oficina
+MAX_NOTA = 500            # v644 · la nota a la persona al decidir
 _ESTADO_CRED = {"incompleta": "incomplete", "vigente": "valid", "por_vencer": "expiring_soon", "vencido": "expired"}
 
 
@@ -253,7 +261,7 @@ def _marcar_tarea(entrada, ctx) -> dict:
 # ═════════════════════════════════════════════════════════════════
 # Nivel 2 — lo que prepara: valida y deja una tarjeta, SIN escribir
 # ═════════════════════════════════════════════════════════════════
-def _tarjeta(ctx, tipo, titulo, detalle, datos) -> dict:
+def _tarjeta(ctx, tipo, titulo, detalle, datos, avisos=None) -> dict:
     lista = ctx.get("acciones")
     if lista is None:
         raise _Negado("Nothing can be prepared here.")
@@ -262,9 +270,11 @@ def _tarjeta(ctx, tipo, titulo, detalle, datos) -> dict:
     if len(lista) >= MAX_TARJETAS:
         raise _Negado("Several cards are already waiting. Ask the person to confirm or cancel them first.")
     lista.append({"id": uuid.uuid4().hex[:8], "tipo": tipo, "titulo": titulo, "detalle": detalle, "datos": datos})
+    # v644 · Lo que la tarjeta advierte, también al modelo: que lo diga ahora, no que se descubra al confirmar
     return {"prepared": True, "status": "NOT DONE YET",
             "next": "They now see a card with Confirm and Cancel, and nothing happens until they press Confirm. "
-                    "Tell them that in one line. Do not say it is done."}
+                    "Tell them that in one line. Do not say it is done.",
+            **({"warnings_on_the_card": list(avisos)} if avisos else {})}
 
 
 def _preparar_parte(entrada, ctx) -> dict:
@@ -326,6 +336,9 @@ def confirmar(accion, ctx) -> tuple:
     if not str(u).strip() or not str(g).strip():
         return False, t("This person could not be identified.")
     tipo = (accion or {}).get("tipo")
+    # ⚠️ v644 · Solo las tarjetas de SU rol: viven en la sesión, pero confirmar no se fía de ellas
+    if tipo not in _TARJETAS_DE.get(str(ctx.get("rol", "")), ()):
+        return False, t("This action is not recognised.")
     try:
         if tipo == "parte":
             from core import daily_log as DL
@@ -345,6 +358,8 @@ def confirmar(accion, ctx) -> tuple:
             _m = (t("{x} recorded ({i}).", x=AU.nombre_tipo(d.get("tipo")), i=r) if not AU.TIPOS[d.get("tipo")]["aprobacion"]
                   else t("Request sent ({i}). We will let you know when it is resolved.", i=r))
             return True, _m + (" " + aviso if aviso else "")
+        if tipo in _CONFIRMAR_OFICINA:
+            return _CONFIRMAR_OFICINA[tipo](d, ctx)
     except _Negado as e:
         return False, str(e)
     except Exception as e:
@@ -356,8 +371,18 @@ def confirmar(accion, ctx) -> tuple:
 # ═════════════════════════════════════════════════════════════════
 # La oficina (v643): su grupo, y lo que ya ve en sus pantallas
 # ═════════════════════════════════════════════════════════════════
+def _logins(prj) -> list:
+    return [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
+
+
 def _asignados(prj, nom) -> list:
-    return [nom.get(x.strip(), x.strip()) for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
+    return [nom.get(x, x) for x in _logins(prj)]
+
+
+def _alarmas_abiertas(g) -> list:
+    """Los avisos abiertos de SU grupo: los que ve la bandeja y los únicos que se cierran desde aquí."""
+    from core import alerts as AL
+    return [r for r in AL._alarmas_visibles() if str(r.get("Group", "")) == str(g) and str(r.get("Status", "")) == "abierta"]
 
 
 def _cartera(entrada, ctx) -> dict:
@@ -398,14 +423,16 @@ def _equipo(entrada, ctx) -> dict:
             if _ci[:10] != hoy.isoformat():
                 e["left_open_from_a_previous_day"] = True
     planificado = []
-    for u in auth.list_users(g):
-        if str(u.get("Role", "")).lower() != "field":
-            continue
+    _campo = [u for u in auth.list_users(g) if str(u.get("Role", "")).lower() == "field"]
+    for u in _campo:
         _us = str(u.get("User", ""))
         for a in R.asignaciones_dia(g, _us, dia) or []:
             planificado.append({"who": nom.get(_us, _us), "what": a.get("etiqueta", ""),
                                 "project_id": a.get("proyecto_id", ""), "note": a.get("nota", "")})
-    return {"date": dmy(dia), "clocked_in_now": list(fichados.values()), "planned": planificado,
+    # ⚠️ v644 · Toda la gente de campo, por su nombre: sin ella, «put installer on PRJ-0034» no se preparó (examen
+    # real), porque el modelo no sabía quién era «installer». Con el login detrás solo si el nombre se repite.
+    return {"date": dmy(dia), "field_staff": sorted(auth.etiqueta_usuarios(_campo).values(), key=str.lower)[:MAX_LISTA * 2],
+            "clocked_in_now": list(fichados.values()), "planned": planificado,
             "absent": [{"who": nom.get(str(r.get("User", "")), r.get("Name", "")), "type": AU.nombre_tipo(str(r.get("Type", ""))),
                         "from": dmy(r.get("From", "")), "to": dmy(r.get("To", "")), "status": r.get("Status", "")}
                        for r in AU.ausentes_en(g, dia)],
@@ -415,12 +442,13 @@ def _equipo(entrada, ctx) -> dict:
 
 
 def _bandejas(entrada, ctx) -> dict:
-    from core import admin_digest as AD, alerts as AL, ausencias as AU, correcciones as CO, falsecar as FC
+    from core import admin_digest as AD, ausencias as AU, correcciones as CO, falsecar as FC
     g = ctx["grupo"]
     nom = AD.nombres_usuarios()
     _quien = lambda r: nom.get(str(r.get("User", "")), r.get("Name", ""))        # noqa: E731
     _dias = FC.dias_sin_registro(g)
-    _als = [r for r in AL._alarmas_visibles() if str(r.get("Group", "")) == str(g) and str(r.get("Status", "")) == "abierta"]
+    _als = _alarmas_abiertas(g)
+    _cors = CO.list_group(g)
     _obras = {str(o.get("ID", "")): o.get("Name", "") for o in _mis_obras(ctx)}
     return {
         "absences_to_approve": [{"id": r.get("ID", ""), "who": _quien(r), "type": AU.nombre_tipo(str(r.get("Type", ""))),
@@ -428,7 +456,9 @@ def _bandejas(entrada, ctx) -> dict:
                                  "reason": _corto(r.get("Reason", ""))} for r in AU.pendientes(g)[:MAX_LISTA]],
         "time_fixes_to_review": [{"id": r.get("ID", ""), "who": _quien(r), "job": r.get("Project", ""), "field": r.get("Field", ""),
                                   "was": r.get("OldValue", ""), "now": r.get("NewValue", ""), "reason": _corto(r.get("Reason", "")),
-                                  "already_on_payslip": r.get("PayslipCovers", "")} for r in CO.pendientes(g)[:MAX_LISTA]],
+                                  "already_on_payslip": r.get("PayslipCovers", ""),
+                                  # v644 · otra posterior volvió a cambiar ese fichaje: se revisa aquella
+                                  "superseded_by": CO.sustituida_por(r, _cors)} for r in CO.pendientes(g)[:MAX_LISTA]],
         "sick_days_over_balance": [{"id": x["id"], "who": x["nombre"], "days": len(x["dias"])} for x in AU.excesos_por_decidir(g)[:MAX_LISTA]],
         "open_alerts": [{"id": r.get("ID", ""), "job": _obras.get(str(r.get("ProjectID", "")), r.get("ProjectID", "")),
                          "project_id": r.get("ProjectID", ""), "message": _corto(r.get("Message", "")),
@@ -476,6 +506,289 @@ def _dinero(entrada, ctx) -> dict:
             "open_invoices": [{"number": f.get("Number", ""), "client": f.get("ClientName", ""), "total": f.get("Total", ""),
                                "collected": f.get("Collected", ""), "due": dmy(f.get("ExpiryDate", "")), "status": INV.estado_cobro(f)}
                               for f in _abiertas[:MAX_LISTA]]}
+
+
+# ═════════════════════════════════════════════════════════════════
+# La oficina, nivel 2 (v644): prepara las cinco, y `confirmar` las hace al tocar Confirm
+# ═════════════════════════════════════════════════════════════════
+def _nombre_de(r, nom) -> str:
+    return nom.get(str(r.get("User", "")), r.get("Name", "")) or str(r.get("User", ""))
+
+
+def _decision(entrada, opciones) -> str:
+    d = str((entrada or {}).get("decision", "")).strip().lower()
+    if d not in opciones:
+        raise _Negado("The decision has to be " + " or ".join(opciones) + ".")
+    return d
+
+
+def _nota(entrada) -> str:
+    n = str((entrada or {}).get("note") or "").strip()
+    if len(n) > MAX_NOTA:
+        raise _Negado(f"That note is too long (limit {MAX_NOTA} characters): shorten it.")
+    return n
+
+
+def _sin_formato(x) -> str:
+    """Un aviso de la pantalla sin iconos ni negritas: la tarjeta lo enseña tal cual (`literal_md`)."""
+    return re.sub(r":material/[a-z_]+:\s*", "", str(x)).replace("**", "")
+
+
+def _ausencia_pendiente(entrada, ctx) -> dict:
+    """⚠️ Los IDs del modelo entran solo por estas tres: lo que ESPERA en SU grupo, o nada."""
+    from core import ausencias as AU
+    aid = str((entrada or {}).get("absence_id", "")).strip()
+    pend = AU.pendientes(ctx["grupo"])
+    r = next((x for x in pend if str(x.get("ID", "")).strip() == aid), None)
+    if r is None:
+        raise _Negado("That is not one of the absences waiting for approval. Waiting: "
+                      + (", ".join(f"{x.get('ID')} ({x.get('Name')})" for x in pend[:MAX_LISTA]) or "none"))
+    return r
+
+
+def _correccion_pendiente(entrada, ctx) -> dict:
+    from core import correcciones as CO
+    cid = str((entrada or {}).get("time_fix_id", "")).strip()
+    pend = CO.pendientes(ctx["grupo"])
+    r = next((x for x in pend if str(x.get("ID", "")).strip() == cid), None)
+    if r is None:
+        raise _Negado("That is not one of the time fixes waiting for review. Waiting: "
+                      + (", ".join(f"{x.get('ID')} ({x.get('Name')})" for x in pend[:MAX_LISTA]) or "none"))
+    return r
+
+
+def _aviso_abierto(entrada, ctx) -> dict:
+    aid = str((entrada or {}).get("alert_id", "")).strip()
+    abiertas = _alarmas_abiertas(ctx["grupo"])
+    r = next((x for x in abiertas if str(x.get("ID", "")).strip() == aid), None)
+    if r is None:
+        raise _Negado("That is not one of this company's open alerts. Open: "
+                      + (", ".join(str(x.get("ID")) for x in abiertas[:MAX_LISTA]) or "none"))
+    return r
+
+
+def _persona_de_campo(entrada, ctx) -> tuple:
+    """`(login, nombre)` de alguien de campo de SU grupo. ⚠️ El modelo da un nombre: se busca entre ellos, y
+    con dos que se llamen igual se pregunta (el nombre se repite; el login es la identidad)."""
+    from core import auth
+    x = str((entrada or {}).get("person", "")).strip().lower()
+    campo = [u for u in auth.list_users(ctx["grupo"]) if str(u.get("Role", "")).lower() == "field"]
+    _et = auth.etiqueta_usuarios(campo)
+    _de = lambda u: _et.get(str(u.get("User", "")), str(u.get("Name") or u.get("User", "")))   # noqa: E731
+    hall = [u for u in campo if x and x in (str(u.get("User", "")).strip().lower(),
+                                            str(u.get("Name", "")).strip().lower(), _de(u).strip().lower())]
+    if len(hall) > 1:
+        raise _Negado("More than one person is called that: " + ", ".join(_de(u) for u in hall) + ". Ask which one.")
+    if not hall:
+        raise _Negado("There is nobody in the field staff called that. Field staff: "
+                      + (", ".join(_de(u) for u in campo[:MAX_LISTA * 2]) or "none"))
+    return str(hall[0].get("User", "")), _de(hall[0])
+
+
+def _preparar_decision_ausencia(entrada, ctx) -> dict:
+    from core import admin_digest as AD, ausencias as AU
+    r = _ausencia_pendiente(entrada, ctx)
+    aprobar = _decision(entrada, ("approve", "reject")) == "approve"
+    nota = _nota(entrada)
+    g, usuario, quien = ctx["grupo"], str(r.get("User", "")), _nombre_de(r, AD.nombres_usuarios())
+    lineas = [t("{a} to {b} · {n} day(s)", a=dmy(r.get("From", "")), b=dmy(r.get("To", "")), n=r.get("Days", ""))]
+    if str(r.get("Reason", "")).strip():
+        lineas.append(t("Reason: {x}", x=_corto(r.get("Reason"))))
+    avisos = []
+    if aprobar:
+        # Lo que la tarjeta de Absences enseña ANTES de aprobar: el saldo que queda y las obras que pierde
+        s = AU.saldo(g, usuario, str(r.get("Type", "")))
+        if not s["ilimitado"]:
+            _tras = s["restantes"] - _num(r.get("Days"))
+            lineas.append(t("Balance after this: {d} of {a} days.", d=f"{_tras:.0f}", a=f"{s['asignados']:.0f}"))
+            if _tras < 0:
+                avisos.append(t("This goes over their balance."))
+        _ch = list(dict.fromkeys(str(c.get("etiqueta", "")) for c in AU.choques(g, usuario, r.get("From"), r.get("To"))))
+        if _ch:
+            avisos.append(t("Already planned on those days: {x}. Those days are freed on the board.", x=", ".join(_ch)))
+    if nota:
+        lineas.append(t("Note for them: {x}", x=nota))
+    lineas += ["⚠️ " + a for a in avisos] + [t("{who} is told.", who=quien)]
+    _x = AU.nombre_tipo(str(r.get("Type", "")))
+    return _tarjeta(ctx, "ausencia_decidir",
+                    t("Approve · {x} · {who}", x=_x, who=quien) if aprobar else t("Reject · {x} · {who}", x=_x, who=quien),
+                    "\n".join(lineas), {"absence_id": str(r.get("ID", "")), "approve": aprobar, "note": nota}, avisos)
+
+
+def _preparar_decision_fichaje(entrada, ctx) -> dict:
+    from core import admin_digest as AD, correcciones as CO, correcciones_ui as CUI
+    r = _correccion_pendiente(entrada, ctx)
+    accion = {"approve": "aprobar", "revert": "revertir"}[_decision(entrada, ("approve", "revert"))]
+    _no = CUI.no_se_puede(r, accion, CO.list_group(ctx["grupo"]))
+    if _no:
+        raise _Negado(_no + " Tell the person: it is reviewed in Planning → Time fixes.")
+    nota = _nota(entrada)
+    quien = _nombre_de(r, AD.nombres_usuarios())
+    _antes = CUI._hhmm(r.get("OldValue")) if str(r.get("OldValue", "")).strip() else t("(open)")
+    _qd = (t("clock in") if str(r.get("Field", "")) == CO.CAMPO_IN else t("clock out"), CUI._dia(r), CUI._tipo_txt(r),
+           str(r.get("Project", "")).strip())
+    lineas = [" · ".join(x for x in _qd if x),
+              t("Was {a} → now {b} · {d}", a=_antes, b=CUI._hhmm(r.get("NewValue")), d=CUI._dif_horas(r))]
+    if str(r.get("Reason", "")).strip():
+        lineas.append(t("Reason: {x}", x=_corto(r.get("Reason"))))
+    avisos = []
+    if str(r.get("PayslipCovers", "")).strip():
+        avisos.append(t("That day was already paid in {x}: check whether it needs regularising.", x=r.get("PayslipCovers")))
+    if nota:
+        lineas.append(t("Note: {x}", x=nota))
+    lineas += ["⚠️ " + a for a in avisos]
+    lineas.append(t("The time goes back to {a} and {who} is told.", a=_antes, who=quien) if accion == "revertir"
+                  else t("The time stays as it is. Nobody is told."))
+    return _tarjeta(ctx, "fichaje_decidir",
+                    t("Approve time fix · {who} · {d}", who=quien, d=_qd[1]) if accion == "aprobar"
+                    else t("Revert time fix · {who} · {d}", who=quien, d=_qd[1]),
+                    "\n".join(lineas), {"time_fix_id": str(r.get("ID", "")), "action": accion, "note": nota}, avisos)
+
+
+def _preparar_cierre_aviso(entrada, ctx) -> dict:
+    from core import admin_digest as AD
+    r = _aviso_abierto(entrada, ctx)
+    _o = {str(o.get("ID", "")): o.get("Name", "") for o in _mis_obras(ctx)}.get(str(r.get("ProjectID", "")), r.get("ProjectID", ""))
+    _de = AD.nombres_usuarios().get(str(r.get("CreatedBy", "")), r.get("CreatedBy", ""))
+    return _tarjeta(ctx, "aviso_cerrar", t("Close alert · {o}", o=_o),
+                    "\n".join([f"{dmy(r.get('Date', ''))} · {_de}", _corto(r.get("Message", "")), t("It is marked as resolved, by you.")]),
+                    {"alert_id": str(r.get("ID", ""))})
+
+
+def _dias_del_tablero(prj, g):
+    """`(desde, hasta)` que el tablero llenaría al asignar, o `None` y por qué. ⚠️ Desde HOY, como
+    `roster.autopoblar_proyecto` (v644): la tarjeta dice lo que pasará, no lo que pasaba antes."""
+    d0, d1 = _parse_date(prj.get("StartDate")), _parse_date(prj.get("EndDateEst"))
+    if not d0 or not d1 or d1 < d0:
+        return None, "sin_fechas"
+    hoy = clock.today(g)
+    if d1 < hoy:
+        return None, "pasado"
+    return (max(d0, hoy), d1), ""
+
+
+def _lo_del_tablero(prj, g) -> str:
+    dias, por = _dias_del_tablero(prj, g)
+    if dias:
+        return t("The planner fills their free weekdays from {a} to {b}.", a=dmy(dias[0]), b=dmy(dias[1]))
+    if por == "pasado":
+        return t("The job's end date ({b}) has passed: nothing is planned on the board. Plan them in Planning → Panel "
+                 "if needed.", b=dmy(prj.get("EndDateEst")))
+    return t("The job has no start or end date: nothing is planned on the board.")
+
+
+def _preparar_asignacion(entrada, ctx) -> dict:
+    from core import projects_ui as PU
+    prj = _obra(entrada, ctx)
+    u, quien = _persona_de_campo(entrada, ctx)
+    pid, nombre = str(prj.get("ID", "")), str(prj.get("Name", ""))
+    if u in _logins(prj):
+        raise _Negado(f"{quien} is already assigned to {nombre}.")
+    _req = [x.strip() for x in str(prj.get("RequiredCerts", "")).split(";") if x.strip()]
+    # ⚠️ Los MISMOS avisos que la pantalla, de la misma función: ausencias, certificados, otras obras, contacto
+    a = PU.avisos_asignacion([u], ctx["grupo"], exclude_pid=pid, certs_req=_req,
+                             fechas=(prj.get("StartDate"), prj.get("EndDateEst")))
+    avisos = ([t("Not available: {x}", x=_sin_formato(x)) for x in a["fuera"]]
+              + [t("Missing the certificates this job requires: {x}", x=_sin_formato(x)) for x in a["no_cumplen"]]
+              + [t("Required certificates expiring soon: {x}", x=_sin_formato(x)) for x in a["cert_pv"]]
+              + [t("Other credentials to check: {x}", x=_sin_formato(x)) for x in a["cred_mal"]]
+              + [t("Already on another job: {x}", x=_sin_formato(x)) for x in a["ocupados"]]
+              + ([t("Missing contact details: they will not get the assignment or the inductions.")] if a["sin_contacto"] else []))
+    lineas = ["⚠️ " + x for x in avisos] + [t("They get the job details and the inductions by email or Telegram."),
+                                           _lo_del_tablero(prj, ctx["grupo"])]
+    return _tarjeta(ctx, "asignar", t("Assign · {who} → {o}", who=quien, o=nombre), "\n".join(lineas),
+                    {"project_id": pid, "user": u}, avisos)
+
+
+def _preparar_aviso_cuadrilla(entrada, ctx) -> dict:
+    from core import admin_digest as AD
+    prj = _obra(entrada, ctx)
+    txt = str(entrada.get("message") or "").strip()
+    if not txt:
+        raise _Negado("The notice is empty: ask them what to tell the crew.")
+    if len(txt) > MAX_AVISO:
+        raise _Negado(f"That is too long for a notice (limit {MAX_AVISO} characters): shorten it.")
+    _us = _logins(prj)
+    if not _us:
+        raise _Negado(f"Nobody is assigned to {prj.get('Name', '')}: there is no crew to tell.")
+    nom = AD.nombres_usuarios()
+    return _tarjeta(ctx, "aviso_cuadrilla", t("Notice to the crew · {o}", o=prj.get("Name", "")),
+                    txt + "\n" + t("To: {x}. By email or Telegram, and it stays in the job's Alerts.", x=", ".join(nom.get(x, x) for x in _us)),
+                    {"project_id": str(prj.get("ID", "")), "message": txt})
+
+
+# ⚠️ Al confirmar, todo se VUELVE a mirar: otro pudo decidir antes, o la cuadrilla cambió.
+def _confirmar_ausencia(d, ctx) -> tuple:
+    from core import ausencias_ui as AUI
+    _ausencia_pendiente(d, ctx)
+    return AUI.decidir(ctx["grupo"], d.get("absence_id"), bool(d.get("approve")), ctx["usuario"], d.get("note", ""))
+
+
+def _confirmar_fichaje(d, ctx) -> tuple:
+    from core import correcciones_ui as CUI
+    _correccion_pendiente(d, ctx)
+    if d.get("action") not in ("aprobar", "revertir"):
+        return False, t("This action is not recognised.")
+    return CUI.hacer({"cid": d.get("time_fix_id"), "accion": d.get("action"), "nota": d.get("note", "")},
+                     ctx["grupo"], ctx["usuario"])
+
+
+def _confirmar_cierre(d, ctx) -> tuple:
+    from core import alerts as AL
+    _aviso_abierto(d, ctx)
+    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=True)
+
+
+def _confirmar_asignacion(d, ctx) -> tuple:
+    """Lo que hace **Save changes** con alguien nuevo: asignarlo, avisarle y llenar su tablero (`_autoagenda`)."""
+    from core import notify, projects as P, roster as R
+    prj = _obra(d, ctx)
+    u, quien = _persona_de_campo({"person": d.get("user")}, ctx)
+    pid, nombre = str(prj.get("ID", "")), str(prj.get("Name", ""))
+    if u in _logins(prj):
+        return False, t("{who} is already assigned to {o}.", who=quien, o=nombre)
+    ok, _n = P.add_field_user(pid, u)
+    if not ok:
+        return False, t("That could not be saved. Try again in a minute.")
+    partes = [t("{who} assigned to {o}.", who=quien, o=nombre)]
+    try:
+        if not notify.any_channel_configured():
+            partes.append(t("No notification channels are configured, so nobody was told."))
+        else:
+            rr = notify.notify_assignment(u, prj)
+            partes.append(t("They were told.") if rr.get("email") or rr.get("telegram")
+                          else t("They could not be told: check their email in Planning → Users."))
+    except Exception as e:
+        logger.warning("chat_tools: aviso de la asignación: %r", e)
+        partes.append(t("They could not be told."))
+    dias, por = _dias_del_tablero(prj, ctx["grupo"])
+    if por == "pasado":
+        partes.append(t("The job's end date has passed: nothing was planned on the board."))
+    if dias:
+        try:
+            r = R.autopoblar_proyecto(ctx["grupo"], pid, [u], dias[0].isoformat(), dias[1].isoformat())
+            partes.append(t("Planner: {n} day(s) assigned.", n=r["llenadas"])
+                          + (" " + t("{n} day(s) already taken were left alone.", n=r["ocupadas"]) if r["ocupadas"] else ""))
+        except Exception as e:
+            logger.warning("chat_tools: tablero de la asignación: %r", e)
+            partes.append(t("The planner could not be filled: plan them in Planning → Panel."))
+    return True, " ".join(partes)
+
+
+def _confirmar_aviso_cuadrilla(d, ctx) -> tuple:
+    from core import alerts as AL
+    prj = _obra(d, ctx)
+    _us = _logins(prj)                       # la cuadrilla de AHORA, no la de cuando se preparó
+    if not _us:
+        return False, t("Nobody is assigned to {o} now.", o=prj.get("Name", ""))
+    ok, r = AL.notify_change(str(prj.get("ID", "")), ctx["grupo"], d.get("message"), ctx["usuario"], _us, str(prj.get("Name", "")))
+    return ((True, t("Sent to {n} person(s) on {o}, and left in its Alerts ({a}).", n=len(_us), o=prj.get("Name", ""), a=r))
+            if ok else (False, str(r)))
+
+
+_CONFIRMAR_OFICINA = {"ausencia_decidir": _confirmar_ausencia, "fichaje_decidir": _confirmar_fichaje,
+                      "aviso_cerrar": _confirmar_cierre, "asignar": _confirmar_asignacion,
+                      "aviso_cuadrilla": _confirmar_aviso_cuadrilla}
 
 
 _SIN_ENTRADA = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -551,8 +864,9 @@ LECTURA_OFICINA = [
     {"name": "get_team", "fn": _equipo,
      "input_schema": {"type": "object", "additionalProperties": False,
                       "properties": {"date": {"type": "string", "description": "YYYY-MM-DD. Defaults to today."}}},
-     "description": "The team on a day: who is clocked in now and where (today only), who is planned on what, who is absent, and "
-                    "credentials expiring. Call it for anything about people: who is working, who is off, who is free."},
+     "description": "The team on a day: the whole field staff by name, who is clocked in now and where (today only), who is "
+                    "planned on what, who is absent, and credentials expiring. Call it for anything about people: who is "
+                    "working, who is off, who is free."},
     {"name": "get_inbox", "fn": _bandejas, "input_schema": _SIN_ENTRADA,
      "description": "What is waiting for the office: absences to approve, time fixes to review, sick days over balance to decide, open "
                     "alerts, and days worked with no Pre-Start or false car check. Call it for anything about what is pending."},
@@ -565,7 +879,49 @@ LECTURA_OFICINA = [
                     "profit and loss for a period, jobs by profit, over budget, pending to invoice and open invoices. Call it for anything "
                     "about costs, budget, invoices or margin."},
 ]
-_POR_ROL = {"field": TODAS, "administrator": LECTURA_OFICINA}
+_NOTA = {"type": "string", "description": "Optional. A short note the person sees."}
+PREPARAR_OFICINA = [
+    {"name": "prepare_absence_decision", "fn": _preparar_decision_ausencia,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["absence_id", "decision"],
+                      "properties": {"absence_id": {"type": "string", "description": "Like AUS-0003, from get_inbox."},
+                                     "decision": {"type": "string", "enum": ["approve", "reject"]}, "note": _NOTA}},
+     "description": "Prepare approving or rejecting an absence request that is waiting. It shows them a card with the balance left "
+                    "and the jobs it frees on the board, and decides nothing yet; on Confirm the person is told. Call it when they "
+                    "ask you to approve or reject a request."},
+    {"name": "prepare_time_fix_decision", "fn": _preparar_decision_fichaje,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["time_fix_id", "decision"],
+                      "properties": {"time_fix_id": {"type": "string", "description": "Like COR-0002, from get_inbox."},
+                                     "decision": {"type": "string", "enum": ["approve", "revert"],
+                                                  "description": "revert puts back the original time: it is how a time fix is rejected."},
+                                     "note": _NOTA}},
+     "description": "Prepare approving or reverting a time fix that is waiting for review. The new time is already applied: approving "
+                    "keeps it, reverting puts back the old one. It shows them a card and changes nothing yet. Call it when they ask "
+                    "you to approve, reject or revert a time fix."},
+    {"name": "prepare_close_alert", "fn": _preparar_cierre_aviso,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["alert_id"],
+                      "properties": {"alert_id": {"type": "string", "description": "Like ALR-0004, from get_inbox."}}},
+     "description": "Prepare marking an open alert as resolved. It shows them a card and closes nothing yet. Call it when they ask "
+                    "you to close or resolve an alert."},
+    {"name": "prepare_assignment", "fn": _preparar_asignacion,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "person"],
+                      "properties": {"project_id": _ID_OBRA,
+                                     "person": {"type": "string", "description": "A field person's name, as the app shows it."}}},
+     "description": "Prepare assigning a field person to a job. It shows them a card with the same warnings as the screen (absences, "
+                    "certificates, other jobs, contact details) and assigns nothing yet. On Confirm the person is told and the "
+                    "planner fills their free weekdays from today to the job's end. Call it when they ask you to put someone on a "
+                    "job, with the person as they said it: if it matches nobody, or more than one, it tells you who to choose from."},
+    {"name": "prepare_crew_notice", "fn": _preparar_aviso_cuadrilla,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "message"],
+                      "properties": {"project_id": _ID_OBRA,
+                                     "message": {"type": "string", "description": "What to tell them, in the person's words."}}},
+     "description": "Prepare a notice to everyone assigned to a job: on Confirm it goes by email or Telegram and stays in the job's "
+                    "Alerts. It shows them a card and sends nothing yet. Call it when they ask you to tell a job's crew something."},
+]
+# v644 · Los tres niveles, como el campo: ver, To-do directo, y las cinco con tarjeta
+OFICINA = LECTURA_OFICINA + DIRECTAS + PREPARAR_OFICINA
+_POR_ROL = {"field": TODAS, "administrator": OFICINA}
+# ⚠️ v644 · Lo que cada rol puede confirmar: `confirmar` lo mira antes de nada
+_TARJETAS_DE = {"field": ("parte", "aviso", "ausencia"), "administrator": tuple(_CONFIRMAR_OFICINA)}
 
 
 def definiciones(rol, usuario="") -> list:

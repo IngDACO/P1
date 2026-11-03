@@ -644,7 +644,11 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
 
     Eficiente: lee la hoja UNA vez y escribe en 1 `batch_update` (filas existentes) + 1
     `append_rows` (semanas nuevas), así el rango no dispara el rate limit. Devuelve
-    {llenadas, ocupadas, actualizadas, nuevas, semanas}."""
+    {llenadas, ocupadas, actualizadas, nuevas, semanas}, y `pasado` si la obra ya debía haber acabado.
+
+    ⚠️ v644 · Desde HOY: lo que ya pasó es historia. Asignar a alguien a una obra empezada llenaba sus
+    semanas pasadas (con PRJ-0034, del 14/09 al 29/10 en un 03/11), y el tablero decía que estuvo
+    planificado días en que nadie lo planificó; Compliance lo compara con lo fichado."""
     vacio = {"llenadas": 0, "ocupadas": 0, "actualizadas": 0, "nuevas": 0, "semanas": 0}
     w = _ws_roster()
     if w is None or not usuarios or not pid:
@@ -652,6 +656,10 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
     ini, fin = _a_date(fecha_ini), _a_date(fecha_fin)
     if not ini or not fin or fin < ini:
         return vacio
+    _hoy = clock.today(grupo)
+    if fin < _hoy:
+        return {**vacio, "pasado": True}
+    ini = max(ini, _hoy)
     usuarios = [str(u) for u in usuarios]
 
     semanas = []

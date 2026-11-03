@@ -333,6 +333,8 @@ with st.sidebar:
         st.caption(f"{_foco} {ctx_label}")
         if _ROL == "field":
             st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))
+        elif _ROL == "administrator":
+            st.caption(t("Your conversation is kept for 14 days."))   # v644 · la foto, todavía solo el campo
 
         # v640 · Lo confirmado o cancelado, ANTES de pintar el historial (trampa 37)
         from core import chat_ui

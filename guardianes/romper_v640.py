@@ -74,7 +74,7 @@ def _una_directa(ctx) -> None:\n""")]),
      [("""    return _tarjeta(ctx, "ausencia", AU.nombre_tipo(tipo),""", """    AU.solicitar(ctx["grupo"], ctx["usuario"], ctx["nombre"], tipo, d0, d1)
     return _tarjeta(ctx, "ausencia", AU.nombre_tipo(tipo),""")]),
     ("⚠️ al modelo no le dice que no está hecho", T,
-     [("""                    "Tell them that in one line. Do not say it is done."}\n""", """                    "Tell them that in one line."}\n""")]),
+     [("""                    "Tell them that in one line. Do not say it is done.",\n""", """                    "Tell them that in one line.",\n""")]),
     # ── Validar antes ──
     ("⚠️ parte vacío", T,
      [("""    if not txt:
@@ -97,7 +97,7 @@ def _una_directa(ctx) -> None:\n""")]),
         raise _Negado("The alert is empty: ask them what the problem is.")
 """, "")]),
     ("⚠️ aviso sin tope", T,
-     [("""    if len(txt) > MAX_AVISO:\n""", """    if False:\n""")]),
+     [("""    if len(txt) > MAX_AVISO:\n        raise _Negado(f"That is too long for an alert""", """    if False:\n        raise _Negado(f"That is too long for an alert""")]),
     ("⚠️ el aviso de obra ajena", T,
      [("""def _preparar_aviso(entrada, ctx) -> dict:
     prj = _obra(entrada, ctx)
@@ -153,9 +153,9 @@ def _una_directa(ctx) -> None:\n""")]),
      [("""            ok, r, aviso = AUI.registrar(g, u, n, d.get("tipo"), d.get("from"), d.get("to"), d.get("reason", ""), bool(d.get("weekends")))\n""", """            ok, r = AU.solicitar(g, u, n, d.get("tipo"), d.get("from"), d.get("to"), d.get("reason", ""))
             aviso = ""\n""")]),
     ("⚠️ un fallo enseña el error interno", T,
-     [("""        return False, t("That could not be saved. Try again in a minute.")\n""", """        return False, str(e)\n""")]),
+     [("""        logger.warning("chat_tools.confirmar(%s): %r", tipo, e)\n        return False, t("That could not be saved. Try again in a minute.")\n""", """        logger.warning("chat_tools.confirmar(%s): %r", tipo, e)\n        return False, str(e)\n""")]),
     ("⚠️ una tarjeta rara dice que sí", T,
-     [("""    return False, t("This action is not recognised.")\n""", """    return True, "ok"\n""")]),
+     [("""    if tipo not in _TARJETAS_DE.get(str(ctx.get("rol", "")), ()):\n        return False, t("This action is not recognised.")\n""", """    if tipo not in _TARJETAS_DE.get(str(ctx.get("rol", "")), ()):\n        return True, "ok"\n""")]),
     # ── La pantalla ──
     ("⚠️ la tarjeta sale después de ejecutar: doble envío", U,
      [("""    lista.remove(a)

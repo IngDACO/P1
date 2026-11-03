@@ -1563,6 +1563,9 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin, al_flash=Fal
                             f"{len(nuevos)} person(s) in {r['semanas']} week(s){_oc}.")
             elif r["ocupadas"]:
                 msgs.append(":material/calendar_month: Planner: the days in the range were already taken; nothing was overwritten.")
+            elif r.get("pasado"):           # v644 · el tablero solo se llena desde hoy
+                msgs.append(t(":material/calendar_month: The project's end date has already passed, so nothing was "
+                              "auto-planned. Plan by hand in :material/calendar_month: Planning if needed."))
         elif nuevos and not fecha_fin:
             msgs.append(":material/calendar_month: The project has no **end date**, so nothing was auto-planned. Set one in :material/edit: Data, or plan by hand in :material/calendar_month: Planning.")
     except Exception:
@@ -1580,15 +1583,17 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin, al_flash=Fal
         (flash.info if al_flash else st.caption)(m)
 
 
-def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
-                      fechas=None):
+def avisos_asignacion(usuarios, grupo=None, exclude_pid=None, certs_req=None,
+                      fechas=None) -> dict:
     """Avisos ANTES de asignar (v219): contacto, credenciales, si YA está en otro
     proyecto (y hasta cuándo), cumplimiento de los certificados que EXIGE el proyecto,
     y (v432) si esa persona tiene una AUSENCIA aprobada o pedida en esas fechas.
     Todo informativo — no bloquea (una asignación con solapes o pendientes puede ser
     deliberada). `exclude_pid` = el proyecto actual (no se cuenta a sí mismo).
     `fechas` = (inicio, fin) del proyecto: si llega, solo se avisa de las ausencias
-    que CRUZAN ese rango; si no, de las que aún no han terminado."""
+    que CRUZAN ese rango; si no, de las que aún no han terminado.
+    v644 · Solo los REÚNE: los pinta `_avisar_asignados`, y la tarjeta del Management assistant
+    enseña los mismos. Dos copias de estas reglas acabarían diciendo cosas distintas."""
     sin_contacto, cred_mal = [], []
     no_cumplen, cert_pv = [], []          # feature 3: certificados requeridos
 
@@ -1684,7 +1689,16 @@ def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
                                     else " (not approved yet)"))
         except Exception as e:
             logger.warning("_avisar_asignados: ausencias: %s", e)
+    return {"fuera": fuera, "ocupados": ocupados, "no_cumplen": no_cumplen, "cert_pv": cert_pv,
+            "cred_mal": cred_mal, "sin_contacto": sin_contacto}
 
+
+def _avisar_asignados(usuarios, grupo=None, exclude_pid=None, certs_req=None,
+                      fechas=None):
+    """Los avisos de `avisos_asignacion`, en pantalla. Todo informativo: no bloquea."""
+    _a = avisos_asignacion(usuarios, grupo, exclude_pid, certs_req, fechas)
+    fuera, ocupados, no_cumplen = _a["fuera"], _a["ocupados"], _a["no_cumplen"]
+    cert_pv, cred_mal, sin_contacto = _a["cert_pv"], _a["cred_mal"], _a["sin_contacto"]
     if fuera:
         st.warning(":material/event_busy: **They will not be available on those days:**\n\n"
                    + "\n".join(f"- {x}" for x in fuera))

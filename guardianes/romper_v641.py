@@ -78,12 +78,12 @@ ROTURAS = [
             w.delete_rows(2)
 """)]),
     ("⚠️ limpiar deja la memoria", U,
-     [("""    if _es_campo():
+     [("""    if _recuerda():
         a = _contexto()
         CM.borrar(a["usuario"], a["grupo"])
 """, "")]),
     ("⚠️ la oficina borra la memoria del campo", U,
-     [("""    if _es_campo():
+     [("""    if _recuerda():
         a = _contexto()
         CM.borrar(a["usuario"], a["grupo"])
 """, """    a = _contexto()
@@ -107,7 +107,7 @@ ROTURAS = [
     ("⚠️ no vuelve a mirar lo de hoy", A,
      [("""        "- La conversación puede venir de otros días, y lo que se dijo entonces puede estar viejo: para los datos de "
         "hoy vuelve a mirar, no repitas lo de antes.\\n"
-""", "")]),
+        "- Si te manda una foto""", """        "- Si te manda una foto""")]),
     ("⚠️ adivina por una foto", A,
      [(""" No adivines medidas, ni des nada por seguro "
         "o conforme solo por una foto.""", """ "
@@ -122,16 +122,20 @@ ROTURAS = [
     ("⚠️ traduce los nombres de las pantallas", A,
      [("""cual, en inglés, sin traducirlos.""", """cual.""")]),
     ("⚠️ reintenta por su cuenta", A,
-     [("""        "- Cada acción responde a lo que pide AHORA. No repitas ni reintentes por tu cuenta algo de antes: si algo "
+     [("""        "aviso.\\n"
+        "- Cada acción responde a lo que pide AHORA. No repitas ni reintentes por tu cuenta algo de antes: si algo "
         "falló, dilo y que decida la persona.\\n"
-""", "")]),
+""", """        "aviso.\\n"
+""")]),
     ("⚠️ se corrige por no ver sus herramientas", A,
-     [("""        "- De los turnos anteriores solo ves el texto, no las herramientas que usaste: eso no significa que no las "
+     [("""        "falló, dilo y que decida la persona.\\n"
+        "- De los turnos anteriores solo ves el texto, no las herramientas que usaste: eso no significa que no las "
         "usaras, así que no te corrijas por ello.\\n"
-""", "")]),
+""", """        "falló, dilo y que decida la persona.\\n"
+""")]),
     ("⚠️ apunta lo que solo debía recordar", A,
      [("""        "- Si te pide que recuerdes algo, ya queda en esta conversación: no lo apuntes en To-do salvo que te lo pida.\\n"
-""", "")]),
+        "- NO puedes fichar""", """        "- NO puedes fichar""")]),
     ("⚠️ la herramienta vuelve a invitar a recordar", "core/chat_tools.py",
      [("""                    "asks you to add a task to a job. Not for things they only want you to remember."},\n""", """                    "asks you to note, add or remember something for a job."},\n""")]),
     # ── Las fotos ──
@@ -162,9 +166,9 @@ ROTURAS = [
     return {"accept_file": True,""", """    return {"accept_file": True,""")]),
     # ── Cuándo ──
     ("⚠️ se recuerda en cada pasada", U,
-     [("""    if st.session_state.get(_RECORDADA) or not _es_campo():\n""", """    if not _es_campo():\n""")]),
-    ("⚠️ la oficina recibe la memoria", U,
-     [("""    if st.session_state.get(_RECORDADA) or not _es_campo():\n""", """    if st.session_state.get(_RECORDADA):\n""")]),
+     [("""    if st.session_state.get(_RECORDADA) or not _recuerda():\n""", """    if not _recuerda():\n""")]),
+    ("⚠️ el propietario recibe la memoria (v644: la oficina ya la tiene)", U,
+     [("""    if st.session_state.get(_RECORDADA) or not _recuerda():\n""", """    if st.session_state.get(_RECORDADA):\n""")]),
     ("⚠️ pisa una conversación en marcha", U,
      [("""    if not st.session_state.get("chat_history"):
         a = _contexto()
@@ -172,8 +176,8 @@ ROTURAS = [
 """, """    a = _contexto()
     st.session_state["chat_history"] = CM.cargar(a["usuario"], a["grupo"])
 """)]),
-    ("⚠️ la oficina guarda en la memoria", U,
-     [("""    if _es_campo():
+    ("⚠️ el propietario guarda en la memoria (v644: la oficina ya guarda)", U,
+     [("""    if _recuerda():
         a = _contexto()
         CM.guardar(""", """    if True:
         a = _contexto()

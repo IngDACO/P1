@@ -599,22 +599,31 @@ def _ejecutar(acc, quien, grupo):
         flash.exito(msg + _extra)
         return
     aprobar = bool(acc.get("aprobar"))
-    nota = str(acc.get("nota") or "")
+    ok, msg = decidir(grupo, aid, aprobar, quien, str(acc.get("nota") or ""))
+    (flash.error if not ok else flash.exito if aprobar else flash.aviso)(msg)
+
+
+def decidir(grupo, aid, aprobar, quien, nota="") -> tuple:
+    """Aprobar o rechazar una solicitud con todo lo que implica: el tablero y el aviso a la persona.
+    `(ok, mensaje)`. v644 · Aparte de `_ejecutar` para que el Management assistant haga exactamente
+    lo mismo que esta bandeja. ⚠️ Solo una de ESTE grupo (`_de_grupo`)."""
+    r = _de_grupo(grupo, aid)
+    if not r:
+        return False, t("Request not found.")
+    usuario = str(r.get("User", ""))
     ok, msg = AU.resolver(aid, aprobar, quien, nota)
     if not ok:
-        flash.error(msg)
-        return
+        return False, msg
     if aprobar:
         # ⚠️ El orden importa: primero la decisión, luego el tablero. Si el roster
         # fallara, la ausencia queda aprobada y el tablero se puede reintentar; al
         # revés, el tablero diría que está fuera sin que nadie lo haya aprobado.
         _ok2, _n = AU.aplicar_al_roster(_de_grupo(grupo, aid) or r)
         _avisar_persona(usuario, r, True, nota)
-        flash.exito(msg + (f" {_n} {t('day(s) marked in the planner.')}" if _ok2 else
-                           f" ⚠️ {t('Could not write to the planner')}: {_n}"))
-    else:
-        _avisar_persona(usuario, r, False, nota)
-        flash.aviso(msg)
+        return True, msg + (f" {_n} {t('day(s) marked in the planner.')}" if _ok2 else
+                            f" ⚠️ {t('Could not write to the planner')}: {_n}")
+    _avisar_persona(usuario, r, False, nota)
+    return True, msg
 
 
 def _tarjeta_pendiente(grupo, r, quien):

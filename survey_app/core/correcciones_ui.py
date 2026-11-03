@@ -186,34 +186,61 @@ def _accion_pendiente(grupo, quien, etq):
 
 
 def _ejecutar(acc, grupo, quien, etq):
-    cid = str(acc.get("cid", ""))
-    r = _de_grupo(grupo, cid)
+    r = _de_grupo(grupo, str(acc.get("cid", "")))
     if not r:
         flash.error(t("Correction not found."))
         return
     _quien = f"{etq.get(str(r.get('User', ''))) or r.get('Name') or r.get('User')} · {_dia(r)}"
+    ok, msg = hacer(acc, grupo, quien)
+    if msg:
+        (flash.exito if ok else flash.error)(f"{_quien}: {msg}")
+
+
+def no_se_puede(r, accion, todas=None) -> str:
+    """Por qué esa acción no vale para esa corrección, o "" (v644). La tarjeta ni ofrece esos botones;
+    se mira también aquí porque el Management assistant pide por ID, sin la tarjeta delante."""
+    if accion in ("aprobar", "revertir"):
+        _por = C.sustituida_por(r, todas)
+        if _por:
+            return t("Superseded by {x}: the same entry was changed again later. Its time is reviewed there.", x=_por)
+    # ⚠️ Revertir el cierre de una sesión olvidada la REABRE: 34 h al día siguiente (ver `_tarjeta`)
+    if accion == "revertir" and not str(r.get("OldValue", "")).strip():
+        return t("It closed an entry that was left open: there is no earlier time to go back to.")
+    return ""
+
+
+def hacer(acc, grupo, quien) -> tuple:
+    """La acción sobre una corrección, con el aviso a la persona cuando su hora cambia: `(ok, mensaje)`.
+    v644 · Aparte para que el Management assistant haga lo mismo que esta bandeja. ⚠️ Solo una de
+    ESTE grupo; un mensaje vacío es que no había nada que hacer."""
+    cid = str(acc.get("cid", ""))
+    r = _de_grupo(grupo, cid)
+    if not r:
+        return False, t("Correction not found.")
     nota = str(acc.get("nota") or "")
     accion = acc.get("accion")
+    _no = no_se_puede(r, accion)
+    if _no:
+        return False, _no
     if accion == "aprobar":
-        ok, msg = C.aprobar(cid, quien, nota)
-    elif accion == "revertir":
+        return C.aprobar(cid, quien, nota)
+    if accion == "revertir":
         ok, msg = C.revertir(cid, quien, nota)
         if ok:
             _avisar_persona(r, "revertir", nota)
-    elif accion == "ajustar":
+        return ok, msg
+    if accion == "ajustar":
         try:
             _h = datetime.strptime(str(acc.get("hora")), "%H:%M").time()
         except (TypeError, ValueError):
-            flash.error(t("That time could not be read."))
-            return
+            return False, t("That time could not be read.")
         ok, msg = C.ajustar(cid, quien, _h, nota)
         if ok:
             _avisar_persona(r, "ajustar", nota, _h.strftime("%H:%M"))
-    elif accion == "sustituida":
-        ok, msg = C.cerrar_sustituida(cid, quien, str(acc.get("por", "")))
-    else:
-        return
-    (flash.exito if ok else flash.error)(f"{_quien}: {msg}")
+        return ok, msg
+    if accion == "sustituida":
+        return C.cerrar_sustituida(cid, quien, str(acc.get("por", "")))
+    return False, ""
 
 
 def _avisar_persona(r, accion, nota="", hora=""):

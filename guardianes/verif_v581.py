@@ -287,6 +287,8 @@ try:
     # Roster en lote: filas 0003 y 0004 (dos filas) — con `len(vals)` salía ROS-0004, que EXISTE
     _wr = _WS(["ROS-0003", "ROS-0004"])
     _poner(RO, "_ws_roster", lambda: _wr)
+    # ⚠️ v644 · El tablero solo se llena desde HOY: «hoy», antes de esa semana
+    _poner(RO.clock, "today", lambda *a, **k: dt.date(2026, 10, 12))
     _r = RO.autopoblar_proyecto("g", "PRJ-0001", ["u1", "u2"], "2026-10-19", "2026-10-23")
     _ids = [f[0] for f in _wr.escritas]
     chk("⚠️ ROS en lote: sigue al MAYOR (0004), salta 0005 → ROS-0006 y ROS-0007",

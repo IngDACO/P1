@@ -7,6 +7,9 @@ SESIÓN, no en la hoja: si se cierra la sesión, no ha pasado nada.
 
 v641 · Y lo que le da continuidad: la conversación se recuerda (`chat_memoria`) y se le puede mandar una
 foto, que se reduce antes de enviarla y no se guarda en ningún sitio.
+
+v644 · La oficina también: sus tarjetas (las cinco de `chat_tools.PREPARAR_OFICINA`) y su memoria,
+cada uno la suya. La foto, todavía solo el campo; el propietario, ni memoria: va con su recorrido.
 """
 import base64
 import io
@@ -29,14 +32,17 @@ MAX_FOTO_MB = 15
 TIPOS_FOTO = ["jpg", "jpeg", "png", "webp"]
 
 
-def _es_campo() -> bool:
-    return str((st.session_state.get("auth") or {}).get("rol", "")) == "field"
+_CON_MEMORIA = ("field", "administrator")       # v644 · el propietario, con su recorrido
+
+
+def _recuerda() -> bool:
+    return str((st.session_state.get("auth") or {}).get("rol", "")) in _CON_MEMORIA
 
 
 def recordar() -> None:
-    """Trae la conversación guardada, UNA vez por sesión. Por ahora solo del campo: la oficina es el
-    siguiente agente del recorrido. ⚠️ No pisa una conversación que ya esté en marcha."""
-    if st.session_state.get(_RECORDADA) or not _es_campo():
+    """Trae la conversación guardada, UNA vez por sesión: del campo y, desde v644, de la oficina; cada
+    uno la suya. ⚠️ No pisa una conversación que ya esté en marcha."""
+    if st.session_state.get(_RECORDADA) or not _recuerda():
         return
     st.session_state[_RECORDADA] = True
     if not st.session_state.get("chat_history"):
@@ -45,8 +51,8 @@ def recordar() -> None:
 
 
 def memorizar() -> None:
-    """Guarda la conversación tal como está. Solo del campo."""
-    if _es_campo():
+    """Guarda la conversación tal como está."""
+    if _recuerda():
         a = _contexto()
         CM.guardar(a["usuario"], a["grupo"], st.session_state.get("chat_history") or [])
 
@@ -95,7 +101,7 @@ def olvidar() -> None:
     la memoria: limpiar tiene que dejarla limpia, no solo la pantalla."""
     st.session_state[_LISTA] = []
     st.session_state.pop(_PET, None)
-    if _es_campo():
+    if _recuerda():
         a = _contexto()
         CM.borrar(a["usuario"], a["grupo"])
 

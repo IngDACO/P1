@@ -483,7 +483,8 @@ chk("`horas_por_usuario_dia` existe y devuelve un dict",
 
 # ── 12 · v432: avisos que faltaban ───────────────────────────────
 seccion("12. v432 · los dos avisos que la auditoría echó en falta")
-_av = fn(arbol("core/projects_ui.py"), "_avisar_asignados")
+# v644 · Los avisos se REÚNEN en `avisos_asignacion` (la pantalla y el Management assistant): ahí se mira
+_av = fn(arbol("core/projects_ui.py"), "avisos_asignacion")
 # ⚠️ Por el IMPORT real dentro de la función, no por la subcadena «ausencias»: esa
 # palabra está también en los comentarios, así que cambiando el import por otro
 # módulo el chequeo seguía pasando con el aviso muerto (trampa nº2).

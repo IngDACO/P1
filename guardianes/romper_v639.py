@@ -17,7 +17,7 @@ A = "core/chat_agent.py"
 ROTURAS = [
     # ── A quién ──
     ("⚠️ la oficina recibe las herramientas del campo", T,
-     [("""_POR_ROL = {"field": TODAS, "administrator": LECTURA_OFICINA}\n""", """_POR_ROL = {"field": TODAS, "administrator": TODAS}\n""")]),
+     [("""_POR_ROL = {"field": TODAS, "administrator": OFICINA}\n""", """_POR_ROL = {"field": TODAS, "administrator": TODAS}\n""")]),
     ("⚠️ sin persona identificada también", T,
      [("""    if not str(usuario or "").strip():
         return []

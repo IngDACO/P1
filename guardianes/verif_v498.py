@@ -222,7 +222,7 @@ finally:
 # ═════ 4 · el aviso de certificados, sin español suelto ══════════════════════
 print("\n[4] el aviso de certificados al asignar, traducido")
 _av = next(n for n in ast.walk(ast.parse(_fuente("core/projects_ui.py")))
-           if isinstance(n, ast.FunctionDef) and n.name == "_avisar_asignados")
+           if isinstance(n, ast.FunctionDef) and n.name == "avisos_asignacion")   # v644 · ahí se arman los avisos
 # ⚠️ El literal 'falta' TIENE que seguir estando: es el DATO con el que se compara. Lo que
 # no puede haber es esa palabra ESCRITA en el texto que se pinta (dentro de una f-string).
 _pintados = [v.value for js in ast.walk(_av) if isinstance(js, ast.JoinedStr)

@@ -45,6 +45,8 @@ from core import roster as R                                 # noqa: E402
 from core import roster_ui as RU                             # noqa: E402
 
 LUN = date(2026, 8, 10)          # lunes
+# ⚠️ v644 · El tablero solo se llena desde HOY: «hoy» va antes de LUN, o con la fecha real no se llenaría nada
+R.clock.today = lambda *a, **k: LUN - timedelta(days=7)
 
 print("== 1) ⚠️ añadir días NO mueve ninguna fecha existente ==")
 # Si esto se rompe, TODA la planificación histórica se desplaza en silencio.

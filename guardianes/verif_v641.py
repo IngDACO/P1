@@ -279,10 +279,10 @@ sec("6. Solo el campo, y a su tiempo")
 _ses = st.session_state
 
 
-def sesion(rol="field", hist=None):
+def sesion(rol="field", hist=None, usuario="campo000"):
     for k in ("_chat_recordada", "chat_history", "_chat_acciones"):
         _ses.pop(k, None)
-    _ses["auth"] = {"usuario": "campo000", "nombre": "Field Test", "rol": rol, "grupo": "cliente1"}
+    _ses["auth"] = {"usuario": usuario, "nombre": "Field Test", "rol": rol, "grupo": "cliente1"}
     if hist is not None:
         _ses["chat_history"] = hist
 
@@ -298,18 +298,25 @@ chk("⚠️ una sola vez por sesión: limpiar no la resucita", _ses["chat_histor
 sesion(hist=[msg("user", "en marcha")])
 CU.recordar()
 chk("⚠️ no pisa una conversación en marcha", [m["content"] for m in _ses["chat_history"]] == ["en marcha"])
-sesion(rol="administrator", hist=[])
+# ⚠️ v644 · CADUCADO por decisión del usuario: la oficina también recuerda (verif_v644). El principio sigue: cada uno la
+# suya, y el propietario ninguna.
+sesion(rol="administrator", hist=[], usuario="Admin2")
 CU.recordar()
 chk("⚠️ la oficina no recibe la memoria del campo", _ses["chat_history"] == [])
+sesion(rol="owner", hist=[msg("user", "del propietario")], usuario="own")
 _e = W.escrituras
 CU.memorizar()
-chk("⚠️ ni guarda", W.escrituras == _e)
+chk("⚠️ el propietario ni guarda", W.escrituras == _e)
+CM.guardar("own", "cliente1", [msg("user", "del propietario")])
+sesion(rol="owner", hist=[], usuario="own")
+CU.recordar()
+chk("⚠️ ni recibe la que hubiera", _ses["chat_history"] == [], _ses["chat_history"])
 sesion(hist=[msg("user", "nueva")])
 CU.memorizar()
 chk("el campo guarda", "nueva" in filas_de("campo000")[0][2], W.filas)
 CU.olvidar()
 chk("⚠️ limpiar borra la memoria", filas_de("campo000") == [], W.filas)
-sesion(rol="administrator", hist=[])
+sesion(rol="administrator", hist=[], usuario="Admin2")
 CM.guardar("campo000", "cliente1", [msg("user", "z")])
 CU.olvidar()
 chk("limpiar como oficina no toca la del campo", len(filas_de("campo000")) == 1)
@@ -325,7 +332,9 @@ chk("⚠️ en el historial queda la marca, nunca la imagen", '_dicho = f"📷 {
 # Tres apariciones: se lee, decide la marca del historial y va a la llamada. Una más sería guardarla.
 chk("⚠️ la foto solo llega a la llamada", "fotos        = _fotos," in _a and _a.count("_fotos") == 3, _a.count("_fotos"))
 chk("guarda después de responder", _a.index('{"role": "assistant", "content": _response}') < _a.index("chat_ui.memorizar()"))
-chk("le dice a la persona que se guarda", "Your conversation is kept for 14 days" in _a and CM.MAX_DIAS == 14)
+# v644 · La oficina también lo dice (sin la foto): se mira la línea del campo entera
+chk("le dice al campo que se guarda y que puede mandar una foto",
+    'st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))' in _a and CM.MAX_DIAS == 14)
 chk("⚠️ limpiar pasa por `olvidar`", "chat_ui.olvidar()" in _a)
 _mem = leer("core/chat_memoria.py")
 chk("⚠️ en la memoria no hay imágenes", "base64" not in _mem and "image" not in _mem.lower().replace("imágenes", ""))

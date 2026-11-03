@@ -234,6 +234,11 @@ at.run()
 chk("⚠️ una acción apuntada a la de OTRA empresa no la toca",
     rec(at, "COR-5")["Status"] == "pending"
     and any("Correction not found" in m for _t2, m in flashes(at)), flashes(at))
+# ⚠️ v644 · `hacer` la llama también el Management assistant, sin pasar por la bandeja: se prueba ella sola
+from core import correcciones_ui as _CUI                          # noqa: E402
+_okh, _mh = _CUI.hacer({"cid": "COR-5", "accion": "aprobar", "nota": ""}, "G", "jefa")
+chk("⚠️ …y `hacer`, llamada sin la pantalla, tampoco", not _okh and "Correction not found" in _mh
+    and rec(at, "COR-5")["Status"] == "pending", (_okh, _mh))
 chk("sin excepción en todo el recorrido", not at.exception, [e.value for e in at.exception][:1])
 
 print("\n" + "=" * 70)
