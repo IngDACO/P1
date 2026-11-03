@@ -1506,7 +1506,7 @@ def render_home(grupo):
             "{flex:1 1 100% !important;}}"
             "</style>")
     from core import projects_ui as PU
-    PU.render_group_header(grupo)
+    _lectura = PU.render_group_header(grupo)
     with st.container(key="cpx_home_fila"):
         col_map, col_pro, col_ag = st.columns([2, 1.5, 1.5], gap="large")
         with col_map:
@@ -1519,6 +1519,11 @@ def render_home(grupo):
         with col_ag:
             st.markdown(t("#### :material/list: Today's schedule"))
             _agenda_hoy(grupo)
+    # v647 · El resumen del día, AL FINAL y en su sitio de arriba: la primera vez del día el modelo tarda unos
+    # segundos, y así lo demás de Home ya se ve mientras tanto.
+    if _lectura is not None:
+        with _lectura:
+            PU.lectura_ia(grupo)
 
 
 # ── Mapa de proyectos ────────────────────────────────────────────

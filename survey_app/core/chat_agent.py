@@ -13,7 +13,7 @@ except Exception:
 # de una baja). Esfuerzo bajo: es un chat, y en el móvil cada segundo cuenta (como `parte_agente`).
 MODEL       = "claude-sonnet-5-5"
 ESFUERZO    = "low"
-MODEL_RESUMEN = "claude-haiku-4-5"   # el resumen de la oficina no es el asistente: se queda como estaba
+# v647 · El resumen del día ya no vive aquí: `core/resumen_dia.py` (Sonnet 5.5, los datos del Management assistant).
 MAX_TOKENS  = 4096                   # ⚠️ el razonamiento gasta de aquí, antes que la respuesta
 # Respaldo del servidor ante un rechazo del modelo (el mismo de `parte_agente`).
 _BETA_RESPALDO = "server-side-fallback-2026-07-01"
@@ -867,35 +867,3 @@ def get_chat_response(
     except Exception as e:
         return f"⚠️ Error contacting the API: {e}"
 
-
-def admin_briefing(grupo: str) -> str:
-    """Resumen ejecutivo de lo más relevante pendiente del grupo (al ingresar el admin).
-    Redacta con IA sobre los hechos del `admin_digest`; si no hay IA, devuelve los hechos."""
-    try:
-        from core import admin_digest
-        d = admin_digest.group_digest(grupo)
-        facts = admin_digest.digest_text(d)
-    except Exception as e:
-        return f"Could not build the summary: {e}"
-
-    api_key = st.secrets.get("ANTHROPIC_API_KEY", "") if anthropic is not None else ""
-    if not api_key:
-        return facts   # fallback determinístico (sin IA)
-
-    system = (
-        SYSTEM_PROMPT + "\n\n" + _PERSONA["administrator"] + "\n\n"
-        "Write a very short EXECUTIVE SUMMARY in English (bullets, at most ~8 lines) of what matters most "
-        "among what the administrator has PENDING in their group today, putting the urgent first "
-        "(overdue, delays, alarms, near misses) and closing with 1-2 suggested actions. Concrete and "
-        "actionable. Use ONLY the data provided; do not invent anything. If there is nothing pending, "
-        "say so in one line.")
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model=MODEL_RESUMEN, max_tokens=600, system=system,
-            messages=[{"role": "user",
-                       "content": "Group data today:\n\n" + facts
-                                  + "\n\nGive me the summary of pending items."}])
-        return resp.content[0].text
-    except Exception:
-        return facts   # ante cualquier fallo de API, muestra los hechos

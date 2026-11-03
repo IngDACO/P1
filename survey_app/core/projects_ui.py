@@ -362,8 +362,9 @@ def render_group_header(grupo: str):
         unsafe_allow_html=True,
     )
     if not P.is_configured():
-        return
-    _resumen_del_dia(grupo)
+        return None
+    # v647 · devuelve el sitio de la lectura de la IA, que `render_home` rellena al final
+    return _resumen_del_dia(grupo)
 
 
 def _kpi_pies(k: dict) -> tuple:
@@ -456,7 +457,7 @@ def _resumen_del_dia(grupo: str):
     try:
         d = admin_digest.group_digest(grupo)
     except Exception:
-        return
+        return None
 
     _al_n = sum(a["n"] for a in d["alarmas"])
     # slug, icono, etiqueta, urgente, count, sección, sub_pestaña, nombre_sección, detalle()
@@ -603,43 +604,69 @@ def _resumen_del_dia(grupo: str):
         # 4) lectura del asistente (IA) — su propio desplegable, bajo demanda
         # v546 · con clave: sin ella se cerraba solo cuando cambiaba lo de encima (un
         # aviso que aparece o se va), y tras «Generate» había que reabrirlo para leer.
+        # v647 · Su SITIO, que `render_home` rellena al final (`lectura_ia`): la primera vez del día el modelo tarda
+        # unos segundos, y así Home ya está a la vista mientras tanto.
         with st.expander(t(":material/forum: The assistant's read (AI)"), key="cpx_lectura_ia"):
-            key = f"_brief_{grupo}"
-            if key in st.session_state:
-                st.markdown(st.session_state[key])
-                b1, b2 = st.columns(2)
-                # ⚠️ v560 · «Refresh» GENERA otra lectura con los datos de ahora. Antes solo
-                # borraba la que había y dejaba el botón «Generate» (visto en el recorrido
-                # del Home): dos clics para lo que el nombre promete en uno.
-                if b1.button(t(":material/refresh: Refresh"), key=f"brief_ref_{grupo}"):
-                    with st.spinner(t("Preparing…")):
-                        from core import admin_digest, chat_agent
-                        try:
-                            admin_digest.group_digest.clear()     # los hechos, de ahora
-                        except Exception:
-                            pass
-                        st.session_state[key] = chat_agent.admin_briefing(grupo)
-                    st.rerun()
-                if b2.button(t(":material/send: Send it to me"), key=f"brief_send_{grupo}"):
-                    from core import notify
-                    _u = st.session_state.get("auth", {}).get("usuario", "")
-                    _txt = st.session_state.get(key, "")
-                    try:
-                        rr = notify.notify_user(_u, f"🔔 Today's summary — {grupo}",
-                                                [l for l in str(_txt).split("\n") if l.strip()])
-                        if rr.get("email") or rr.get("telegram"):
-                            st.success(t(":material/send: Summary sent."))
-                        else:
-                            st.warning(t("Your user has no email/Telegram configured."))
-                    except Exception as e:
-                        st.error(f"It could not be sent: {e}")
+            return st.container()
+
+
+def lectura_ia(grupo: str):
+    """v647 · El resumen del día (`resumen_dia`): el de hoy si ya está, o lo prepara (una vez al día por empresa). Cada
+    punto, con su botón a donde se resuelve (elementos activos). Sin el asistente, los hechos de siempre, dicho."""
+    from core import resumen_dia as RD
+    from core.i18n import idioma
+    _u = str((st.session_state.get("auth") or {}).get("usuario", ""))
+    _id = idioma()
+    res = RD.guardado(grupo, _id)
+    mot = ""
+    if res is None:
+        with st.spinner(t("The assistant is preparing today's read…")):
+            res, mot = RD.del_dia(grupo, _u, _id)
+    if res is None:
+        from core import admin_digest
+        st.caption(t(":material/info: The assistant could not prepare today's read ({m}). These are the facts:", m=mot or "?"))
+        try:
+            st.markdown(maps.literal_md(admin_digest.digest_text(admin_digest.group_digest(grupo))).replace("\n", "  \n"))
+        except Exception as e:
+            logger.warning("projects_ui.lectura_ia: %s", e)
+        return
+    _ir = {"project": t("Open the job"), "absences": t("Go to Absences"), "time_fixes": t("Go to Time fixes"),
+           "panel": t("Go to Panel"), "users": t("Go to Users"), "invoices": t("Go to Invoices"),
+           "expenses": t("Go to Expenses"), "prestart": t("Go to Pre-Start")}
+    if res.get("titular"):
+        st.markdown("**%s**" % maps.literal_md(res["titular"]))
+    for i, p in enumerate(res.get("puntos") or []):
+        c1, c2 = st.columns([4, 1], vertical_alignment="center")
+        c1.markdown((":red[:material/priority_high:] " if p["urgente"] else ":material/arrow_right: ")
+                    + maps.literal_md(p["texto"]))
+        if p["ir"] in _ir and c2.button(_ir[p["ir"]], key="ria_%d" % i, width="stretch"):
+            if p["ir"] == "project":
+                st.session_state["_admin_open_proj"] = p["obra"]
             else:
-                st.caption(t("The assistant writes the company's status in a few sentences, with a recommendation."))
-                if st.button(t("✨ Generate the read"), key=f"brief_gen_{grupo}"):
-                    with st.spinner(t("Preparing…")):
-                        from core import chat_agent
-                        st.session_state[key] = chat_agent.admin_briefing(grupo)
-                    st.rerun()
+                st.session_state.pop("_admin_open_proj", None)
+            _ir_a(*RD.DESTINOS[p["ir"]])
+    st.caption(t("Prepared at {h} with the app's data, once a day for the whole office.", h=res.get("hora", "")))
+    b1, b2 = st.columns(2)
+    # ⚠️ v560 · «Refresh» GENERA otro con los datos de ahora (no solo borra el que había).
+    if b1.button(t(":material/refresh: Refresh"), key=f"brief_ref_{grupo}"):
+        with st.spinner(t("Preparing…")):
+            from core import admin_digest
+            try:
+                admin_digest.group_digest.clear()     # los hechos, de ahora
+            except Exception:
+                pass
+            RD.del_dia(grupo, _u, _id, rehacer=True)
+        st.rerun()
+    if b2.button(t(":material/send: Send it to me"), key=f"brief_send_{grupo}"):
+        from core import notify
+        try:
+            rr = notify.notify_user(_u, f"🔔 Today's summary — {grupo}", RD.como_texto(res))
+            if rr.get("email") or rr.get("telegram"):
+                st.success(t(":material/send: Summary sent."))
+            else:
+                st.warning(t("Your user has no email/Telegram configured."))
+        except Exception as e:
+            st.error(f"It could not be sent: {e}")
 
 
 # Documentos: tipos y permisos por rol

@@ -27,8 +27,9 @@ ROTURAS = [
      [('            betas         = [_BETA_RESPALDO],\n', '')]),
     ("⚠️ una temperatura, que Sonnet 5.5 rechaza", C,
      [('            max_tokens    = MAX_TOKENS,\n', '            max_tokens    = MAX_TOKENS,\n            temperature   = 0.2,\n')]),
-    ("el resumen de la oficina se mueve sin que nadie lo pidiera", C,
-     [('MODEL_RESUMEN = "claude-haiku-4-5"', 'MODEL_RESUMEN = "claude-sonnet-5-5"')]),
+    # v647 · el usuario PIDIÓ moverlo a Sonnet (core/resumen_dia.py): lo que se rompe ahora es que vuelva a Haiku
+    ("el resumen del día vuelve a Haiku", "core/resumen_dia.py",
+     [('MODELO = "claude-sonnet-5-5"', 'MODELO = "claude-haiku-4-5"')]),
     # ── Lo que vuelve ──
     ("⚠️ vuelve `content[0].text`", C,
      [('            return _texto_de(r)\n', '            return r.content[0].text\n')]),

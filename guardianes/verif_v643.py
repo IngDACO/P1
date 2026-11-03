@@ -241,6 +241,15 @@ chk("⚠️ dice qué cuenta: un 0 no es que nadie trabajara", "does not mean no
 chk("⚠️ las obras, la peor primero", [j["project_id"] for j in x["jobs_by_estimated_profit_lowest_first"]] == ["PRJ-2", "PRJ-1"], x["jobs_by_estimated_profit_lowest_first"])
 chk("sobre presupuesto", x["over_budget"][0]["id"] == "PRJ-1")
 chk("por facturar: solo lo que hay, con nombre", x["pending_to_invoice"] == [{"project_id": "PRJ-1", "name": "Bondi", "amount": 700.46}], x["pending_to_invoice"])
+# v647 · el resumen del día sumaba la lista a mano: el total va dado, y de TODAS (la lista va acotada a MAX_LISTA)
+chk("por facturar, con su total dado", x.get("pending_to_invoice_total") == 700.46, x.get("pending_to_invoice_total"))
+_o2 = (INV.pendiente_por_proyecto, CT.MAX_LISTA)
+INV.pendiente_por_proyecto, CT.MAX_LISTA = (lambda g: {"PRJ-1": 100.0, "PRJ-2": 50.25, "PRJ-3": 0}), 1
+# ⚠️ con su PROPIA variable: reusar `x` (la lista acotada a 1) dejaba ciega la comprobación de facturas de abajo
+_x2, m = ej("get_money")
+chk("⚠️ el total cuenta también lo que no cabe en la lista", len(_x2["pending_to_invoice"]) == 1 and _x2["pending_to_invoice_total"] == 150.25,
+    (_x2["pending_to_invoice"], _x2.get("pending_to_invoice_total")))
+INV.pendiente_por_proyecto, CT.MAX_LISTA = _o2
 chk("⚠️ facturas abiertas: ni cobradas ni anuladas", [f["number"] for f in x["open_invoices"]] == ["F-1"] and x["open_invoices"][0]["status"] == "vencida", x["open_invoices"])
 _pnl.clear()
 ej("get_money", {"from": "2026-01-01", "to": "2026-03-31"})

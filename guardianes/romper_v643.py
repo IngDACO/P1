@@ -119,6 +119,12 @@ ROTURAS = [
      [("""if INV.estado_cobro(f) not in ("cobrada", "anulada")]\n""", """if INV.estado_cobro(f) != "cobrada"]\n""")]),
     ("por facturar incluye los ceros", T,
      [("""for k, v in INV.pendiente_por_proyecto(g).items() if _num(v) > 0), key=lambda x: -x[1])\n""", """for k, v in INV.pendiente_por_proyecto(g).items()), key=lambda x: -x[1])\n""")]),
+    # v647 · el total de lo por facturar va dado (el resumen del día lo sumaba a mano)
+    ("⚠️ el total de lo por facturar, solo de lo listado", T,
+     [("""            "pending_to_invoice_total": round(sum(v for _, v in _por), 2),\n""",
+       """            "pending_to_invoice_total": round(sum(v for _, v in _por[:MAX_LISTA]), 2),\n""")]),
+    ("sin el total de lo por facturar", T,
+     [("""            "pending_to_invoice_total": round(sum(v for _, v in _por), 2),\n""", "")]),
     ("⚠️ se cambia la cifra del P&L", T,
      [(""""profit": p["ganancia"],""", """"profit": p["facturado"],""")]),
     # ── El agente ──

@@ -610,6 +610,8 @@ def _dinero(entrada, ctx) -> dict:
                                                        "margin_pct": x.get("margen_ing")} for x in _filas[:MAX_LISTA]],
             "over_budget": E.over_budget(g),
             "pending_to_invoice": [{"project_id": k, "name": _nombres.get(k, k), "amount": round(v, 2)} for k, v in _por[:MAX_LISTA]],
+            # v647 · El total de TODAS, no de las listadas: el resumen del día lo sumaba a mano, y la lista va acotada
+            "pending_to_invoice_total": round(sum(v for _, v in _por), 2),
             "open_invoices": [{"number": f.get("Number", ""), "client": f.get("ClientName", ""), "total": f.get("Total", ""),
                                "collected": f.get("Collected", ""), "due": dmy(f.get("ExpiryDate", "")), "status": INV.estado_cobro(f)}
                               for f in _abiertas[:MAX_LISTA]]}

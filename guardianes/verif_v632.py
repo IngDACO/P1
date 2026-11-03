@@ -100,11 +100,11 @@ chk("el historial sigue siendo texto, y la pregunta va al final",
     [m["content"] for m in _k["messages"]] == ["antes", "respuesta", "hola"])
 chk("mismo respaldo que `parte_agente`", CA._BETA_RESPALDO == __import__("core.parte_agente", fromlist=["x"])._BETA_RESPALDO)
 
-_cola[:] = [respuesta([bloque("text", text="resumen")])]
-_r = CA.admin_briefing("cliente1")
-chk("el resumen de la oficina no se mueve: sigue en Haiku", _resumen and _resumen[-1]["model"] == "claude-haiku-4-5",
-    _resumen[-1:] and _resumen[-1].get("model"))
-chk("...y sale", _r == "resumen", _r)
+# ⚠️ v647 · CADUCADO por decisión del usuario: el resumen del día pasa a Sonnet 5.5, como los demás agentes, en su
+# propio módulo (verif_v647). Sin `admin_briefing` en el asistente.
+from core import resumen_dia as _RD                                # noqa: E402
+chk("el resumen del día, también en Sonnet 5.5 (y fuera del asistente)", _RD.MODELO == "claude-sonnet-5-5"
+    and not hasattr(CA, "admin_briefing") and not hasattr(CA, "MODEL_RESUMEN"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 sec("2. Lo que vuelve de la API: cada forma, sin error en el chat")
@@ -123,7 +123,7 @@ _x = pregunta(respuesta([]))
 chk("sin contenido: un mensaje", _x.startswith("⚠️ I could not get an answer"), _x)
 _cuerpo = leer("core/chat_agent.py")
 _i = _cuerpo.index("def get_chat_response")
-chk("ya no se lee por posición en el asistente", "content[0]" not in _cuerpo[_i:_cuerpo.index("def admin_briefing")])
+chk("ya no se lee por posición en el asistente", "content[0]" not in _cuerpo[_i:])
 
 # ─────────────────────────────────────────────────────────────────────────────
 sec("3. La baja: lo que dicen los pasos es lo que hace la pantalla")

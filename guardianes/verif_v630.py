@@ -194,8 +194,11 @@ CA.get_chat_response("hola", [], None, None, rol="administrator", grupo="cliente
 _s = _vistos[-1]["system"]
 chk("a la oficina, su persona y su grupo", "TU INTERLOCUTOR: ADMINISTRADOR" in _s and "VIVO DEL GRUPO" in _s
     and "- **Administrator:** %s." % _adm in _s)
-CA.admin_briefing("cliente1")
-chk("el resumen del día usa la misma guía", "- **Administrator:** %s." % _adm in _vistos[-1]["system"])
+# ⚠️ v647 · CADUCADO por decisión del usuario: el resumen del día tiene instrucciones PROPIAS, sin la guía del Survey
+# (eran 7.500 de sus 7.800 tokens) y sin menú: sus botones llevan a IDs que comprueba verif_v647.
+from core import resumen_dia as _RD                                # noqa: E402
+chk("el resumen del día, con instrucciones propias y sin la guía", "GEOMETRÍA DEL HUECO" not in _RD._INSTRUCCIONES
+    and "FUNCIONES DE LA APP COPEX" not in _RD._INSTRUCCIONES)
 _app = leer("app.py")
 chk("la app le pasa el rol", "rol          = _ROL," in _app and 'if _ROL == "field"' in _app)
 

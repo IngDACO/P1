@@ -94,13 +94,11 @@ ROTURAS = [
        "        \".st-key-cpxtop [data-testid='stColumn']:nth-child(4){flex:0 0 64px !important;\"\n"
        "        \"min-width:64px !important;}\"\n", "")]),
     ("⚠️ «Refresh» vuelve a solo borrar la lectura", PU,
-     [("                            pass\n"
-       "                        st.session_state[key] = chat_agent.admin_briefing(grupo)\n",
-       "                            pass\n"
-       "                        st.session_state.pop(key, None)\n")]),
+     [("            RD.del_dia(grupo, _u, _id, rehacer=True)\n",
+       "            RD._almacen()[\"datos\"].pop(RD._clave(grupo, _id), None)\n")]),
     ("«Refresh» redacta con los datos de antes (caché)", PU,
-     [("                            admin_digest.group_digest.clear()     # los hechos, de ahora\n",
-       "                            pass\n")]),
+     [("                admin_digest.group_digest.clear()     # los hechos, de ahora\n",
+       "                pass\n")]),
     ("⚠️ la URL vuelve a quedarse sin `&p=`", HU,
      [('        prj = (st.session_state.get("_prjsel_pending")\n'
        '               or st.session_state.get("_admin_open_proj"))\n',

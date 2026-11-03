@@ -256,9 +256,10 @@ chk("escritorio: la campana, 64 px", "nth-child(4){flex:0 0 64px" in _esc_b)
 
 # ══════════════════════════════════════════════════════════════════════════════
 print("\n7. Home: «Refresh» genera otra lectura")
+# v647 · El resumen salió a `resumen_dia` (una vez al día por empresa): «Refresh» lo pide de nuevo, con `rehacer`
 G_IA = r'''
 import streamlit as st
-from core import projects_ui as PU, admin_digest, chat_agent, auth
+from core import projects_ui as PU, admin_digest, resumen_dia as RD, auth
 st.session_state.setdefault("auth", {"usuario": "jefa", "rol": "administrator", "grupo": "G"})
 st.session_state.setdefault("_N", 0)
 auth.list_users = lambda *a, **k: []
@@ -270,12 +271,15 @@ class _Dig:
     def clear(self):
         st.session_state["_LIMPIO"] = True
 admin_digest.group_digest = _Dig()
-def _brief(g):
+RD.guardado = lambda g, idi: st.session_state.get("_brief_G", {"titular": "LECTURA VIEJA", "puntos": [], "hora": "07:00"})
+def _del_dia(g, u, idi, rehacer=False):
     st.session_state["_N"] += 1
-    return "LECTURA %d" % st.session_state["_N"]
-chat_agent.admin_briefing = _brief
-st.session_state.setdefault("_brief_G", "LECTURA VIEJA")
-PU._resumen_del_dia("G")
+    st.session_state["_brief_G"] = {"titular": "LECTURA %d" % st.session_state["_N"], "puntos": [], "hora": "09:00"}
+    st.session_state["_rehacer"] = rehacer
+    return st.session_state["_brief_G"], ""
+RD.del_dia = _del_dia
+with PU._resumen_del_dia("G"):
+    PU.lectura_ia("G")
 '''
 at = AppTest.from_string(G_IA, default_timeout=60)
 at.run()
@@ -283,7 +287,8 @@ chk("se pinta sin excepción", not at.exception, [e.value for e in at.exception]
 [b for b in at.button if b.key == "brief_ref_G"][0].click()
 at.run()
 chk("⚠️ «Refresh» deja una lectura NUEVA (no la borra)",
-    at.session_state["_brief_G"] == "LECTURA 1", at.session_state["_brief_G"])
+    at.session_state["_brief_G"]["titular"] == "LECTURA 1" and at.session_state["_rehacer"] is True
+    and any("LECTURA 1" in m.value for m in at.markdown), at.session_state["_brief_G"])
 chk("…con los datos de ahora (vacía la caché del resumen)",
     "_LIMPIO" in at.session_state and at.session_state["_LIMPIO"] is True)
 
