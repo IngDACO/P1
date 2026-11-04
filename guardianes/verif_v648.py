@@ -258,7 +258,21 @@ chk("con fallos, sale en rojo (GitHub avisa al dueño)", r == 1)
 
 sec("6. El trabajo de GitHub")
 W = leer(".github/workflows/resumen_manana.yml")
-chk("cada hora (el script decide la hora de cada empresa) y a mano", 'cron: "17 * * * *"' in W and "workflow_dispatch:" in W)
+chk("y a mano (Run workflow)", "workflow_dispatch:" in W)
+# ⚠️ v651 · CADUCADO por decisión del usuario («uno por la mañana, seguro»): «cada hora» no se cumplía (GitHub lanzó 2 de ~14).
+# Lo que se exige ahora sale del PROPIO horario: cada cuarto de hora de 7:00 a 10:45 en Sydney tiene su intento, con y sin
+# horario de verano, y fuera de la mañana no corre.
+import re as _re                                                    # noqa: E402
+_pedidos = set()
+for _m in _re.finditer(r'cron: "\*/(\d+) (\d+)(?:-(\d+))? \* \* \*"', W):
+    _p, _h1, _h2 = int(_m.group(1)), int(_m.group(2)), int(_m.group(3) or _m.group(2))
+    _pedidos |= {_h * 60 + _mi for _h in range(_h1, _h2 + 1) for _mi in range(0, 60, _p)}
+_franja = {_h * 60 + _mi for _h in range(7, 11) for _mi in (0, 15, 30, 45)}
+for _nom, _off in (("Sydney en verano (UTC+11)", 11), ("Sydney en invierno (UTC+10)", 10)):
+    _local = {(x + _off * 60) % 1440 for x in _pedidos}
+    chk("⚠️ %s: un intento en CADA cuarto de hora de 7:00 a 10:45" % _nom, _franja <= _local, sorted(_franja - _local)[:5])
+chk("⚠️ el resto del día no corre", "17 * * * *" not in W and W.count("- cron:") == 2 and len(_pedidos) == 20,
+    (W.count("- cron:"), len(_pedidos)))
 chk("⚠️ sin pull_request: el código de otro nunca corre con los secretos", "pull_request" not in W)
 chk("solo lectura del repositorio", "permissions:\n  contents: read" in W)
 chk("dos a la vez no (mandarían dos veces)", "concurrency:" in W and "cancel-in-progress: false" in W)

@@ -4,7 +4,8 @@
 ## Decisiones del usuario (03/11/2026)
 
 - Cada persona de la oficina lo activa PARA SÍ, en Home («Every morning too»): nadie lo recibe sin haberlo pedido.
-- Lo manda un trabajo de GitHub Actions (`.github/workflows/resumen_manana.yml`, cada hora) que lanza
+- Lo manda un trabajo de GitHub Actions (`.github/workflows/resumen_manana.yml`; v651: cada 15 min en la mañana
+  australiana, porque GitHub no garantiza los horarios) que lanza
   `resumen_manana.py`: a cada empresa cuando en SU hora local son entre las 7 y las 11, una vez al día por persona.
 - Es el resumen de Home (`resumen_dia.del_dia`), con los mismos datos y las mismas reglas: UNA llamada por empresa e
   idioma, y la reciben todos los suscritos de ese idioma. v649 · Y el MISMO del día: lo que prepara uno lo deja en la
@@ -134,7 +135,7 @@ def suscribir(grupo, usuario, idioma, si=True) -> tuple:
 
 
 # ═════════════════════════════════════════════════════════════════
-# Mandarlo (el trabajo de cada hora)
+# Mandarlo (cada intento del trabajo de la mañana)
 # ═════════════════════════════════════════════════════════════════
 def toca(ahora) -> bool:
     """¿Es la hora de la mañana de ESA empresa?"""
@@ -161,7 +162,7 @@ def enviar_empresa(grupo, ignorar_hora=False) -> dict:
     from core import hojas, notify, resumen_dia as RD
     cuenta = dict.fromkeys(CUENTAS, 0)
     # ⚠️ SIN cabeceras: en una empresa donde nadie lo pidió, la hoja no existe y así NO se crea (un lector que escribe,
-    # regla v145). El trabajo es un proceso nuevo cada hora: el lote se lee ahora, y la fila i es la i + 2 de la hoja.
+    # regla v145). Cada intento es un proceso nuevo: el lote se lee ahora, y la fila i es la i + 2 de la hoja.
     recs = hojas.registros(SHEET) or []
     filas = [(i + 2, r) for i, r in enumerate(recs)
              if str(r.get("Group", "")).strip().lower() == str(grupo).strip().lower() and _activa(r)]

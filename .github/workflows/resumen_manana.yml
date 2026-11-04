@@ -1,13 +1,18 @@
 name: Morning summary
 
-# v648 · El resumen del día, cada mañana, a quien lo pidió en Home («Every morning too»). Corre cada hora y el script
-# decide, empresa por empresa, si en SU hora local toca (de 7 a 11, una vez al día por persona): core/resumen_envio.py.
+# v648 · El resumen del día, cada mañana, a quien lo pidió en Home («Every morning too»). El script decide, empresa por
+# empresa, si en SU hora local toca (de 7 a 11, una vez al día por persona): core/resumen_envio.py.
+# ⚠️ v651 · GitHub NO garantiza los horarios: lanza cuando puede y se salta turnos (de ~14 «cada hora» lanzó 2). Por eso
+# se le piden intentos cada 15 min durante la mañana australiana, 20:00-00:59 UTC = de 7 a 11 en Sydney con y sin horario
+# de verano (y Brisbane, Melbourne, Adelaida). Solo el primero manda; los demás ven «ya hoy». El resto del día no corre.
+# Una empresa en otro huso necesita SU franja aquí (decisión del usuario: una vez por la mañana, seguro).
 # ⚠️ El repositorio es PÚBLICO: el registro de este trabajo lo ve cualquiera, así que el script solo imprime cuentas.
 # ⚠️ Necesita el secreto STREAMLIT_SECRETS_TOML (Settings → Secrets and variables → Actions). Sin él no hace nada.
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/15 20-23 * * *"
+    - cron: "*/15 0 * * *"
   workflow_dispatch:
     inputs:
       ignorar_hora:

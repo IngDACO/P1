@@ -70,7 +70,12 @@ ROTURAS = [
     ("⚠️ con pull_request", WF, [("""  workflow_dispatch:\n""", """  pull_request:\n  workflow_dispatch:\n""")]),
     ("⚠️ puede escribir en el repositorio", WF, [("""  contents: read\n""", """  contents: write\n""")]),
     ("dos a la vez", WF, [("""  cancel-in-progress: false\n""", """  cancel-in-progress: true\n""")]),
-    ("solo una vez al día, a las 00:17 UTC", WF, [("""    - cron: "17 * * * *"\n""", """    - cron: "17 0 * * *"\n""")]),
+    # v651 · re-anclada al horario de la mañana, y las roturas de ese horario
+    ("⚠️ un solo intento al día (GitHub se lo puede saltar)", WF, [("""    - cron: "*/15 20-23 * * *"\n    - cron: "*/15 0 * * *"\n""",
+                                                                  """    - cron: "17 21 * * *"\n""")]),
+    ("⚠️ sin la última hora (en invierno no cubre las 10)", WF, [("""    - cron: "*/15 0 * * *"\n""", "")]),
+    ("intentos cada hora en vez de cada 15 min", WF, [("""    - cron: "*/15 20-23 * * *"\n""", """    - cron: "0 20-23 * * *"\n""")]),
+    ("⚠️ vuelve a correr todo el día", WF, [("""    - cron: "*/15 0 * * *"\n""", """    - cron: "*/15 0 * * *"\n    - cron: "17 * * * *"\n""")]),
     # v650 · Node 24 y la máquina fijada
     ("vuelve checkout@v4 (Node 20)", WF, [("""      - uses: actions/checkout@v5\n""", """      - uses: actions/checkout@v4\n""")]),
     ("vuelve setup-python@v5 (Node 20)", WF, [("""      - uses: actions/setup-python@v6\n""", """      - uses: actions/setup-python@v5\n""")]),

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Manda el resumen del día a quien lo pidió (v648). Lo lanza `.github/workflows/resumen_manana.yml` cada hora; cada
+"""Manda el resumen del día a quien lo pidió (v648). Lo lanza `.github/workflows/resumen_manana.yml` (cada 15 min en la mañana australiana, v651); cada
 empresa recibe el suyo cuando en su hora local son entre las 7 y las 11 (`core/resumen_envio.py`).
 
     python resumen_manana.py                 # lo que toque a esta hora

@@ -1284,7 +1284,7 @@ los datos provistos, no inventes"). UI: `projects_ui.render_group_header` → `_
 "🔔 Resumen del día": chips de pendientes + la lectura de la IA, `lectura_ia`, que Home rellena AL FINAL en el sitio
 que `_resumen_del_dia` le reserva). Solo el rol administrador (el propietario no tiene un único grupo).
 **Cada mañana (v648):** quien lo pide en Home («Every morning too») lo recibe por correo/Telegram: `.github/workflows/resumen_manana.yml`
-(cada hora) → `survey_app/resumen_manana.py` → `core/resumen_envio.py` (hoja `DailySummary` por empresa; de 7 a 11 hora local, una vez
+(cada 15 min de 20:00 a 00:59 UTC, v651: GitHub no garantiza horarios) → `survey_app/resumen_manana.py` → `core/resumen_envio.py` (hoja `DailySummary` por empresa; de 7 a 11 hora local, una vez
 al día, solo administradores activos). ⚠️ El repositorio es PÚBLICO: su registro solo lleva cuentas. Secreto `STREAMLIT_SECRETS_TOML`.
 **Uno al día también entre procesos (v649):** `del_dia` deja el del día en `DailyBriefs` (libro de la empresa) y el envío o Home, el que
 llegue después, lo reutiliza; «Refresh» añade otro y manda el último.
