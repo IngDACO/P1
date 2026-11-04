@@ -271,6 +271,10 @@ chk("se escribe donde lo busca la app, con permisos solo del dueño", "working-d
 chk("⚠️ y se borra pase lo que pase", "if: always()" in W and "rm -f survey_app/.streamlit/secrets.toml" in W)
 chk("sin el secreto, no hace nada (y lo dice)", "STREAMLIT_SECRETS_TOML is not set" in W and W.count("if: steps.sec.outputs.ok == 'true'") == 4)
 chk("el Python del Cloud y sus librerías", 'python-version: "3.12"' in W and "pip install -q -r survey_app/requirements.txt" in W)
+# v650 · lo que avisó GitHub en la 1ª ejecución (04/11/2026): Node 20 en desuso y `ubuntu-latest` pasando a Ubuntu 26
+chk("⚠️ las acciones en Node 24 (checkout@v5, setup-python@v6), no las de Node 20", "uses: actions/checkout@v5" in W
+    and "uses: actions/setup-python@v6" in W and "checkout@v4" not in W and "setup-python@v5" not in W)
+chk("⚠️ la máquina fijada (`ubuntu-latest` cambia de versión sola)", "runs-on: ubuntu-24.04" in W and "ubuntu-latest" not in W)
 chk("«ignorar la hora» solo a mano", "github.event_name == 'workflow_dispatch' && inputs.ignorar_hora" in W and "--ignorar-hora" in W)
 chk("⚠️ el secreto local no está en el repositorio", ".streamlit/secrets.toml" in leer(".gitignore") or "secrets.toml" in leer(".gitignore"))
 

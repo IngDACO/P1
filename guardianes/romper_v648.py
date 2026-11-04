@@ -71,6 +71,10 @@ ROTURAS = [
     ("⚠️ puede escribir en el repositorio", WF, [("""  contents: read\n""", """  contents: write\n""")]),
     ("dos a la vez", WF, [("""  cancel-in-progress: false\n""", """  cancel-in-progress: true\n""")]),
     ("solo una vez al día, a las 00:17 UTC", WF, [("""    - cron: "17 * * * *"\n""", """    - cron: "17 0 * * *"\n""")]),
+    # v650 · Node 24 y la máquina fijada
+    ("vuelve checkout@v4 (Node 20)", WF, [("""      - uses: actions/checkout@v5\n""", """      - uses: actions/checkout@v4\n""")]),
+    ("vuelve setup-python@v5 (Node 20)", WF, [("""      - uses: actions/setup-python@v6\n""", """      - uses: actions/setup-python@v5\n""")]),
+    ("⚠️ la máquina, la que toque", WF, [("""    runs-on: ubuntu-24.04\n""", """    runs-on: ubuntu-latest\n""")]),
     # ── En Home ──
     ("⚠️ el interruptor lo pide para otro", PU, [("""        ok, msg = RE.suscribir(grupo, usuario, idioma, _si)\n""", """        ok, msg = RE.suscribir(grupo, "Admin2x", idioma, _si)\n""")]),
     ("⚠️ si no se pudo, el interruptor se queda como si sí", PU, [("""            st.session_state[_k] = not _si\n""", """            pass\n""")]),
