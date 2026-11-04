@@ -10,6 +10,16 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## EL ENVÍO DE LA MAÑANA, CON MUCHOS INTENTOS EN SU FRANJA (v651)
+
+Decisión del usuario (04/11/2026, «Uno por la mañana, seguro»): GitHub no garantiza los horarios. Desde que se subió, el trabajo «cada hora» lanzó 2 de unas 14 ejecuciones, y un día sin ninguna entre las 7 y las 11 sería un día sin resumen.
+
+- Ahora se le piden intentos **cada 15 minutos de 20:00 a 00:59 UTC**: de 7 a 11 en Sydney con y sin horario de verano (y Brisbane, Melbourne y Adelaida). Solo el primero manda (`LastSent`); los demás ven «ya hoy» y acaban sin llamar al modelo. El resto del día el trabajo no corre: 20 intentos al día, ~15 min de máquina.
+- Una empresa en otro huso necesitaría SU franja en el workflow (lo dice su cabecera).
+- `verif_v648` lo deduce del propio horario: cada cuarto de hora de 7:00 a 10:45 en Sydney, en verano y en invierno, tiene su intento, y fuera de la mañana no corre. `romper_v648` lleva las roturas (un solo intento, sin la última hora, cada hora en vez de cada 15 min, otra vez todo el día).
+
+medido en GitHub: el workflow sigue activo y el push de 773398f no dio ningún error de fichero (el YAML, leído también en local: las dos franjas, ubuntu-24.04, checkout@v5 y setup-python@v6). Los intentos de la mañana, sin ver aún: el primero toca el 05/11 a las 07:00 de Sydney (20:00 UTC) · verif_v648 74/74 · romper_v648 50/50 (con las 4 nuevas del horario), 3330 anclas vivas · suite 270/270
+
 ## EL ENVÍO DE LA MAÑANA, EN NODE 24 Y CON LA MÁQUINA FIJADA (v650)
 
 Aprobado por el usuario el 04/11/2026 («ok dale»), sobre los dos avisos de GitHub en la primera ejecución del trabajo (Run workflow #1, en verde: «enviados 1», LastSent apuntado y 0 llamadas al modelo).
@@ -15715,7 +15725,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v650 = actual)
+## Versiones desplegadas (v651 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15723,6 +15733,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v651 | **El envío de la mañana, con muchos intentos en su franja**: GitHub no garantiza horarios (lanzó 2 de ~14), así que se le piden cada 15 min de 7 a 11 en Sydney (20:00-00:59 UTC, con y sin horario de verano) y solo el primero manda; el resto del día no corre. medido en GitHub: el workflow sigue activo y el push de 773398f no dio ningún error de fichero (el YAML, leído también en local: las dos franjas, ubuntu-24.04, checkout@v5 y setup-python@v6). Los intentos de la mañana, sin ver aún: el primero toca el 05/11 a las 07:00 de Sydney (20:00 UTC) · verif_v648 74/74 · romper_v648 50/50 (con las 4 nuevas del horario), 3330 anclas vivas · suite 270/270 |
 | v650 | **El envío de la mañana, en Node 24 y con la máquina fijada**: `checkout@v5`, `setup-python@v6` y `ubuntu-24.04`, por los avisos de GitHub en la primera ejecución. medido en GitHub: Run workflow #4 sobre c67fa36, verde en 44 s con checkout@v5, setup-python@v6 y la máquina ubuntu-24.04, «empresas 1 | enviados 0 | ya_hoy 1 …» (Bobo ya lo tenía: no manda dos) y SIN las dos anotaciones de la #1. Antes, GitHub corrió solo el trabajo a las 07:05 y a las 11:36 de Sydney, los dos en verde y sin duplicar (LastSent sigue en 06:09). ⚠️ Pero de las ~14 ejecuciones de cada hora desde que se subió, GitHub solo lanzó 2: arreglo propuesto · verif_v648 71/71 · romper_v648 47/47 (con las 3 nuevas), 3327 anclas vivas · suite 270/270 |
 | v649 | **Lo visto en la prueba de v646**: una actividad de varias partes con solo una nombrada ya no se premarca (pregunta «¿y el resto?»), la tarjeta de la oficina dice «this log» y «1 activity», y el resumen del día se paga una vez también entre el envío de la mañana y Home (hoja `DailyBriefs`). medido en producción como oficina, chip v649: Home preparó el de hoy (05:27) y quedó en DailyBriefs; desde OTRO proceso (en local, como el envío) del_dia lo reutilizó con 0 llamadas al modelo; «Refresh», por primera vez en producción, lo rehízo (05:32), quedó detrás y es el que se reutiliza. Con un parte de PRUEBA de campo000 en PRJ-0034 (5 días sin revisar): la tarjeta de la oficina dice «Activities this log mentions» y «Pending in this log», «Install CW guide shoes» marcada y ««and the CW buffer» — tick it only if all of it is done.» con «Is the car buffer done too?» SIN marcar; en el parte de al lado, «1 activity credited from this log». Sin confirmar nada; la obra devuelta EXACTA a la foto, el parte borrado y el resumen rehecho sin él · verif_v649 40/40; al día verif_v465, verif_v610, verif_v647 y verif_v648 · romper_v649 32/32 y las 9 afectadas, 317/317 (v523 30, v586 15, v607 37, v608 12, v610 26, v641 50, v646 62, v647 41, v648 44), 3324 anclas vivas · suite 270/270 |
 | v648 | **El resumen del día, cada mañana, a quien lo pida**: un interruptor en Home para cada persona; GitHub Actions lo manda por correo o Telegram de 7 a 11 hora de la empresa, una vez al día, solo a administradores activos; registro público con solo cuentas. Falta el secreto en GitHub (lo pone el usuario). medido en producción como oficina, chip v648: el interruptor «Every morning too» bajo «Send it to me», apagado; encenderlo, «Done: … around 7:00 your company's time.» y en la hoja Active=YES con «desde» de ahora; apagarlo, «Done: no more morning summaries.» y Active=NO; sin aviso de contacto (Admin2 tiene correo). Antes, el script real contra cliente1: sin nadie suscrito NO creó la hoja; con Admin2 suscrito y --ignorar-hora, 1 enviado a Admin2 (una llamada real) y LastSent apuntado; repetido, «ya hoy»; sin ignorar la hora (22:5x en Sydney), «fuera de hora». GitHub registró «Morning summary» activo; desde Actions, PROBADO el 04/11 con el secreto puesto (Run workflow #1, 53 s: «enviados 1», LastSent apuntado y 0 llamadas al modelo, reutilizó el de Home). Admin2 queda en Active=NO: lo activa quien lo quiera · verif_v648 69/69; al día verif_v465 (DailySummary nace en inglés), verif_v560 y verif_v647 (sustituyen el interruptor) · romper_v648 44/44 y las 4 afectadas, 221/221 (v560 26, v636 104, v641 50, v647 41), 3291 anclas vivas · suite 269/269 (en la 1ª vuelta, 2 rojos de forma: check_suite_integra, porque verif_v648 importaba el script como módulo, y verif_v465, por la hoja nueva sin declarar; arreglados con su razón) |
