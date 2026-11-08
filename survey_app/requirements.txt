@@ -7,7 +7,9 @@
 # removed after 2026-06-01»: un reinicio cualquiera podía romper esas pantallas sin tocar
 # nada nuestro. Subirla es una decisión: se prueba la suite con la nueva y se cambia aquí.
 # (>=1.39 hacía falta por la clase CSS st-key-<key> por widget, v169: 1.64 la tiene.)
-streamlit==1.64.0
+# v661 · 1.64.0 → 1.67.0 (05/11/2026): la 1.66.1 es la primera que deja Pillow 13 (`pillow<14`), y
+# Pillow 13 arregla las 39 vulnerabilidades publicadas que le quedaban a la 12.3.
+streamlit==1.67.0
 # ⚠️ v657 · ANTES de cambiar una línea de aquí: `py -3.12 guardianes/libs_cloud.py`. El Cloud instala
 # con `uv` en Linux; el local, con pip en Windows. En v655 la suite entera pasaba en local y el Cloud no
 # arrancó (ver svglib, abajo). Las subidas de seguridad (pip-audit del 08/11/2026) van de UNA en UNA.

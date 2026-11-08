@@ -172,8 +172,10 @@ at = AppTest.from_string(G3, default_timeout=120).run()
 _w(at, "selectbox", "cot_prj_tipo_COT-9").set_value("Delivery")
 at.run()
 chk("Delivery: SIN NS y CON fecha de fin (antes nacía sin ella)", not _nums(at) and _fins(at))
+# ⚠️ v661 · CADUCADO por Streamlit 1.65 («Apply AppTest form values only on submit»): la fecha va DENTRO del
+# formulario y aquí se relanzaba antes de enviar, así que AppTest la ignoraba y llegaba la de hoy. En el
+# navegador sigue en la caja hasta enviar: se pone y se envía en la misma pasada.
 _fins(at)[0].set_value(dt.date.today() + dt.timedelta(days=3))
-at.run()
 _crear(at)
 _k = at.session_state["_LOG"][0] if at.session_state["_LOG"] else {}
 chk("…y la pasa al motor", _k.get("fecha_fin") == dt.date.today() + dt.timedelta(days=3)

@@ -209,11 +209,13 @@ at.button(key="cpxkpi_cont_seg").click()
 at.run()
 chk("Tracking options ABRE la lista de obras (y baja a ella)",
     _ss(at, "_cont_ver_jobs") is True and _desplegado(at, "Jobs that must")
-    and ".st-key-ir_cpx_cont_jobs" in _textos(at), [str(e.label) for e in at.status])
+    and ".st-key-ir_cpx_cont_jobs" in _textos(at), [str(e.label) for e in list(at.expander) + list(at.status)])
 at.button(key="cpxkpi_cont_seg").click()
 at.run()
+# ⚠️ v661 · CADUCADO por Streamlit 1.65 («Keep iconed expanders out of AppTest status»): el desplegable con
+# icono ya sale en `at.expander`, no en `at.status`; se busca en los dos, como `_desplegado` (trampa 40).
 chk("…y otro toque la cierra", not _ss(at, "_cont_ver_jobs") and not _desplegado(at, "Jobs that must")
-    and any("Jobs that must" in str(e.label) for e in at.status))
+    and any("Jobs that must" in str(e.label) for e in list(at.expander) + list(at.status)))
 
 print("\n4, 5, 10. El parte")
 at = _app()

@@ -320,14 +320,21 @@ def fin_estimada(at):
     return [c.value for c in at.caption if "Estimated finish" in c.value]
 
 
-def crear(at):
+def crear(at, campos=()):
     # ⚠️ v636 · CADUCADO por un cambio deliberado: una instalación pregunta «False car?», obligatoria
     # y sin preselección (decisión del usuario), y sin responderla no se crea. Lo que aquí se prueba
     # no depende de la respuesta; la pregunta la vigila verif_v636.
+    # ⚠️ v661 · CADUCADO por Streamlit 1.65 («Apply AppTest form values only on submit»): AppTest IGNORA lo
+    # puesto en un control DENTRO del formulario si la pasada no lo envía, y aquí se relanzaba para responder
+    # «False car?» (va FUERA): el nombre llegaba vacío («The project name is required.»). En el navegador lo
+    # tecleado sigue en la caja hasta enviar; se copia su orden: lo de fuera primero, y el formulario
+    # (`campos` = [(tipo, clave, valor)]) se rellena y se envía en la MISMA pasada.
     for r in at.radio:
         if str(r.key).startswith("np_fc_") and r.value is None:
             r.set_value(False)
     at.run()
+    for tipo, clave, valor in campos:
+        getattr(at, tipo)(key=clave).set_value(valor)
     [x for x in at.button if "Create project" in str(x.label)][0].click()
     at.run()
 
@@ -353,17 +360,18 @@ chk("…y dice la que se va a guardar («04/11/2026 (25 days)»)",
     _f1 and "**04/11/2026** (25 days)" in _f1[0], _f1)
 
 print("\n5. Nombre repetido")
-at.text_input(key="np_nom_adm").set_value("88 Walker  St")
-crear(at)
+crear(at, [("text_input", "np_nom_adm", "88 Walker  St")])
 chk("avisa del duplicado", any("already exists: PRJ-0002" in w.value for w in at.warning))
 _cb = [c for c in at.checkbox if str(c.key).startswith("np_dup_adm_")]
 chk("⚠️ la casilla está (dentro del form)", len(_cb) == 1, [c.key for c in at.checkbox])
 chk("…y no se creó nada", not log(at), log(at))
-_cb[0].check()
+# ⚠️ v661 · En el navegador marcar una casilla de un formulario no relanza: se marca y se envía. Lo que
+# protegía «marcarla NO la borra» es que la casilla siga ahí, con la MISMA clave, tras otra pasada.
+_kdup = _cb[0].key if _cb else None
 at.run()
-chk("⚠️ marcarla NO la borra (sigue ahí y marcada)",
-    [c.value for c in at.checkbox if str(c.key).startswith("np_dup_adm_")] == [True])
-crear(at)
+chk("⚠️ marcarla NO la borra (sigue ahí, con su clave, tras otra pasada)",
+    _kdup is not None and [c.key for c in at.checkbox if str(c.key).startswith("np_dup_adm_")] == [_kdup])
+crear(at, [("checkbox", _kdup, True)])
 chk("⚠️ con la casilla, la obra homónima SE CREA", log(at)[:1] == [("crear", "88 Walker  St", "Installation", "2026-11-04", log(at)[0][4] if log(at) else -1)],
     log(at))
 
@@ -381,9 +389,8 @@ at = AppTest.from_string(GUION_ALTA, default_timeout=90)
 at.run()
 at.selectbox(key="np_tipo_adm").set_value("Delivery")
 at.run()
-at.date_input(key="np_fin_adm").set_value(__import__("datetime").date(2026, 10, 20))
-at.text_input(key="np_nom_adm").set_value("Entrega")
-crear(at)
+crear(at, [("date_input", "np_fin_adm", __import__("datetime").date(2026, 10, 20)),
+           ("text_input", "np_nom_adm", "Entrega")])
 chk("⚠️ crear un Delivery NO revienta", not at.exception, [e.value for e in at.exception][:1])
 chk("…se escribe con su fecha de fin y 1 actividad",
     log(at) == [("crear", "Entrega", "Delivery", "2026-10-20", 1)], log(at))
@@ -394,8 +401,7 @@ print("\n8. Alta del propietario")
 at = AppTest.from_string(GUION_ALTA, default_timeout=90)
 at.session_state["_clave"] = "own"
 at.run()
-at.text_input(key="np_nom_own").set_value("Torre")
-crear(at)
+crear(at, [("text_input", "np_nom_own", "Torre")])
 chk("el propietario: se elige la obra nueva en su selector",
     "ownerproj_sel" in at.session_state and at.session_state["ownerproj_sel"] == "G · PRJ-0099 · Torre")
 chk("…y no toca el abierto del admin", "_admin_open_proj" not in at.session_state)
