@@ -29,7 +29,9 @@ svglib>=1.5.0,<1.6
 gspread>=6.0.0,<7
 google-auth>=2.28.0,<3
 lxml>=5.0,<6
-pillow>=10.0,<12
+# v659 · 12.3 (pip-audit del 08/11/2026). Pillow 13, la que las arregla TODAS, no entra: Streamlit 1.64
+# pide `pillow<13`; lo que falta lo cubre `core/imagenes` (Pillow solo abre JPEG, PNG y WEBP).
+pillow>=12.3,<13
 # v658 · 23.0.1 (pip-audit del 08/11/2026). Streamlit 1.64 pide `pyarrow<26` y no la 25.0.0.
 pyarrow>=23.0.1,<24
 # Login persistente (cookies). Import perezoso: si falla, la app sigue sin persistencia.
