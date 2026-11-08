@@ -13,6 +13,9 @@ C_BRAND = colors.HexColor("#1a3a5c")
 C_MUTE = colors.HexColor("#7a8699")
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def generate_label_pdf(activo: dict, qr_png: bytes, grupo_nombre: str = "") -> bytes:
     ss = getSampleStyleSheet()
     nom = ParagraphStyle("nom", parent=ss["Normal"], fontSize=20, leading=23,
@@ -28,8 +31,8 @@ def generate_label_pdf(activo: dict, qr_png: bytes, grupo_nombre: str = "") -> b
     story = []
 
     qr = Image(_io.BytesIO(qr_png), width=48 * mm, height=48 * mm)
-    lineas = [Paragraph(str(activo.get("Name", "")), nom),
-              Paragraph(str(activo.get("ID", "")), idst)]
+    lineas = [Paragraph(esc_pdf(activo.get("Name", "")), nom),
+              Paragraph(esc_pdf(activo.get("ID", "")), idst)]
     # ⚠️ Las ramas van por la CLAVE, nunca por el texto de la etiqueta: al traducir
     # «Marca/Modelo» a «Make/Model» la comparación por texto dejó de cumplirse y esa
     # línea desapareció de la etiqueta, sin ningún error. Es el modo de fallo típico
@@ -41,10 +44,10 @@ def generate_label_pdf(activo: dict, qr_png: bytes, grupo_nombre: str = "") -> b
         else:
             v = str(activo.get(key, "")).strip()
         if v:
-            lineas.append(Paragraph(f"{lbl}: {v}", sub))
+            lineas.append(Paragraph(f"{lbl}: {esc_pdf(v)}", sub))
     if grupo_nombre:
         lineas.append(Spacer(1, 4))
-        lineas.append(Paragraph(str(grupo_nombre), sub))
+        lineas.append(Paragraph(esc_pdf(grupo_nombre), sub))
 
     card = Table([[qr, lineas]], colWidths=[52 * mm, 122 * mm])
     card.setStyle(TableStyle([

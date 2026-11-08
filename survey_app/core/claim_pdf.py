@@ -46,6 +46,9 @@ C_MUTE = colors.HexColor("#7a8699")
 logger = logging.getLogger(__name__)
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _money(v) -> str:
     return f"${_num(v):,.2f}"
 
@@ -103,9 +106,9 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
     except Exception as e:
         logger.warning("claim_pdf: no se pudo leer la identidad fiscal de %s: %s", _grp, e)
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(str(marca), mk)]
+    _emisor = [Paragraph(esc_pdf(marca), mk)]
     if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
     head = Table([[_emisor, Paragraph(_titulo, ti)]], colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -113,14 +116,14 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
 
     # ── cabecera: de quién es la obra y qué documento es ─────────────────────
     _filas_meta = [
-        [Paragraph(d("Claim no."), sm), Paragraph(str(rec.get("Number", "")), Hb)],
-        [Paragraph(d("Date"), sm), Paragraph(str(rec.get("Date", "")), H)],
+        [Paragraph(d("Claim no."), sm), Paragraph(esc_pdf(rec.get("Number", "")), Hb)],
+        [Paragraph(d("Date"), sm), Paragraph(esc_pdf(rec.get("Date", "")), H)],
     ]
     if str(rec.get("PeriodTo", "")).strip():
         _filas_meta.append([Paragraph(d("Period to"), sm),
-                            Paragraph(str(rec.get("PeriodTo")), H)])
+                            Paragraph(esc_pdf(rec.get("PeriodTo")), H)])
     _filas_meta.append([Paragraph(d("Status"), sm),
-                        Paragraph(i18n.etiqueta(str(rec.get("Status", ""))), H)])
+                        Paragraph(esc_pdf(i18n.etiqueta(str(rec.get("Status", "")))), H)])
     meta = Table(_filas_meta, colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
@@ -128,16 +131,16 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
     _prj = proyecto or {}
     cli = cliente or {}
     bill = [Paragraph(f"<b>{d('Claim to')}</b>", Hb),
-            Paragraph(str(cli.get("Name", "") or _prj.get("Client", "") or "—"), H)]
+            Paragraph(esc_pdf(cli.get("Name", "") or _prj.get("Client", "") or "—"), H)]
     for k in ("ContactName", "Address", "Email", "Phone"):
         v = str(cli.get(k, "")).strip()
         if v:
-            bill.append(Paragraph(v, sm))
+            bill.append(Paragraph(esc_pdf(v), sm))
     if str(_prj.get("Name", "")).strip():
         bill += [Spacer(1, 4), Paragraph(f"<b>{d('Job')}</b>", Hb),
-                 Paragraph(str(_prj.get("Name")), H)]
+                 Paragraph(esc_pdf(_prj.get("Name")), H)]
         if str(_prj.get("Location", "")).strip():
-            bill.append(Paragraph(str(_prj.get("Location")), sm))
+            bill.append(Paragraph(esc_pdf(_prj.get("Location")), sm))
     info = Table([[bill, meta]], colWidths=[104 * mm, 74 * mm])
     info.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [info, Spacer(1, 12)]
@@ -225,7 +228,7 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
                               amount=_money(_queda)), sm), Spacer(1, 6)]
 
     if str(rec.get("Note", "")).strip():
-        story += [Paragraph(f"<b>{d('Note:')}</b> {rec.get('Note')}", sm)]
+        story += [Paragraph(f"<b>{d('Note:')}</b> {esc_pdf(rec.get('Note'))}", sm)]
 
     doc.build(story)
     return buf.getvalue()

@@ -51,7 +51,9 @@ from core import auth, timeclock                                   # noqa: E402
 
 _r = auth.verify_login("no-existe-zzz-v445", "x")
 chk("auth.verify_login se ejecuta y devuelve dict", isinstance(_r, dict))
-chk("...con el mensaje en inglés", "User not found" in str(_r.get("error")),
+# ⚠️ v653 · CADUCADO a propósito: era «User not found»; desde v653 el login da el MISMO mensaje
+# si la cuenta no existe o la contraseña no vale (distintos decían qué cuentas existen).
+chk("...con el mensaje en inglés", "Wrong username or password" in str(_r.get("error")),
     str(_r.get("error")))
 _o, _m = auth.add_user("zzz-v445", "x", "rol-inexistente", "n", "cliente1")
 chk("auth.add_user (rol inválido) en inglés", "Invalid role" in str(_m), str(_m))

@@ -26,6 +26,9 @@ C_LIGHT = colors.HexColor("#e8f1fb")
 C_ZEBRA = colors.HexColor("#f4f7fb")
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _estilos():
     s = getSampleStyleSheet()
     def add(n, **kw):
@@ -47,9 +50,9 @@ def _tabla(filas, ss, W):
     if not filas:
         return None
     cols = list(filas[0].keys())
-    data = [[Paragraph(str(c), ss["THead"]) for c in cols]]
+    data = [[Paragraph(esc_pdf(c), ss["THead"]) for c in cols]]
     for f in filas:
-        data.append([Paragraph(str(f.get(c, "")), ss["TCell"]) for c in cols])
+        data.append([Paragraph(esc_pdf(f.get(c, "")), ss["TCell"]) for c in cols])
     t = Table(data, colWidths=[W / len(cols)] * len(cols), repeatRows=1)
     cmds = [("BACKGROUND", (0, 0), (-1, 0), C_COPEX),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -87,7 +90,7 @@ def tool_pdf(titulo: str, meta: dict = None, svgs: list = None,
     ficha = [(k, v) for k, v in meta.items() if str(v or "").strip()]
     if ficha:
         t = Table([[Paragraph(f"<b>{k}</b>", ss["TCell"]),
-                    Paragraph(str(v), ss["TCell"])] for k, v in ficha],
+                    Paragraph(esc_pdf(v), ss["TCell"])] for k, v in ficha],
                   colWidths=[W * 0.26, W * 0.74])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (0, -1), C_LIGHT),

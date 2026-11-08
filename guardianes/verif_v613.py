@@ -147,8 +147,12 @@ at = AppTest.from_string(APP, default_timeout=60).run()
 chk("se pinta sin excepción", not at.exception, [e.value for e in at.exception][:1])
 chk("sin exigirlo: dice que por ahora es OPCIONAL (y que vincularlo sirve para los avisos)",
     any("For now Telegram is **optional**" in x for x in _txt(at)), _txt(at)[:6])
-chk("...y el enlace del bot sigue ahí para vincularlo",
-    any("t.me/copex_bot?start=helper1" in str(c.value) for c in at.code), [str(c.value) for c in at.code])
+# ⚠️ v653 · CADUCADO a propósito: el enlace llevaba `?start=helper1` (el nombre de usuario, que
+# se adivina); desde v653 es un código aleatorio («c» + 10 hex) y no lleva el usuario.
+import re as _re
+chk("...y el enlace del bot sigue ahí para vincularlo (con un código aleatorio, no el usuario)",
+    any(_re.search(r"t\.me/copex_bot\?start=c[0-9a-f]{10}$", str(c.value)) for c in at.code)
+    and not any("helper1" in str(c.value) for c in at.code), [str(c.value) for c in at.code])
 at2 = AppTest.from_string(APP, default_timeout=60)
 at2.session_state["_pol"] = True
 at2.run()

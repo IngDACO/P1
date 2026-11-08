@@ -5,6 +5,7 @@ Navegación con st.radio (NO st.tabs) para evitar mezcla de contenido.
 import logging
 
 from core.i18n import t, etiqueta as _etq
+from html import escape as _esc_html     # v653 · lo de la hoja, escapado en el HTML
 from datetime import timedelta
 
 import pandas as pd
@@ -352,7 +353,7 @@ def render_group_header(grupo: str):
         'margin-bottom:14px;">'
         f'<span style="line-height:1;">{_MI("business", "#fff", "26px")}</span>'
         '<div style="min-width:0;">'
-        f'<div style="color:#fff;font-size:21px;font-weight:800;line-height:1.1;">{grupo}</div>'
+        f'<div style="color:#fff;font-size:21px;font-weight:800;line-height:1.1;">{_esc_html(str(grupo or ''))}</div>'
         # ⚠️ v327: era #b0c8e8 → 3.2:1 contra el extremo CLARO del degradado de la
         # banda. Los otros 5 usos de ese tono (PDF, email, cajetín) van sobre el azul
         # OSCURO, donde da 9.1:1, así que solo se cambia este. #e2ecf9 → 4.58:1.
@@ -2388,7 +2389,7 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
         ag  = ags.get(str(p.get("GroupingID", "")), "")
         sub = f"{pid} · {str(p.get('Client','')) or '—'}" + (f" · {ag}" if ag else "")
         if show_group and p.get("Group"):
-            sub = f"{_MI('business')} {p.get('Group')} · " + sub
+            sub = f"{p.get('Group')} · " + sub     # v653 · el icono va fuera: `sub` se escapa entero
         ubic = str(p.get("Location", "") or "")
         ubic_html = (f'<div style="font-size:11px;white-space:nowrap;overflow:hidden;'
                      f'text-overflow:ellipsis;">{maps.maps_link_html(ubic, ubic, color="#2e6da4")}</div>'
@@ -2416,14 +2417,14 @@ def _portfolio_html(proys, horas, alarmas, ags, delays=None, aheads=None,
             f'<div style="width:9px;height:9px;border-radius:50%;background:{bar};flex:none;"></div>'
             '<div style="flex:1;min-width:0;">'
             f'<div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;'
-            f'overflow:hidden;text-overflow:ellipsis;">{nom}</div>'
+            f'overflow:hidden;text-overflow:ellipsis;">{_esc_html(nom)}</div>'
             f'<div style="font-size:12px;color:#6b7280;white-space:nowrap;overflow:hidden;'
-            f'text-overflow:ellipsis;">{sub}</div>'
+            f'text-overflow:ellipsis;">{(_MI("business") + " ") if show_group and p.get("Group") else ""}{_esc_html(sub)}</div>'
             + ubic_html +
             '</div>'
             + retraso_badge +
             f'<span style="font-size:12px;padding:3px 10px;border-radius:20px;background:{bg};'
-            f'color:{fg};white-space:nowrap;flex:none;">{_etq(est)}</span>'
+            f'color:{fg};white-space:nowrap;flex:none;">{_esc_html(_etq(est))}</span>'
             '<div style="width:118px;flex:none;">'
             '<div style="display:flex;justify-content:space-between;font-size:11px;'
             f'color:#6b7280;margin-bottom:3px;"><span>Avance</span>'
@@ -2608,8 +2609,8 @@ def _historial_section(pid: str):
                 _a = _valor(campo, antes)
                 _d = _valor(campo, despues)
                 st.markdown(
-                    f"&nbsp;&nbsp;&nbsp;&nbsp;{_lbl}: "
-                    f"<span style='color:{theme.GRIS_SUAVE}'>{_a}</span> → <b>{_d}</b>",
+                    f"&nbsp;&nbsp;&nbsp;&nbsp;{_esc_html(str(_lbl))}: "
+                    f"<span style='color:{theme.GRIS_SUAVE}'>{_esc_html(_a)}</span> → <b>{_esc_html(_d)}</b>",
                     unsafe_allow_html=True)
 
 
@@ -2921,14 +2922,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         'padding:12px 16px;margin-bottom:10px;background:#fff;">'
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;'
         'flex-wrap:wrap;">'
-        f'<div style="font-size:18px;font-weight:800;color:#1f2937;">{prj.get("Name","")}'
+        f'<div style="font-size:18px;font-weight:800;color:#1f2937;">{_esc_html(str(prj.get("Name", "")))}'
         f'<span style="font-family:monospace;font-size:12px;color:#667080;font-weight:500;'
-        f'margin-left:8px;">{pid}</span></div>'
+        f'margin-left:8px;">{_esc_html(str(pid))}</span></div>'
         f'<span style="font-size:12px;padding:3px 11px;border-radius:20px;background:{_bg};'
-        f'color:{_fg};white-space:nowrap;">{_etq(est)}</span></div>'
+        f'color:{_fg};white-space:nowrap;">{_esc_html(_etq(est))}</span></div>'
         f'<div style="font-size:12px;color:#6b7280;margin-top:3px;">'
-        + (f'{_tp} · ' if _tp else '')
-        + f'{_cli}{_ubic}</div>'
+        + (f'{_esc_html(_tp)} · ' if _tp else '')
+        + f'{_esc_html(_cli)}{_ubic}</div>'
         # barra + las dos cifras en la MISMA línea: la barra ya dice el %, así que el
         # número va a su lado en vez de en una tarjeta propia.
         '<div style="display:flex;align-items:center;gap:12px;margin-top:11px;">'

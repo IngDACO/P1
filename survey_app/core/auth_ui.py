@@ -4,7 +4,6 @@ UI de login, barra de usuario y paneles de gestión (propietario / administrador
 import os
 
 from core.i18n import t, etiqueta as _etq
-import re
 import time
 from datetime import date
 import streamlit as st
@@ -67,7 +66,12 @@ def _contacto_uno(sel, key_prefix="cc"):
             st.rerun()
     else:
         bot  = notify.bot_username()
-        code = re.sub(r"[^A-Za-z0-9_-]", "", sel) or "user"
+        # v653 · un código ALEATORIO por persona y sesión, de un solo uso (era el nombre de
+        # usuario, que se adivina: ver `notify.codigo_vinculo`)
+        _kcod = f"_tg_codigo_{sel}"
+        if not st.session_state.get(_kcod):
+            st.session_state[_kcod] = notify.codigo_vinculo()
+        code = st.session_state[_kcod]
         if not notify.exige_telegram_campo():
             # v613 · decisión del usuario: POR AHORA no se exige para entrar (pruebas con usuarios
             # ficticios); vincularlo sigue sirviendo para que les lleguen los avisos por Telegram.
@@ -78,7 +82,7 @@ def _contacto_uno(sel, key_prefix="cc"):
         # ⚠️ Telegram SOLO manda el `/start <código>` cuando el chat es NUEVO. Si esa
         # persona ya había hablado con el bot, al abrir el enlace no hay botón Start
         # —hay caja de texto— y no se envía nada: por eso «ya di start» y no conecta.
-        # El emparejado es por subcadena, así que mandar el código a secas sirve igual.
+        # v653 · el emparejado es EXACTO: el código a secas o «/start código».
         st.caption(t("If they had already used the bot there is no **Start** button: "
                      "then they just send this text as a normal message in the chat:"))
         st.code(code)
@@ -87,7 +91,10 @@ def _contacto_uno(sel, key_prefix="cc"):
             _d = notify.telegram_diagnostico(code)
             if _d.get("chat_id"):
                 auth.set_contact(sel, telegram=_d["chat_id"])
-                flash.exito(t(":material/check_circle: Telegram linked."))
+                st.session_state.pop(_kcod, None)       # v653 · de un solo uso
+                # v653 · de QUIÉN es el chat que quedó, para que se vea si no es esa persona
+                flash.exito(t(":material/check_circle: Telegram linked: {n}.",
+                              n=_d.get("nombre") or t("(no name on Telegram)")))
                 st.rerun()
             elif _d.get("motivo") == "webhook":
                 # ⚠️ El caso que no daba NI TRAZA: con un webhook activo Telegram

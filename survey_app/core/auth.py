@@ -107,6 +107,88 @@ _COL = {h: i + 1 for i, h in enumerate(LOGIN_HEADERS)}
 # la cuenta se libera sola.
 SESSION_TIMEOUT = 180
 
+# ── v653 · La sesión guardada y el freno de la entrada ───────────────────────
+# La cookie de «Keep me signed in» dura SESION_DIAS en el navegador, pero el token de la hoja
+# valía hasta el siguiente login o logout: una cookie copiada servía para siempre. Ahora
+# `validate_session` la rechaza si la cuenta lleva más de SESION_DIAS sin usarse (el heartbeat
+# apunta `SessionTime` cada 50 s mientras está abierta). El mismo número que `session_cookie._DIAS`.
+SESION_DIAS = 7
+# Entrada: tras LOGIN_MAX_FALLOS fallos seguidos de una cuenta (en LOGIN_VENTANA s), hay que
+# esperar LOGIN_ESPERA s desde el último; y con LOGIN_MAX_PROCESO fallos en un minuto en TODA la
+# app, espera todo el mundo (cada intento cuesta ~0,2 s de PBKDF2). Restaurar: más de
+# RESTAURAR_MAX_FALLOS cookies que no valen en un minuto y se deja de preguntar a la hoja (cada
+# una es una lectura de `Login`, y la cuota de 60/min es de TODA la app): se pide la contraseña.
+LOGIN_MAX_FALLOS = 5
+LOGIN_VENTANA = 600
+LOGIN_ESPERA = 60
+LOGIN_MAX_PROCESO = 60
+RESTAURAR_MAX_FALLOS = 20
+# ⚠️ El MISMO mensaje para «no existe» y «contraseña mal»: distintos decían qué cuentas existen.
+ERROR_LOGIN = "Wrong username or password."
+_FRENO = threading.Lock()
+_FALLOS = {}              # usuario en minúsculas → [epoch de cada fallo reciente]
+_FALLOS_PROCESO = []      # epoch de cada fallo de entrada, de todas las cuentas
+_FALLOS_RESTAURAR = []    # epoch de cada cookie que no valió
+
+
+def _clave_freno(usuario) -> str:
+    return str(usuario or "").strip().lower()
+
+
+def espera_login(usuario: str) -> int:
+    """Segundos que faltan para poder volver a intentar entrar con `usuario` (0 = ya)."""
+    ahora = time.time()
+    with _FRENO:
+        _FALLOS_PROCESO[:] = [x for x in _FALLOS_PROCESO if ahora - x < 60]
+        if len(_FALLOS_PROCESO) >= LOGIN_MAX_PROCESO:
+            return max(1, int(60 - (ahora - _FALLOS_PROCESO[0])) + 1)
+        f = [x for x in _FALLOS.get(_clave_freno(usuario), []) if ahora - x < LOGIN_VENTANA]
+        if len(f) >= LOGIN_MAX_FALLOS and ahora - f[-1] < LOGIN_ESPERA:
+            return max(1, int(LOGIN_ESPERA - (ahora - f[-1])) + 1)
+    return 0
+
+
+def _anotar_fallo_login(usuario: str) -> None:
+    ahora = time.time()
+    k = _clave_freno(usuario)
+    with _FRENO:
+        _FALLOS[k] = [x for x in _FALLOS.get(k, []) if ahora - x < LOGIN_VENTANA] + [ahora]
+        _FALLOS_PROCESO.append(ahora)
+        if len(_FALLOS) > 2000:            # que no crezca sin fin: fuera lo que ya no cuenta
+            for kk in [kk for kk, v in _FALLOS.items() if not v or ahora - v[-1] >= LOGIN_VENTANA]:
+                _FALLOS.pop(kk, None)
+
+
+def _olvidar_fallos_login(usuario: str) -> None:
+    with _FRENO:
+        _FALLOS.pop(_clave_freno(usuario), None)
+
+
+def _restaurar_frenado() -> bool:
+    ahora = time.time()
+    with _FRENO:
+        _FALLOS_RESTAURAR[:] = [x for x in _FALLOS_RESTAURAR if ahora - x < 60]
+        return len(_FALLOS_RESTAURAR) >= RESTAURAR_MAX_FALLOS
+
+
+def _anotar_restaurar_fallido() -> None:
+    with _FRENO:
+        _FALLOS_RESTAURAR.append(time.time())
+
+
+def _token_igual(guardado, dado) -> bool:
+    """Comparación en tiempo constante (un `!=` corta en el primer carácter distinto)."""
+    a, b = str(guardado or "").strip(), str(dado or "").strip()
+    return bool(a) and hmac.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+
+
+def _sesion_caducada(rec) -> bool:
+    try:
+        ts = int(float(rec.get("SessionTime", 0) or 0))
+    except Exception:
+        ts = 0
+    return ts <= 0 or (time.time() - ts) > SESION_DIAS * 24 * 3600
+
 
 # ── Hash de contraseñas ──────────────────────────────────────
 def hash_password(pw: str, iterations: int = 200_000) -> str:
@@ -471,34 +553,68 @@ def _find_row(lws, usuario):
 
 
 # ── Autenticación ────────────────────────────────────────────
+_HAY_USUARIOS = False      # v653 · una vez visto, ya no se vuelve a preguntar (Login no se vacía)
+
+
 def has_any_user() -> bool:
+    """¿Hay alguna cuenta? (si no, la pantalla de entrada ofrece crear el propietario).
+
+    ⚠️ v653 · Se pinta en CADA carga de la pantalla de entrada, sin sesión: leía `Login` entera
+    cada vez, y cualquiera que recargara esa página gastaba la cuota de 60 lecturas/min de toda
+    la app. Ahora: la lectura en lote, y una vez que hay cuentas, ni eso (`Login` no se vacía
+    nunca: reabriría el bootstrap)."""
+    global _HAY_USUARIOS
+    if _HAY_USUARIOS:
+        return True
+    try:
+        if _login_records_cached():
+            _HAY_USUARIOS = True
+            return True
+    except Exception:
+        pass
     lws, err = _get_login_ws()
     if err:
         return True   # si no se puede leer, no ofrecer setup inicial
     try:
-        return len(_records(lws)) > 0
+        _hay = len(_records(lws)) > 0
     except Exception:
         return True
+    if _hay:
+        _HAY_USUARIOS = True
+    return _hay
 
 
 def verify_login(usuario: str, pw: str) -> dict:
-    lws, err = _get_login_ws()
-    if err:
-        return {"ok": False, "error": err}
+    """Usuario y contraseña → {ok, usuario, rol, nombre, grupo} o {ok: False, error}.
+
+    v653 · Con freno (`espera_login`) y el MISMO mensaje si la cuenta no existe o la contraseña
+    no vale; «Inactive user» solo con la contraseña buena (antes delataba cuentas). Lee de la
+    lectura en lote de `Login` (la de `get_user`; las escrituras de cuentas la invalidan): cada
+    intento leía la hoja entera. Si el lote no responde, la lectura directa de siempre."""
     usuario = (usuario or "").strip()
-    for r in _records(lws):
+    _esp = espera_login(usuario)
+    if _esp:
+        return {"ok": False, "error": t("Too many failed attempts. Try again in {s} s.", s=_esp)}
+    recs = _login_records_cached()
+    if not recs:
+        lws, err = _get_login_ws()
+        if err:
+            return {"ok": False, "error": err}
+        recs = _records(lws)
+    for r in recs:
         if str(r.get("User", "")).strip().lower() == usuario.lower():
-            activo = str(r.get("Active", "SI")).strip().upper()
-            if activo not in _ACTIVE_OK:
-                return {"ok": False, "error": t("Inactive user.")}
             if verify_password(pw, str(r.get("Password", ""))):
+                if str(r.get("Active", "SI")).strip().upper() not in _ACTIVE_OK:
+                    return {"ok": False, "error": t("Inactive user.")}
+                _olvidar_fallos_login(usuario)
                 return {"ok": True,
                         "usuario": str(r.get("User", "")),
                         "rol":     str(r.get("Role", "field")).strip().lower(),
                         "nombre":  str(r.get("Name", "")) or usuario,
                         "grupo":   str(r.get("Group", "")).strip()}
-            return {"ok": False, "error": t("Wrong password.")}
-    return {"ok": False, "error": t("User not found.")}
+            break
+    _anotar_fallo_login(usuario)
+    return {"ok": False, "error": t(ERROR_LOGIN)}
 
 
 # ── Sesión única por cuenta ("primero gana") ─────────────────
@@ -577,7 +693,7 @@ def _heartbeat_con(lws, err, usuario: str, token: str) -> bool:
         return True
     if row is None:
         return False
-    if str(rec.get("SessionToken", "")).strip() != str(token):
+    if not _token_igual(rec.get("SessionToken", ""), token):
         return False
     try:
         lws.update_cell(row, _COL["SessionTime"], str(int(time.time())))
@@ -664,6 +780,10 @@ def validate_session(usuario: str, token: str) -> dict:
     del usuario, devuelve sus datos de login; si no, {}."""
     if not (str(usuario).strip() and str(token).strip()):
         return {}
+    # v653 · con demasiadas cookies malas en el último minuto ya no se pregunta a la hoja
+    # (cada una es una lectura de `Login`): quien sea, escribe la contraseña.
+    if _restaurar_frenado():
+        return {}
     lws, err = _get_login_ws()
     if err:
         return {}
@@ -671,9 +791,9 @@ def validate_session(usuario: str, token: str) -> dict:
         _, rec = _find_row(lws, usuario)
     except Exception:
         return {}   # no se pudo leer → no restaurar (se pide login, no se rompe)
-    if not rec:
-        return {}
-    if str(rec.get("SessionToken", "")).strip() != str(token).strip():
+    # v653 · tiempo constante, y la sesión CADUCA: más de SESION_DIAS sin usarse no se restaura
+    if not rec or not _token_igual(rec.get("SessionToken", ""), token) or _sesion_caducada(rec):
+        _anotar_restaurar_fallido()
         return {}
     if str(rec.get("Active", "SI")).strip().upper() not in _ACTIVE_OK:
         return {}
@@ -727,7 +847,7 @@ def end_session(usuario: str, token: str = None):
     row, rec = _find_row(lws, usuario)
     if row is None:
         return
-    if token is None or str(rec.get("SessionToken", "")).strip() == str(token):
+    if token is None or _token_igual(rec.get("SessionToken", ""), token):
         try:
             lws.update_cell(row, _COL["SessionToken"], "")
             lws.update_cell(row, _COL["SessionTime"], "")

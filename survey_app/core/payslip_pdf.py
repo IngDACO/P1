@@ -21,6 +21,9 @@ C_LIGHT = colors.HexColor("#e8f1fb")
 C_MUTE  = colors.HexColor("#7a8699")
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _money(v) -> str:
     return f"${_num(v):,.2f}"
 
@@ -57,9 +60,9 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     except Exception:
         _ident = {}
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(str(marca), mk)]
+    _emisor = [Paragraph(esc_pdf(marca), mk)]
     if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
     head = Table([[_emisor, Paragraph(d("PAYSLIP"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -72,11 +75,11 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
     if est == "pagada" and str(nomina.get("PaymentDate", "")).strip():
         _est_txt += f" ({dmy(nomina.get('PaymentDate'))})"
     emp = Table([
-        [Paragraph(d("Employee"), sm), Paragraph(str(nomina.get("Name", "")), Hb),
+        [Paragraph(d("Employee"), sm), Paragraph(esc_pdf(nomina.get("Name", "")), Hb),
          Paragraph(d("Period"), sm),
          Paragraph(f"{dmy(nomina.get('PeriodFrom'))} → {dmy(nomina.get('PeriodTo'))}", H)],
         [Paragraph(d("Hours"), sm), Paragraph(f"{_num(nomina.get('Hours')):.2f} h", H),
-         Paragraph(d("Status"), sm), Paragraph(_est_txt, H)],
+         Paragraph(d("Status"), sm), Paragraph(esc_pdf(_est_txt), H)],
     ], colWidths=[22 * mm, 67 * mm, 22 * mm, 67 * mm])
     emp.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                              ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
@@ -91,7 +94,7 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
                           r=_money(nomina.get("HourlyRate"))), H),
                  Paragraph(d("earning"), H), Paragraph(_money(base), H)])
     for c in conceptos:
-        data.append([Paragraph(str(c.get("concepto", "")), H),
+        data.append([Paragraph(esc_pdf(c.get("concepto", "")), H),
                      Paragraph(i18n.etiqueta(c.get("tipo", "")), H), Paragraph(_money(c.get("monto")), H)])
     t = Table(data, colWidths=[110 * mm, 30 * mm, 38 * mm])
     t.setStyle(TableStyle([

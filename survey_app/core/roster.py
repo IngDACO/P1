@@ -14,6 +14,7 @@ semana Lun–Vie con "copiar la semana anterior", el campo ve todo el tablero).
 """
 import json
 import logging
+import re
 from datetime import date, datetime, timedelta
 
 import streamlit as st
@@ -82,6 +83,15 @@ PALETA = [
     ("Peach",    "#f6b189"), ("Olive",   "#7f8c8d"), ("Indigo",   "#34495e"),
 ]
 _COLOR_DEFECTO = "#2e6da4"
+# v653 · un color va DENTRO de un `style=`: solo «#hex» o un nombre de color, nunca otra cosa
+# (un valor con comillas cerraba el atributo y metía marcado en la página).
+_RE_COLOR = re.compile(r"^(#[0-9a-fA-F]{3,8}|[a-zA-Z]{3,20})$")
+
+
+def color_seguro(c, defecto: str = _COLOR_DEFECTO) -> str:
+    """`c` si es un color CSS de verdad («#2e6da4», «teal»); si no, `defecto`."""
+    c = str(c or "").strip()
+    return c if _RE_COLOR.match(c) else defecto
 
 
 
@@ -432,7 +442,7 @@ def color_de(asig, tidx) -> str:
         return ESTADOS[asig]["color"]
     r = tidx.get(asig)
     if r:
-        return str(r.get("Color", "")) or _COLOR_DEFECTO
+        return color_seguro(r.get("Color", ""))
     return "#eef1f5"          # sin asignar
 
 

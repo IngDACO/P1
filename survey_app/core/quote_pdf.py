@@ -26,6 +26,9 @@ C_LIGHT = colors.HexColor("#e8f1fb")
 C_MUTE = colors.HexColor("#7a8699")
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _money(v) -> str:
     return f"${_num(v):,.2f}"
 
@@ -55,9 +58,9 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     except Exception:
         _ident = {}
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(str(marca), mk)]
+    _emisor = [Paragraph(esc_pdf(marca), mk)]
     if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
     head = Table([[_emisor, Paragraph(d("QUOTE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -66,7 +69,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
 
     _ver = int(_num(cot.get("Version"), 1))
     meta = Table([
-        [Paragraph(d("Quote no."), sm), Paragraph(num + (f"  ·  v{_ver}" if _ver > 1 else ""), Hb)],
+        [Paragraph(d("Quote no."), sm), Paragraph(esc_pdf(num) + (f"  ·  v{_ver}" if _ver > 1 else ""), Hb)],
         # v575 · DD/MM/YYYY (iban en ISO)
         [Paragraph(d("Date"), sm), Paragraph(dmy(cot.get("Date")), H)],
         [Paragraph(d("Valid until"), sm), Paragraph(dmy(cot.get("ValidUntil")), Hb)],
@@ -77,11 +80,11 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
 
     cli = cliente or {}
     para = [Paragraph(f"<b>{d('To')}</b>", Hb),
-            Paragraph(str(cot.get("ClientName", "") or cli.get("Name", "") or "—"), H)]
+            Paragraph(esc_pdf(cot.get("ClientName", "") or cli.get("Name", "") or "—"), H)]
     for k in ("ContactName", "Address", "Email", "Phone"):
         v = str(cli.get(k, "") or "").strip()
         if v:
-            para.append(Paragraph(v, sm))
+            para.append(Paragraph(esc_pdf(v), sm))
     bloque = Table([[para, meta]], colWidths=[102 * mm, 76 * mm])
     bloque.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [bloque, Spacer(1, 12)]
@@ -92,7 +95,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     for l in Q.lineas_de(cot):
         txt = str(l.get("concepto", ""))
         desc = str(l.get("descripcion", "") or "").strip()
-        celda = [Paragraph(txt, H)] + ([Paragraph(desc, sm)] if desc else [])
+        celda = [Paragraph(esc_pdf(txt), H)] + ([Paragraph(esc_pdf(desc), sm)] if desc else [])
         cant = _num(l.get("cantidad"))
         uni = str(l.get("unidad", "") or "")
         # v582 · un SERVICIO no lleva unidad (cuesta horas × tarifa × cantidad): las líneas
@@ -100,7 +103,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         if str(l.get("tipo", "")) == "service":
             uni = ""
         cant_txt = f"{cant:g}" + (f" {uni}" if uni and uni != "unit" else "")
-        filas.append([celda, Paragraph(cant_txt, H),
+        filas.append([celda, Paragraph(esc_pdf(cant_txt), H),
                       Paragraph(_money(l.get("precio_total")), H)])
     tab = Table(filas, colWidths=[112 * mm, 24 * mm, 42 * mm], repeatRows=1)
     tab.setStyle(TableStyle([
@@ -131,7 +134,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
 
     nota = str(cot.get("Note", "") or "").strip()
     if nota:
-        story += [Paragraph(f"<b>{d('Notes')}</b>", Hb), Paragraph(nota, H), Spacer(1, 8)]
+        story += [Paragraph(f"<b>{d('Notes')}</b>", Hb), Paragraph(esc_pdf(nota), H), Spacer(1, 8)]
     story += [Paragraph(
         d("This quote is valid until {v}. Prices are subject to written "
           "confirmation after that date.", v=dmy(cot.get("ValidUntil"))), sm)]

@@ -47,6 +47,9 @@ C_MUTED    = colors.HexColor("#7fa8d4")
 _LOGO = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "icon-512.png")
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def numero_informe() -> str:
     """Nº de informe automático, único y ordenable: INF-AAAAMMDD-HHMM."""
     return clock.now().strftime("INF-%Y%m%d-%H%M")
@@ -249,7 +252,7 @@ def _ia_text(text, styles):
     if not text or str(text).startswith("[Interpretation unavailable"):
         return [Paragraph(f"<i>{d('Interpretation not available.')}</i>", styles["UBody"])]
     parts = [p.strip() for p in str(text).split("\n") if p.strip()]
-    return [Paragraph(para, styles["UBody"]) for para in parts]
+    return [Paragraph(esc_pdf(para), styles["UBody"]) for para in parts]
 
 
 def generate_user_report(project_params, calculated, optimizer_result,
@@ -320,8 +323,8 @@ def generate_user_report(project_params, calculated, optimizer_result,
 
     # ── Ficha del proyecto (datos ampliados) ────────────────
     def _fila(l1, v1, l2, v2):
-        return [Paragraph(f"<b>{l1}</b>", styles["UInfo"]), Paragraph(str(v1), styles["UInfo"]),
-                Paragraph(f"<b>{l2}</b>", styles["UInfo"]), Paragraph(str(v2), styles["UInfo"])]
+        return [Paragraph(f"<b>{l1}</b>", styles["UInfo"]), Paragraph(esc_pdf(v1), styles["UInfo"]),
+                Paragraph(f"<b>{l2}</b>", styles["UInfo"]), Paragraph(esc_pdf(v2), styles["UInfo"])]
     it = Table([
         _fila(d("Client"), meta["cliente"], d("Report no."), n_inf),
         _fila(d("Project"), meta["proyecto"], d("Date"), fecha),
@@ -402,7 +405,7 @@ def generate_user_report(project_params, calculated, optimizer_result,
             ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]
         for i, mrow in enumerate(best["matrix"]):
-            cells = [Paragraph(str(i + 1), styles["UCell"])]
+            cells = [Paragraph(esc_pdf(i + 1), styles["UCell"])]
             for ci, c in enumerate(survey_cols, start=1):
                 v = mrow.get(c, 0)
                 cells.append(Paragraph(f"{v:.1f}", styles["UCell"]))
@@ -469,11 +472,11 @@ def generate_user_report(project_params, calculated, optimizer_result,
         trows = [thead]
         for r in srows:
             trows.append([
-                Paragraph(str(r["Actividad"]), styles["UInfo"]),
-                Paragraph(r["Inicio"], styles["UCell"]),
-                Paragraph(r["Fin"], styles["UCell"]),
-                Paragraph(str(r["Duración (d)"]), styles["UCell"]),
-                Paragraph(str(r["Peso (%)"]), styles["UCell"]),
+                Paragraph(esc_pdf(r["Actividad"]), styles["UInfo"]),
+                Paragraph(esc_pdf(r["Inicio"]), styles["UCell"]),
+                Paragraph(esc_pdf(r["Fin"]), styles["UCell"]),
+                Paragraph(esc_pdf(r["Duración (d)"]), styles["UCell"]),
+                Paragraph(esc_pdf(r["Peso (%)"]), styles["UCell"]),
             ])
         st = Table(trows, colWidths=[W * 0.40, W * 0.16, W * 0.16, W * 0.12, W * 0.16])
         st.setStyle(TableStyle(_zebra([
@@ -518,10 +521,10 @@ def generate_user_report(project_params, calculated, optimizer_result,
                  [d("Line"), d("Initial X (mm)"), d("Final X (mm)"), d("Shifted")]]
         ptrows = [phead]
         for r in plumb_table(plumb):
-            ptrows.append([Paragraph(str(r["Línea"]), styles["UInfo"]),
-                           Paragraph(str(r["X inicial (mm)"]), styles["UCell"]),
-                           Paragraph(str(r["X final (mm)"]), styles["UCell"]),
-                           Paragraph(str(r["Desplazada"]), styles["UCell"])])
+            ptrows.append([Paragraph(esc_pdf(r["Línea"]), styles["UInfo"]),
+                           Paragraph(esc_pdf(r["X inicial (mm)"]), styles["UCell"]),
+                           Paragraph(esc_pdf(r["X final (mm)"]), styles["UCell"]),
+                           Paragraph(esc_pdf(r["Desplazada"]), styles["UCell"])])
         ptab = Table(ptrows, colWidths=[W * 0.40, W * 0.20, W * 0.20, W * 0.20])
         ptab.setStyle(TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
@@ -537,8 +540,8 @@ def generate_user_report(project_params, calculated, optimizer_result,
         chead = [Paragraph(f"<b>{h}</b>", styles["UCell"]) for h in [d("Measurement"), d("Distance (mm)")]]
         ctrows = [chead]
         for r in plumb_checks(plumb):
-            ctrows.append([Paragraph(str(r["Medida"]), styles["UInfo"]),
-                           Paragraph(str(r["Distancia (mm)"]), styles["UCell"])])
+            ctrows.append([Paragraph(esc_pdf(r["Medida"]), styles["UInfo"]),
+                           Paragraph(esc_pdf(r["Distancia (mm)"]), styles["UCell"])])
         ctab = Table(ctrows, colWidths=[W * 0.72, W * 0.28])
         ctab.setStyle(TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
@@ -631,12 +634,12 @@ def generate_user_report(project_params, calculated, optimizer_result,
     _firma = Table([
         [Paragraph(f"<font size=8 color='#666666'>{d('PREPARED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
-                   f"<b>{meta['ingeniero']}</b><br/>"
+                   f"<b>{esc_pdf(meta['ingeniero'])}</b><br/>"
                    f"<font size=8 color='#666666'>{d('Head installer/s')} · COPEX</font>",
                    styles["UInfo"]),
          Paragraph(f"<font size=8 color='#666666'>{d('RECEIVED BY')}</font><br/><br/><br/>"
                    "_______________________________<br/>"
-                   f"<b>{meta['cliente']}</b><br/>"
+                   f"<b>{esc_pdf(meta['cliente'])}</b><br/>"
                    f"<font size=8 color='#666666'>{d('Name, position and date')}</font>",
                    styles["UInfo"])],
     ], colWidths=[W / 2, W / 2])

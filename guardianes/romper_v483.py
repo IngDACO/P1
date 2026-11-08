@@ -73,7 +73,8 @@ ROTURAS = [
 
     ("invoice_pdf.py", "el PDF deja de llevar el ABN",
      _NL.join(['    if str(_ident.get("abn") or "").strip():',
-               "        _emisor.append(Paragraph(f\"{d('ABN')} {_ident['abn']}\", sm))"]),
+               # v653 · re-anclada: el ABN va ahora escapado (`esc_pdf`); la rotura es la misma
+               "        _emisor.append(Paragraph(f\"{d('ABN')} {esc_pdf(_ident['abn'])}\", sm))"]),
      '    if False:' + _NL + "        pass"),
 
     # v569 · la llamada lleva ahora `format="DD/MM/YYYY"`: la rotura es la misma

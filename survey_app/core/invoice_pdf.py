@@ -33,6 +33,9 @@ C_MUTE  = colors.HexColor("#7a8699")
 logger = logging.getLogger(__name__)
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _money(v) -> str:
     return f"${_num(v):,.2f}"
 
@@ -76,9 +79,9 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     except Exception as e:
         logger.warning("invoice_pdf: no se pudo leer la identidad fiscal de %s: %s", _grp, e)
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(str(marca), mk)]
+    _emisor = [Paragraph(esc_pdf(marca), mk)]
     if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {_ident['abn']}", sm))
+        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
     head = Table([[_emisor, Paragraph(d("TAX INVOICE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -86,7 +89,7 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
 
     est = I.estado_cobro(factura)
     meta = Table([
-        [Paragraph(d("Invoice no."), sm), Paragraph(str(factura.get("Number", "")), Hb)],
+        [Paragraph(d("Invoice no."), sm), Paragraph(esc_pdf(factura.get("Number", "")), Hb)],
         [Paragraph(d("Date"), sm), Paragraph(_dmy(factura.get("Date", "")), H)],
         [Paragraph(d("Due"), sm), Paragraph(_dmy(factura.get("ExpiryDate", "")), H)],
         [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
@@ -95,11 +98,11 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
 
     cli = cliente or {}
     bill = [Paragraph(f"<b>{d('Bill to')}</b>", Hb),
-            Paragraph(str(factura.get("ClientName", "") or cli.get("Name", "") or "—"), H)]
+            Paragraph(esc_pdf(factura.get("ClientName", "") or cli.get("Name", "") or "—"), H)]
     for k in ("ContactName", "Address", "Email", "Phone"):
         v = str(cli.get(k, "")).strip()
         if v:
-            bill.append(Paragraph(v, sm))
+            bill.append(Paragraph(esc_pdf(v), sm))
     info = Table([[bill, meta]], colWidths=[104 * mm, 74 * mm])
     info.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [info, Spacer(1, 12)]
@@ -107,7 +110,7 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     data = [[Paragraph(f"<b>{d('Description')}</b>", ParagraphStyle("hh", parent=Hb, textColor=colors.white)),
              Paragraph(f"<b>{d('Amount')}</b>", ParagraphStyle("hr", parent=Hb, textColor=colors.white))]]
     for ln in I.lineas_de(factura):
-        data.append([Paragraph(str(ln.get("concepto", "")), H), Paragraph(_money(ln.get("importe")), H)])
+        data.append([Paragraph(esc_pdf(ln.get("concepto", "")), H), Paragraph(_money(ln.get("importe")), H)])
     t = Table(data, colWidths=[133 * mm, 45 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), C_BRAND),
@@ -144,7 +147,7 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     story += [tot, Spacer(1, 10)]
 
     if str(factura.get("Note", "")).strip():
-        story += [Paragraph(f"<b>{d('Note:')}</b> {factura.get('Note')}", sm)]
+        story += [Paragraph(f"<b>{d('Note:')}</b> {esc_pdf(factura.get('Note'))}", sm)]
 
     doc.build(story)
     return buf.getvalue()

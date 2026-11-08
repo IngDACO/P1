@@ -141,23 +141,35 @@ def telegram_diagnostico(code: str) -> dict:
         return {"chat_id": None, "motivo": _motivo, "detalle": _des, "n_updates": 0}
 
     ups = j.get("result", []) or []
+    # ⚠️ v653 · El mensaje tiene que ser EXACTAMENTE el código (o «/start código»): se buscaba
+    # como SUBCADENA, así que «ana» casaba con «/start banana», y el código era el nombre de
+    # usuario (ver `codigo_vinculo`).
+    code = " ".join(str(code or "").split())
     for u in reversed(ups):
         m = u.get("message") or {}
-        if str(code) in str(m.get("text", "")):
-            return {"chat_id": str(m.get("chat", {}).get("id", "")), "motivo": "",
-                    "detalle": "", "n_updates": len(ups)}
+        txt = " ".join(str(m.get("text", "")).split())
+        if code and txt in (code, f"/start {code}"):
+            chat = m.get("chat") or {}
+            nombre = " ".join(x for x in (str(chat.get("first_name", "") or "").strip(),
+                                          str(chat.get("last_name", "") or "").strip()) if x)
+            if str(chat.get("username", "") or "").strip():
+                nombre = (nombre + f" (@{str(chat.get('username')).strip()})").strip()
+            return {"chat_id": str(chat.get("id", "")), "motivo": "",
+                    "detalle": "", "n_updates": len(ups), "nombre": nombre}
     return {"chat_id": None,
             "motivo": "sin_mensajes" if not ups else "sin_codigo",
             "detalle": "", "n_updates": len(ups)}
 
 
-def telegram_find_chat_by_code(code: str):
-    """El chat_id de quien mandó '/start <code>', o None.
+def codigo_vinculo() -> str:
+    """v653 · El código para vincular el Telegram de UNA persona: aleatorio y de un solo uso.
 
-    ⚠️ UNA sola definición de la búsqueda: delega en `telegram_diagnostico` en vez de
-    repetir el recorrido (la lección de los cinco `_num` divergentes de v323).
+    ⚠️ Era su nombre de usuario: quien lo supiera mandaba «/start <usuario>» al bot antes que
+    ella y, al pulsar «Link», el chat que quedaba era el SUYO (y con él los avisos de esa persona:
+    obras, direcciones, inducciones). `?start=` admite letras, números, «_» y «-», hasta 64.
     """
-    return telegram_diagnostico(code).get("chat_id")
+    import secrets
+    return "c" + secrets.token_hex(5)
 
 
 # ── Alto nivel ───────────────────────────────────────────────────

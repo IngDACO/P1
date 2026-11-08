@@ -74,7 +74,8 @@ def save(usuario: str, token: str):
         return
     try:
         secs = _DIAS * 24 * 3600
-        cookie_str = f"{_COOKIE}={usuario}|{token}; max-age={secs}; path=/; SameSite=Lax"
+        # v653 · `Secure`: el navegador no la manda nunca por http (localhost cuenta como seguro)
+        cookie_str = f"{_COOKIE}={usuario}|{token}; max-age={secs}; path=/; SameSite=Lax; Secure"
         # v532 · `incrustar.script` en vez de `components.html` (que Streamlit va a quitar):
         # el mismo recuadro, así que `window.parent` sigue siendo la página de la app.
         incrustar.script("<script>try{window.parent.document.cookie="

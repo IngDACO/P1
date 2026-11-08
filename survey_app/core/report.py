@@ -45,6 +45,9 @@ C_BLACK    = colors.black
 W = 170 * mm
 
 
+from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
+
+
 def _styles():
     s = getSampleStyleSheet()
     s.add(ParagraphStyle("ReportTitle",  fontSize=16, textColor=C_WHITE,    alignment=TA_CENTER, fontName="Helvetica-Bold", spaceAfter=2))
@@ -158,7 +161,7 @@ def _ia_block(text, styles, title=_d("🤖 Technical interpretation")):
         return sp(2)
     rows = [
         [Paragraph(f"<b>{title}</b>", styles["Note"])],
-        [Paragraph(text, styles["Normal2"])],
+        [Paragraph(esc_pdf(text), styles["Normal2"])],
     ]
     t = Table(rows, colWidths=[W])
     t.setStyle(TableStyle([
@@ -188,7 +191,7 @@ def _survey_table(df, lim_map, min_vals, styles, cut_cols=None,
              [Paragraph(f"<b>{c}</b>", styles["Normal2"]) for c in cols]
     rows = [header]
     for idx, row in df.iterrows():
-        cells = [Paragraph(str(idx + 1), styles["Normal2"])]
+        cells = [Paragraph(esc_pdf(idx + 1), styles["Normal2"])]
         for c in cols:
             val = row[c]
             cells.append(Paragraph(
@@ -391,7 +394,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
             Paragraph(f"<b>{col}</b>",                                       styles["Normal2"]),
             Paragraph(f"{lim:.1f}",                                          styles["Normal2"]),
             Paragraph(crit,                                                   styles["Normal2"]),
-            Paragraph(str(n),                                                 styles["Normal2"]),
+            Paragraph(esc_pdf(n),                                                 styles["Normal2"]),
             Paragraph(", ".join(str(l) for l in viols) if viols else "—",   styles["Normal2"]),
             Paragraph(f"{dif:.2f}",                                          styles["Normal2"]),
             Paragraph("FAIL" if n else "OK",                                  styles["Normal2"]),
@@ -433,7 +436,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
     cw_l = [12*mm] + [(W - 26*mm) / ncols] * ncols + [14*mm]
     for i in range(len(surv_list)):
         n_viol = 0
-        cells  = [Paragraph(str(i + 1), styles["Normal2"])]
+        cells  = [Paragraph(esc_pdf(i + 1), styles["Normal2"])]
         for ci, col in enumerate(survey_cols, start=1):
             viol, val, el, excess = cell_data.get((i, col), (False, 0, 0, 0))
             cells.append(Paragraph(f"{val:.1f}", styles["Normal2"]))
@@ -441,7 +444,7 @@ def _violations_block(surv_list, lim_map, survey_cols, styles,
                             C_RED_BG if viol else C_GREEN_BG))
             if viol:
                 n_viol += 1
-        cells.append(Paragraph(str(n_viol) if n_viol else "OK", styles["Normal2"]))
+        cells.append(Paragraph(esc_pdf(n_viol) if n_viol else "OK", styles["Normal2"]))
         if n_viol:
             cmds_l.append(("BACKGROUND", (ncols+1, i+1), (ncols+1, i+1), C_RED_BG))
         rows_l.append(cells)
@@ -456,7 +459,7 @@ def _summary_table(summary_list, styles):
     if not summary_list:
         return sp(2)
     header = [Paragraph(f"<b>{k}</b>", styles["Normal2"]) for k in summary_list[0]]
-    rows   = [header] + [[Paragraph(str(v), styles["Normal2"]) for v in item.values()] for item in summary_list]
+    rows   = [header] + [[Paragraph(esc_pdf(v), styles["Normal2"]) for v in item.values()] for item in summary_list]
     t = Table(rows, colWidths=[W/len(summary_list[0])] * len(summary_list[0]))
     t.setStyle(TableStyle([
         ("GRID",         (0,0),(-1,-1), 0.3, colors.lightgrey),
@@ -539,7 +542,7 @@ def generate_report(project_params, calculated, survey_original,
          Paragraph(f"<b>{_d('Condition / Parameter')}</b>", styles["Normal2"]),
          Paragraph(f"<b>{_d('Value')}</b>",        styles["Normal2"])],
         [Paragraph(_d("Number of stops (NS)"),        styles["Normal2"]),
-         Paragraph(str(ns_),                        styles["Normal2"]),
+         Paragraph(esc_pdf(ns_),                        styles["Normal2"]),
          Paragraph(_d("Omega side"),                styles["Normal2"]),
          Paragraph(_side(p.get("OMEGA_SIDE")),      styles["Normal2"])],
         [Paragraph("Lado offset cabina",            styles["Normal2"]),
@@ -1049,11 +1052,11 @@ def generate_report(project_params, calculated, survey_original,
         trows = [thead]
         for r in srows:
             trows.append([
-                Paragraph(str(r["Actividad"]), styles["Normal2"]),
-                Paragraph(r["Inicio"], styles["Normal2"]),
-                Paragraph(r["Fin"], styles["Normal2"]),
-                Paragraph(str(r["Duración (d)"]), styles["Normal2"]),
-                Paragraph(str(r["Peso (%)"]), styles["Normal2"]),
+                Paragraph(esc_pdf(r["Actividad"]), styles["Normal2"]),
+                Paragraph(esc_pdf(r["Inicio"]), styles["Normal2"]),
+                Paragraph(esc_pdf(r["Fin"]), styles["Normal2"]),
+                Paragraph(esc_pdf(r["Duración (d)"]), styles["Normal2"]),
+                Paragraph(esc_pdf(r["Peso (%)"]), styles["Normal2"]),
             ])
         stab = Table(trows, colWidths=[W*0.42, W*0.16, W*0.16, W*0.10, W*0.16])
         stab.setStyle(TableStyle([
@@ -1092,10 +1095,10 @@ def generate_report(project_params, calculated, survey_original,
                  [_d("Line"), _d("X start (mm)"), _d("X end (mm)"), _d("Shifted")]]
         ptrows = [phead]
         for r in plumb_table(plumb):
-            ptrows.append([Paragraph(str(r["Línea"]), styles["Normal2"]),
-                           Paragraph(str(r["X inicial (mm)"]), styles["Normal2"]),
-                           Paragraph(str(r["X final (mm)"]), styles["Normal2"]),
-                           Paragraph(str(r["Desplazada"]), styles["Normal2"])])
+            ptrows.append([Paragraph(esc_pdf(r["Línea"]), styles["Normal2"]),
+                           Paragraph(esc_pdf(r["X inicial (mm)"]), styles["Normal2"]),
+                           Paragraph(esc_pdf(r["X final (mm)"]), styles["Normal2"]),
+                           Paragraph(esc_pdf(r["Desplazada"]), styles["Normal2"])])
         ptab = Table(ptrows, colWidths=[W*0.40, W*0.20, W*0.20, W*0.20])
         ptab.setStyle(TableStyle([
             ("GRID", (0,0),(-1,-1), 0.3, colors.lightgrey),
@@ -1112,8 +1115,8 @@ def generate_report(project_params, calculated, survey_original,
         chead = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in [_d("Measurement"), _d("Distance (mm)")]]
         ctrows = [chead]
         for r in plumb_checks(plumb):
-            ctrows.append([Paragraph(str(r["Medida"]), styles["Normal2"]),
-                           Paragraph(str(r["Distancia (mm)"]), styles["Normal2"])])
+            ctrows.append([Paragraph(esc_pdf(r["Medida"]), styles["Normal2"]),
+                           Paragraph(esc_pdf(r["Distancia (mm)"]), styles["Normal2"])])
         ctab = Table(ctrows, colWidths=[W*0.72, W*0.28])
         ctab.setStyle(TableStyle([
             ("GRID", (0,0),(-1,-1), 0.3, colors.lightgrey),

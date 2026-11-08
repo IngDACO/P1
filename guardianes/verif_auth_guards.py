@@ -10,8 +10,13 @@ sys.path.insert(0, r"C:\Users\diego\P1\survey_app")
 
 from core import auth
 
+import time as _tm
+# ⚠️ v653 · CADUCADO a propósito: era SessionTime "0", y desde v653 una sesión sin uso en más
+# de 7 días (y «0» lo es) ya no se restaura. Hace 10 min: restaurable (< 7 días) y libre para
+# abrir otra (> SESSION_TIMEOUT, 180 s), que es lo que pedían las pruebas de abajo.
 FILAS = [{"User": "dacox", "Password": "x", "Role": "propietario", "Name": "Daco",
-          "Active": "SI", "Group": "", "SessionToken": "TOK-BUENO", "SessionTime": "0"}]
+          "Active": "SI", "Group": "", "SessionToken": "TOK-BUENO",
+          "SessionTime": str(int(_tm.time()) - 600)}]
 
 
 class WSFalso:

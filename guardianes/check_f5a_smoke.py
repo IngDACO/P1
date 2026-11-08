@@ -37,15 +37,18 @@ from core import auth, timeclock                                   # noqa: E402
 _r = auth.verify_login("no-existe-zzz", "x")
 chk("auth.verify_login (usuario inexistente) se EJECUTA",
     isinstance(_r, dict) and _r.get("ok") is False)
-chk("...y el mensaje va en inglés", "User not found" in str(_r.get("error")),
+# ⚠️ v653 · CADUCADO a propósito: era «User not found»; desde v653 el login da el MISMO mensaje
+# si la cuenta no existe o la contraseña no vale (distintos decían qué cuentas existen).
+chk("...y el mensaje va en inglés", "Wrong username or password" in str(_r.get("error")),
     str(_r.get("error")))
 
 # ⚠️ Con usuario vacío responde «User not found.», no «required»: la validación de
 # campos obligatorios vive en `auth_ui`, no aquí. Otra expectativa mía equivocada —
 # el código estaba bien las tres veces.
 _r = auth.verify_login("", "")
+# ⚠️ v653 · CADUCADO a propósito (la misma razón de arriba)
 chk("auth.verify_login (vacío) → mensaje inglés",
-    "User not found" in str(_r.get("error")), str(_r.get("error")))
+    "Wrong username or password" in str(_r.get("error")), str(_r.get("error")))
 
 # ⚠️ `_session_active` es donde estaba la variable `t` que se renombró: si el
 # renombrado hubiera roto algo, revienta aquí y no al compilar.

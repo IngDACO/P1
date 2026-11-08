@@ -1779,7 +1779,7 @@ def _catalogo(grupo):
                 _act = str(r.get("Active", "SI")).upper() in ("SI", "SÍ", "TRUE", "1")
                 cc = st.columns([0.5, 3.6, 1.6, 1.3])
                 cc[0].markdown(f"<div style='width:20px;height:20px;border-radius:5px;"
-                               f"background:{r.get('Color','#2e6da4')};margin-top:4px'></div>",
+                               f"background:{R.color_seguro(r.get('Color'))};margin-top:4px'></div>",
                                unsafe_allow_html=True)
                 _prj = str(r.get("ProjectID", "")).strip()
                 cc[1].markdown(f"**{str(r.get('Number','')).strip()}. {r.get('Name','')}**"
