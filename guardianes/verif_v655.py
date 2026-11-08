@@ -49,16 +49,19 @@ for ln in src("requirements.txt").splitlines():
     if ln:
         r = Requirement(ln)
         _req[r.name.lower()] = r
-_SUELOS = {"pillow": "12.3", "pypdf": "6.21.4", "lxml": "6.1", "pyarrow": "23.0.1", "cryptography": "50"}
-for pkg, suelo in _SUELOS.items():
+# ⚠️ v656 · CADUCADO a propósito: v655 subía pillow 12.3, lxml 6.1, pyarrow 23.0.1 y cryptography 50,
+# y en el Cloud la app NO arrancó («Error running app», 08/11/2026; en local, todo en verde). v656
+# devolvió `requirements.txt` a lo de v654 hasta leer el registro del Cloud y saber cuál fue. Lo que
+# se vigila ahora: los rangos de siempre (los que arrancan) y que lo instalado en local esté dentro.
+_BUENOS = {"pillow": ("11.3.0", "12.0.0"), "lxml": ("5.4.0", "6.0.0"), "pyarrow": ("17.0.0", "18.0.0"),
+           "cryptography": ("49.0.0", "50.0.0"), "pypdf": ("6.21.4", "7.0.0")}
+for pkg, (dentro, fuera) in _BUENOS.items():
     r = _req.get(pkg)
-    chk(f"{pkg}: el rango no deja instalar nada por debajo de {suelo}",
-        r is not None and not r.specifier.contains("0.0.1") and r.specifier.contains(version(pkg))
-        and any(s.operator == ">=" and s.version == suelo for s in r.specifier), str(r))
-    chk(f"{pkg}: lo instalado ({version(pkg)}) está dentro", r is not None and r.specifier.contains(version(pkg)))
-chk("Pillow sigue por debajo de 13 (Streamlit 1.64 pide `pillow<13`)", not _req["pillow"].specifier.contains("13.0.0"))
-chk("pyarrow dentro de lo que pide Streamlit 1.64 (<26, no 25.0.0)",
-    not _req["pyarrow"].specifier.contains("26.0.0") and not _req["pyarrow"].specifier.contains("25.0.0"))
+    chk(f"{pkg}: el rango que arranca en el Cloud (deja {dentro}, no {fuera})",
+        r is not None and r.specifier.contains(dentro) and not r.specifier.contains(fuera), str(r))
+    chk(f"{pkg}: lo instalado en local ({version(pkg)}) está dentro (local = Cloud)",
+        r is not None and r.specifier.contains(version(pkg)))
+# lo que la limitación de formatos cubre mientras Pillow no pueda subir: ver la sección 2
 
 # ═════════════════════════════════════════════════════════════════════════════
 sec("2. Pillow solo abre JPEG, PNG y WEBP")
