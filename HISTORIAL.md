@@ -10,6 +10,16 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## PILLOW 13: CERO VULNERABILIDADES PUBLICADAS EN LO QUE INSTALA EL CLOUD (v662)
+
+Con Streamlit 1.67 (v661) ya cabe **Pillow 13.0.0** (`>=13.0,<14`), que arregla las 39 vulnerabilidades publicadas que le quedaban a la 12.3 (las dos críticas: el desbordamiento del decodificador JPEG y la memoria reutilizada al cambiar de modo). `core/imagenes` sigue limitando lo que se abre a JPEG, PNG y WEBP: defensa por si sale otra.
+
+- `libs_cloud.py` antes de tocar nada: solo cambia Pillow, con rueda para Linux; el local, al mismo 13.0.0.
+- Leídas sus notas: de lo que quita o cambia, la app solo usa `Image.fromarray(..., mode="RGBA")` en la firma del Pre-Start (`prestart_ui._firma_png`), que falla en silencio si algo va mal. Probada con Pillow 13 llamando a la función REAL con un lienzo sintético: PNG en RGB, trazo negro sobre blanco, un lienzo vacío sigue siendo «sin firma» y ningún aviso. No cambia nada de la app.
+- verif_v655: el suelo de Pillow sube a 13.0 (la 12.3 ya no cabe), con su razón; la limitación de formatos, igual con la 13 (TIFF, GIF y BMP fuera; JPEG, PNG, WEBP y la MPO de móvil dentro).
+
+medido en producción: el registro del Cloud enseña «- pillow==12.3.0 / + pillow==13.0.0», sin errores; chip v662 (el arranque abre el icono con Pillow) y la Biblioteca pinta sus 12 miniaturas de 360×360, hechas de nuevo con la 13, ninguna rota; pip-audit del conjunto exacto del Cloud: «No known vulnerabilities found» (eran 104 en 8 paquetes el 08/11) · verif_v655 al día (suelo de Pillow 13.0), verde; la firma del Pre-Start con la función real y Pillow 13: PNG correcto, sin avisos · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 con Pillow 13.0.0 y Streamlit 1.67.0
+
 ## STREAMLIT 1.64.0 → 1.67.0, PARA PODER LLEVAR PILLOW A 13 (v661)
 
 Las 39 vulnerabilidades que quedaban tras v660 eran todas de Pillow 12.3 y las arregla Pillow 13, que Streamlit 1.64 no deja (`pillow<13`). La primera que lo deja es la **1.66.1** (`pillow<14`); se sube a la última, **1.67.0** (05/11/2026), decisión del usuario. Pillow va aparte, en v662: una cosa por versión.
@@ -15841,7 +15851,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v661 = actual)
+## Versiones desplegadas (v662 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15849,6 +15859,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v662 | **Pillow 13**: arregla las 39 vulnerabilidades que le quedaban a la 12.3; el pip-audit de lo que instala el Cloud queda a cero. La firma del Pre-Start (lo único que tocaba lo que Pillow 13 cambia) probada con la función real. medido en producción: el registro del Cloud enseña «- pillow==12.3.0 / + pillow==13.0.0», sin errores; chip v662 (el arranque abre el icono con Pillow) y la Biblioteca pinta sus 12 miniaturas de 360×360, hechas de nuevo con la 13, ninguna rota; pip-audit del conjunto exacto del Cloud: «No known vulnerabilities found» (eran 104 en 8 paquetes el 08/11) · verif_v655 al día (suelo de Pillow 13.0), verde; la firma del Pre-Start con la función real y Pillow 13: PNG correcto, sin avisos · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 con Pillow 13.0.0 y Streamlit 1.67.0 |
 | v661 | **Streamlit 1.64.0 → 1.67.0** (la 1.66.1 es la primera que deja Pillow 13). La suite dio 3 rojos, los tres de AppTest (formularios que solo aplican lo enviado; desplegables con icono en `at.expander`), al día con su razón; una sonda sobre los 104 guardianes con AppTest confirma que no queda ningún paso en vacío. Producción repasada pantalla por pantalla: solo cambia un borde fino en las cajas. medido en producción: el registro del Cloud enseña «streamlit 1.64.0 → 1.67.0», watchdog 7.1 y websockets 17.4, sin errores; chip v661, la sesión restaurada sola (componente de cookies), y repasadas Home, Finance, Planning, Projects con la ficha de PRJ-0034, las cinco herramientas, Pre-Start con la firma, Timeclock, Inventory, Contacts y la Biblioteca: sin errores ni fantasmas, mismos estilos medidos · verif_v558 72, verif_v584 32 y verif_v587 22, verdes; la sonda de formularios: 2 casos en 104 guardianes, 0 tras el arreglo · sin batería propia; las 3 afectadas, 53/53 (v558 26, v584 18, v587 9), 3368 anclas vivas · suite 274/274 con Streamlit 1.67.0 (en la 1ª tanda, 3 rojos de AppTest —verif_v558, verif_v584, verif_v587—, al día con su razón) |
 | v660 | **Librerías, 4 de 4: lxml 6.1**, con svglib quieta en la 1.5.1 (sin pycairo): todo lo que v655 quería subir, subido de una en una y comprobado en el Cloud. medido en producción: el registro del Cloud enseña «- lxml==5.4.0 / + lxml==6.1.3», los mismos 75 paquetes y ni rastro de cairo, «Processed dependencies!» y «Updated app!»; chip v660; Tools → Belting con HQ 14045, HGP 85 y HGPR 150 (sin guardar nada): el PDF, leído en la página sin descargarlo, lleva el DIBUJO —los textos del SVG («Car», «Lift 1», «DSTS 51.0 mm», «below FFL · HGPR 150.0») con sus líneas y curvas—, que solo llega por svglib con lxml · verif_v655 al día (_ESPERAN vacío), verde; libs_cloud.py: solo cambia lxml, svglib en 1.5.1 · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 |
 | v659 | **Librerías, 3 de 4: Pillow 12.3** (la 13 no entra: Streamlit 1.64 pide <13; lo demás lo cubre la limitación de formatos de v655), comprobada antes con `libs_cloud.py`. medido en producción: el registro del Cloud enseña «- pillow==11.3.0 / + pillow==12.3.0», «Processed dependencies!» y «Updated app!»; chip v659, la sesión restaurada sola, y la Biblioteca (750) pinta sus 12 miniaturas de 360×360 hechas de nuevo tras el reinicio, ninguna rota y sin errores · verif_v655 al día, verde (la limitación de formatos, igual con la 12.3) · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 |
