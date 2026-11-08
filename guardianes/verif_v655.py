@@ -60,7 +60,9 @@ chk("svglib por debajo de 1.6 (la 1.6.0 trae pycairo: el Cloud no la puede insta
 chk("svglib: lo instalado en local está dentro", _SVG is not None and _SVG.specifier.contains(version("svglib")))
 # paquete: (suelo de seguridad, la versión justo por debajo, que ya no debe entrar)
 _SUELO = {"pypdf": ("6.21.4", "6.21.3"), "cryptography": ("50.0.0", "49.0.0"),
-          "pyarrow": ("23.0.1", "23.0.0"), "pillow": ("12.3.0", "12.2.0"), "lxml": ("6.1.0", "6.0.2")}
+          "pyarrow": ("23.0.1", "23.0.0"), "pillow": ("13.0.0", "12.3.0"), "lxml": ("6.1.0", "6.0.2")}
+# ⚠️ v662 · el suelo de Pillow sube de 12.3 a 13.0 (arregla las 39 que le quedaban a la 12.3): entra desde
+# Streamlit 1.66.1 (v661). La 12.3 ya no debe caber en el rango.
 _ESPERAN = set()          # todas subidas, de una en una: pyarrow en v658, Pillow en v659 y lxml en v660
 chk("lo que espera es parte de los suelos", _ESPERAN <= set(_SUELO), _ESPERAN)
 for pkg, (suelo, debajo) in _SUELO.items():
