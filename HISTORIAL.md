@@ -10,6 +10,18 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LO QUE TUMBÓ v655: svglib 1.6.0 TRAE pycairo, SIN RUEDA PARA LINUX; LIBRERÍAS DE UNA EN UNA (v657)
+
+El registro del fallo de v655 ya no existía (el Cloud guarda solo el del último arranque y el Reboot lo borró), pero el del arranque nuevo dice cómo instala: Python 3.12.16 y **`uv`**, que rechaza todo conflicto; el local instala con pip en Windows. Resolviendo como el Cloud (`uv pip compile --python-platform x86_64-unknown-linux-gnu --python-version 3.12`) salió la causa: con `lxml>=6.1` el resolvedor cambiaba **svglib 1.5.1 → 1.6.0** (la 1.6.0 pide `lxml>=6`; la 1.5.1 acepta cualquiera), y la 1.6.0 trae `rlpycairo` → **pycairo 1.29.2**, que solo publica ruedas para Windows: en Linux hay que compilarla con las librerías de sistema de cairo, que el Cloud no tiene. En local pasaba todo porque allí sí hay rueda.
+
+- **`svglib>=1.5.0,<1.6`**, con la razón al lado. lxml 6.1 + svglib 1.5.1 es justo lo que probó la suite en v655.
+- **`guardianes/libs_cloud.py`** (herramienta, no guardián: sale a PyPI): resuelve el `requirements.txt` como el Cloud, enseña lo que cambia frente a HEAD (un paquete NUEVO es lo que hay que mirar), pregunta a PyPI si cada uno tiene rueda para Linux/cp312 (sin rueda solo se admite svglib 1.5.1, Python puro, que el Cloud ya compila) y compara con el Python local. Validada con el caso malo conocido: con el `requirements` de v655 dice «NO SUBIR» y nombra pycairo; con el de v656, «SE PUEDE SUBIR». Se usa ANTES de tocar una línea del `requirements`.
+- **El local, igual que el Cloud**: 19 dependencias indirectas iban por detrás (python-dateutil 2.9 frente a 4.0.0, starlette 1.7 frente a 1.10, pydantic…), así que la suite no probaba lo que corre allí. Instalado el conjunto exacto que resuelve uv.
+- **Primera subida, de una en una**: cryptography 50 (`>=50,<51`) y el suelo de pypdf (6.21.4, la que ya instalaba el Cloud: no cambia nada). Siguen pyarrow, Pillow y lxml, una por versión.
+- verif_v655, al día con su razón (2ª vez): svglib por debajo de 1.6; cada suelo de seguridad puesto o «todavía sin subir» (`_ESPERAN`, que se vacía al subirlos); lo instalado en local, dentro del rango. Sondas validadas con las líneas viejas.
+
+medido en producción: el registro del Cloud enseña «+ cryptography==50.0.2», «Processed dependencies!» y «Updated app!»; chip v657, la sesión de la oficina restaurada sola y Home con los datos de la hoja (la cuenta de servicio de Google firma con cryptography) · verif_v655 al día, verde; libs_cloud.py validada con el caso malo de v655 (NO SUBIR, pycairo) · sin batería propia (solo cambia requirements.txt); las 3 afectadas, 51/51 (v537 8, v538 6, v607 37), 3367 anclas vivas · suite 274/274 con el Python local igual al del Cloud
+
 ## LAS LIBRERÍAS DE v655 NO ARRANCAN EN EL CLOUD: VUELTA A LAS DE v654 (v656)
 
 Al desplegar v655 el Cloud mostró «Oh no. Error running app.» y siguió así tras recargar: la app estuvo caída unos 8 min. En local, con las mismas versiones, la suite entera (274) y las 12 baterías afectadas estaban en verde: **lo local no es el Cloud** (trampa 11), y menos en ruedas nativas de Linux (la lección de v65). v656 devuelve `requirements.txt` EXACTAMENTE a lo de v654 (pillow<12, lxml<6, pyarrow<18, cryptography<50; pypdf<7 ya instalaba la última 6.x) y deja el resto del código de v655, que funciona igual con ellas. El Python local, vuelto a esas mismas versiones.
@@ -15785,7 +15797,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v656 = actual)
+## Versiones desplegadas (v657 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15793,6 +15805,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v657 | **Lo que tumbó v655**: con lxml 6 el resolvedor del Cloud elegía svglib 1.6.0, que trae pycairo (sin rueda para Linux). svglib fijo por debajo de 1.6, `guardianes/libs_cloud.py` para resolver como el Cloud antes de tocar `requirements.txt`, el local igual que el Cloud y la primera subida: cryptography 50. medido en producción: el registro del Cloud enseña «+ cryptography==50.0.2», «Processed dependencies!» y «Updated app!»; chip v657, la sesión de la oficina restaurada sola y Home con los datos de la hoja (la cuenta de servicio de Google firma con cryptography) · verif_v655 al día, verde; libs_cloud.py validada con el caso malo de v655 (NO SUBIR, pycairo) · sin batería propia (solo cambia requirements.txt); las 3 afectadas, 51/51 (v537 8, v538 6, v607 37), 3367 anclas vivas · suite 274/274 con el Python local igual al del Cloud |
 | v656 | **Las librerías de v655 no arrancaban en el Cloud** («Error running app», ~8 min caída): `requirements.txt` vuelve a lo de v654 y el resto de v655 se queda; subirlas espera al registro del Cloud. medido en producción, chip v656: arranca, la sesión se restaura sola y la Biblioteca pinta sus 12 miniaturas sin ninguna rota (la limitación de formatos de v655, con el Pillow de siempre) · verif_v655 al día (los rangos que arrancan), verde · sin baterías afectadas (solo cambia requirements.txt), 3367 anclas vivas · suite 274/274 con el Python local vuelto a las librerías del Cloud |
 | v655 | **Revisión del código, 3 de 3**: Pillow solo abre JPEG, PNG y WEBP, tiempo límite en el correo y el asistente, la carpeta de Drive con apóstrofo ya no se duplica, subidas de 50 MB (tras un Reboot) y tres funciones muertas fuera. ⚠️ La subida de librerías tumbó el arranque en el Cloud: deshecha en v656. ⚠️ en producción NO ARRANCÓ: «Oh no. Error running app.» también tras recargar (las librerías nuevas; ver v656) · verif_v655 31/31 · sin batería propia; las 12 afectadas, 442/442 (v517 28, v536 6, v604 35, v619 6, v630 26, v632 28, v639 50, v640 60, v641 50, v643 69, v644 71, v645 13), 3367 anclas vivas · suite 274/274 (en la 1ª tanda, 8 rojos caducados: los clientes de Anthropic de mentira no aceptaban timeout; al día con su razón) |
 | v654 | **Revisión del código, 2 de 3**: las escrituras a la hoja van tal cual (Sheets ya no convierte «00123» ni un «=» en fórmula), los CSV salen sin fórmulas y un ID recién dado queda reservado para que dos altas a la vez no se pisen. medido en producción, chip v654, sin errores: con la app abierta, el heartbeat (que escribe con update_cell) dejó SessionTime de Admin2 como TEXTO hace 23 s (la auditoría lo había visto como número) · verif_v654 21/21 · sin batería propia; las 3 afectadas, 81/81 (v568 24, v581 29, v590 28), 3367 anclas vivas · suite 273/273 (en la 1ª tanda, 2 rojos caducados por la reserva de IDs —verif_v427 y verif_v581, al día con su razón— y uno mío, un fichero de v655 creado con la suite en marcha) |
