@@ -10,6 +10,15 @@ ventana de contexto. Contenido: 258 secciones detalladas + el índice de 440 ver
 
 ---
 
+## LIBRERÍAS, 4 DE 4: lxml 6.1 — TODAS LAS DE SEGURIDAD SUBIDAS, SIN pycairo (v660)
+
+Última subida de las de seguridad (pip-audit del 08/11/2026), de una en una: **lxml 5.4.0 → 6.1.3** (`>=6.1,<7`). Es la que en v655 hizo que el resolvedor eligiera svglib 1.6.0 (que pide `lxml>=6` y trae pycairo, sin rueda para Linux): con `svglib<1.6` (v657) svglib se queda en la 1.5.1 y `libs_cloud.py` enseña que solo cambia lxml. Con esto, lo que v655 quería subir está subido: cryptography 50 (v657), pyarrow 23.0.1 (v658), Pillow 12.3 (v659) y lxml 6.1 (v660), más el suelo de pypdf; Pillow 13 no entra (Streamlit 1.64 pide <13) y lo que le falta lo cubre la limitación de formatos de v655.
+
+- verif_v655: `_ESPERAN` vacío; vigila los cinco suelos, svglib por debajo de 1.6 y lo instalado en local.
+- CLAUDE.md, el entorno del Cloud al día: los topes nuevos y el procedimiento (`libs_cloud.py` antes de tocar `requirements.txt`, de una en una).
+
+medido en producción: el registro del Cloud enseña «- lxml==5.4.0 / + lxml==6.1.3», los mismos 75 paquetes y ni rastro de cairo, «Processed dependencies!» y «Updated app!»; chip v660; Tools → Belting con HQ 14045, HGP 85 y HGPR 150 (sin guardar nada): el PDF, leído en la página sin descargarlo, lleva el DIBUJO —los textos del SVG («Car», «Lift 1», «DSTS 51.0 mm», «below FFL · HGPR 150.0») con sus líneas y curvas—, que solo llega por svglib con lxml · verif_v655 al día (_ESPERAN vacío), verde; libs_cloud.py: solo cambia lxml, svglib en 1.5.1 · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274
+
 ## LIBRERÍAS, 3 DE 4: Pillow 12.3 (v659)
 
 Tercera subida de las de seguridad (pip-audit del 08/11/2026), de una en una: **Pillow 11.3.0 → 12.3.0** (`>=12.3,<13`). Pillow 13, la que arregla TODAS las publicadas, no entra: Streamlit 1.64 pide `pillow<13`. Lo que queda lo sigue cubriendo `core/imagenes` (desde v655 Pillow solo abre JPEG, PNG y WEBP), que con la 12.3 sigue igual (verif_v655, sección 2: un TIFF, un GIF y un BMP no se abren; JPEG, PNG, WEBP y la MPO de móvil sí).
@@ -15820,7 +15829,7 @@ comprueba lo que dice**.
 
 ---
 
-## Versiones desplegadas (v659 = actual)
+## Versiones desplegadas (v660 = actual)
 ⚠️ La tabla NO está completa: v241-v288 se desplegaron sin registrarse aquí (el documento se quedó
 atrás). Lo que sí está descrito arriba, en sus secciones propias, es lo que se construyó en ese
 tramo (Contactos/CRM, Finanzas, Inventario, geocoder, ruta del día, sistema de diseño). Para el
@@ -15828,6 +15837,7 @@ detalle exacto de una versión no listada: `git log`.
 
 | Ver | Cambio principal |
 |---|---|
+| v660 | **Librerías, 4 de 4: lxml 6.1**, con svglib quieta en la 1.5.1 (sin pycairo): todo lo que v655 quería subir, subido de una en una y comprobado en el Cloud. medido en producción: el registro del Cloud enseña «- lxml==5.4.0 / + lxml==6.1.3», los mismos 75 paquetes y ni rastro de cairo, «Processed dependencies!» y «Updated app!»; chip v660; Tools → Belting con HQ 14045, HGP 85 y HGPR 150 (sin guardar nada): el PDF, leído en la página sin descargarlo, lleva el DIBUJO —los textos del SVG («Car», «Lift 1», «DSTS 51.0 mm», «below FFL · HGPR 150.0») con sus líneas y curvas—, que solo llega por svglib con lxml · verif_v655 al día (_ESPERAN vacío), verde; libs_cloud.py: solo cambia lxml, svglib en 1.5.1 · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 |
 | v659 | **Librerías, 3 de 4: Pillow 12.3** (la 13 no entra: Streamlit 1.64 pide <13; lo demás lo cubre la limitación de formatos de v655), comprobada antes con `libs_cloud.py`. medido en producción: el registro del Cloud enseña «- pillow==11.3.0 / + pillow==12.3.0», «Processed dependencies!» y «Updated app!»; chip v659, la sesión restaurada sola, y la Biblioteca (750) pinta sus 12 miniaturas de 360×360 hechas de nuevo tras el reinicio, ninguna rota y sin errores · verif_v655 al día, verde (la limitación de formatos, igual con la 12.3) · sin batería propia ni afectadas (solo cambia requirements.txt), 3368 anclas vivas · suite 274/274 |
 | v658 | **Librerías, 2 de 4: pyarrow 23.0.1**. Y un rojo intermitente de verif_v643 destapó que el arnés tiraba en silencio el apunte de un intento de escritura si el registro estaba bloqueado un instante (provocado: se perdían las 8): ahora reintenta, y si no puede, el guardián sale en rojo; un rojo de la suite enseña su detalle. medido en producción: el registro del Cloud enseña «- pyarrow==17.0.0 / + pyarrow==23.0.1», «Processed dependencies!» y «Updated app!»; chip v658, la sesión de la oficina restaurada sola, y Finance → Profitability pinta sus 2 tablas sin errores, con los datos de la hoja (Parramatta Square — Lift A, 10371.9, margen 0.0%) · verif_v655 y verif_v643 (102) al día, verdes; el bloqueo provocado: 0 de 8 líneas antes, 8 de 8 después · sin batería propia; romper_v643 70/70 (con la nueva «sin reintentos»; en la 3ª tanda se paró antes de romper nada por la sonda frágil, ya arreglada) y romper_arnes 36/36 (3ª tanda, mismo código del arnés y de run_suite), 3368 anclas vivas · suite 274/274 (las dos primeras tandas, en rojo: verif_v643 intermitente —lo que destapó el agujero— y check_anclas_roturas, por el ancla repetida) |
 | v657 | **Lo que tumbó v655**: con lxml 6 el resolvedor del Cloud elegía svglib 1.6.0, que trae pycairo (sin rueda para Linux). svglib fijo por debajo de 1.6, `guardianes/libs_cloud.py` para resolver como el Cloud antes de tocar `requirements.txt`, el local igual que el Cloud y la primera subida: cryptography 50. medido en producción: el registro del Cloud enseña «+ cryptography==50.0.2», «Processed dependencies!» y «Updated app!»; chip v657, la sesión de la oficina restaurada sola y Home con los datos de la hoja (la cuenta de servicio de Google firma con cryptography) · verif_v655 al día, verde; libs_cloud.py validada con el caso malo de v655 (NO SUBIR, pycairo) · sin batería propia (solo cambia requirements.txt); las 3 afectadas, 51/51 (v537 8, v538 6, v607 37), 3367 anclas vivas · suite 274/274 con el Python local igual al del Cloud |
