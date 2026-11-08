@@ -45,7 +45,8 @@ def send_email(to: str, subject: str, html: str) -> bool:
     msg["Subject"] = subject
     msg["From"] = u
     msg["To"] = to
-    with smtplib.SMTP("smtp.gmail.com", 587) as s:
+    # v655 · con tiempo límite: sin él, un servidor que no contesta dejaba la pantalla parada
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as s:
         s.starttls()
         s.login(u, p)
         s.sendmail(u, [to], msg.as_bytes())

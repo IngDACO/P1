@@ -790,7 +790,8 @@ def get_chat_response(
     if not api_key:
         return "⚠️ API key not configured. Add ANTHROPIC_API_KEY to .streamlit/secrets.toml"
 
-    client = anthropic.Anthropic(api_key=api_key)
+    # v655 · tiempo límite y UN reintento, como los otros clientes de la app (por defecto: 10 min y 2)
+    client = anthropic.Anthropic(api_key=api_key, timeout=90, max_retries=1)
 
     # Persona según el rol + contexto del survey actual
     persona       = _PERSONA.get(rol, _PERSONA["administrator"])

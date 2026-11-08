@@ -26,6 +26,9 @@ import core as _core_pkg                                  # noqa: E402
 _core_pkg._VERSION_CARGADA = _V_DISCO
 
 from core import incrustar                                # noqa: E402
+# v655 · Pillow solo ABRE JPEG, PNG y WEBP (lo que acepta la app): ver `core/imagenes`
+from core import imagenes as _imagenes                   # noqa: E402
+_imagenes.limitar_pillow()
 
 # v549 · Los botones parten su texto en vez de recortarlo con «…» (trampa nº33): `wrap=True`
 # por defecto en TODA la app. Antes de cualquier botón (el login incluido).

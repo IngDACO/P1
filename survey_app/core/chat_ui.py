@@ -67,8 +67,9 @@ def opciones_foto(rol) -> dict:
 def foto_para_api(archivo) -> str:
     """La foto en JPEG y reducida, en base64. ⚠️ Girada según su EXIF: el móvil guarda la orientación
     aparte, y sin esto el asistente la leería de lado."""
-    from PIL import Image, ImageOps
-    with Image.open(archivo) as im:
+    from PIL import ImageOps
+    from core import imagenes             # v655 · solo JPEG, PNG y WEBP
+    with imagenes.abrir(archivo) as im:
         _im = ImageOps.exif_transpose(im).convert("RGB")
     _im.thumbnail((MAX_LADO, MAX_LADO))
     b = io.BytesIO()

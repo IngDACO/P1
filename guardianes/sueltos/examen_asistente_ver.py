@@ -49,7 +49,7 @@ _real = CA.anthropic.Anthropic
 
 
 class _Cliente:
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, **_kw):  # v655 · **_kw: el cliente de verdad lleva ahora timeout y max_retries
         self._c = _real(api_key=api_key)
         self.beta = self
         self.messages = self

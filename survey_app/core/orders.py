@@ -21,8 +21,8 @@ Recibir = marcar la orden + crear el gasto. Si se creara el gasto primero y fall
 marcado, la orden seguiría pendiente y al reintentar habría **dos gastos** por la misma
 compra: el costo saldría inflado sin que nadie lo vea. Por eso se marca PRIMERO y se
 crea el gasto después: si falla lo segundo, el costo queda corto pero la orden queda
-marcada `recibida` **sin GastoID**, y eso `sin_gasto()` lo detecta y la UI lo enseña
-con un botón para completarlo. Un hueco visible es mejor que un doble cargo invisible.
+marcada `recibida` **sin GastoID**, y la lista de órdenes de la obra lo enseña con un
+botón para completarlo (`completar_gasto`). Un hueco visible es mejor que un doble cargo invisible.
 """
 import logging
 
@@ -192,13 +192,6 @@ def bloqueos(pid, grupo=None) -> dict:
     return out
 
 
-def sin_gasto(grupo) -> list:
-    """Recibidas a las que les falta su fila en `Gastos` (ver la nota de arriba):
-    su costo NO está contado en ningún sitio hasta que se complete."""
-    return [r for r in list_group(grupo, RECIBIDA)
-            if not str(r.get("ExpenseID", "")).strip()]
-
-
 # ── Escrituras ───────────────────────────────────────────────────
 def _next_id() -> str:
     """⚠️ Lee FRESCO, nunca de la caché: un ID sacado de datos de hasta 120 s puede
@@ -311,8 +304,8 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
 
     ok_g, msg_g = _crear_gasto(r, valor, creado_por)
     if not ok_g:
-        # ⚠️ La orden queda marcada y SIN GastoID a propósito: `sin_gasto()` la
-        # detecta y se puede completar. Duplicar el gasto sería peor.
+        # ⚠️ La orden queda marcada y SIN GastoID a propósito: la lista de órdenes de la
+        # obra lo avisa y se puede completar. Duplicar el gasto sería peor.
         return False, (f"{t('Marked as received, but the expense was NOT recorded')} ({msg_g}). "
                        + t("Complete it from the orders list."))
     _set(w, row, {"ExpenseID": msg_g})

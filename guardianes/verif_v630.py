@@ -172,7 +172,8 @@ class _Msgs:
 
 
 _falso = types.SimpleNamespace(
-    Anthropic=lambda api_key=None: types.SimpleNamespace(messages=_Msgs(),
+    # ⚠️ v655 · `**_kw`: el cliente de verdad lleva ahora timeout y max_retries (antes, solo la clave)
+    Anthropic=lambda api_key=None, **_kw: types.SimpleNamespace(messages=_Msgs(),
                                                          beta=types.SimpleNamespace(messages=_Msgs())),
     AuthenticationError=type("A", (Exception,), {}), RateLimitError=type("R", (Exception,), {}))
 _man = types.SimpleNamespace(is_available=lambda: False)

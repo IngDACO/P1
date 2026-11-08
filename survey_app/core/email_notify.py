@@ -206,7 +206,7 @@ def send_usage_notification(
             except Exception:
                 pass
 
-        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:   # v655 · tiempo límite
             server.ehlo()
             server.starttls()
             server.login(gmail_user, gmail_pass)

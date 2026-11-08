@@ -8,7 +8,11 @@
 # nada nuestro. Subirla es una decisión: se prueba la suite con la nueva y se cambia aquí.
 # (>=1.39 hacía falta por la clase CSS st-key-<key> por widget, v169: 1.64 la tiene.)
 streamlit==1.64.0
-pypdf>=4.0.0,<7
+# v655 · suelos de seguridad (pip-audit del 08/11/2026): pypdf, lxml, pillow, pyarrow y cryptography
+# tenían vulnerabilidades publicadas en las versiones que instalaban estos rangos. ⚠️ Pillow 13 (la que
+# las arregla TODAS) no entra: Streamlit 1.64 pide `pillow<13`; lo que falta lo cubre `core/imagenes`
+# (Pillow solo abre JPEG, PNG y WEBP). Streamlit 1.64 pide también `pyarrow<26` (y no la 25.0.0).
+pypdf>=6.21.4,<7
 pandas>=2.0.0,<2.3
 numpy>=1.26.0,<2
 openpyxl>=3.1.0,<4
@@ -22,9 +26,9 @@ anthropic==1.17.0
 svglib>=1.5.0,<2
 gspread>=6.0.0,<7
 google-auth>=2.28.0,<3
-lxml>=5.0,<6
-pillow>=10.0,<12
-pyarrow>=14.0,<18
+lxml>=6.1,<7
+pillow>=12.3,<13
+pyarrow>=23.0.1,<24
 # Login persistente (cookies). Import perezoso: si falla, la app sigue sin persistencia.
 # ⚠️ v538 · FIJO (==): es un COMPONENTE (lleva su JavaScript) y la cookie de «Keep me signed in»
 # depende de él. Lo que tumbó el Pre-Start en v537 —el Cloud reinstala todo al despertar la
@@ -53,4 +57,4 @@ streamlit-drawable-canvas==0.9.3
 # Cifrado de los tokens de Xero (v488). Ya llega como dependencia de google-auth; se
 # fija aqui para que no dependa de que esa libreria la siga arrastrando. Ruedas abi3
 # estables para Python 3.12.
-cryptography>=42,<50
+cryptography>=50,<51

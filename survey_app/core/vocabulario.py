@@ -1276,18 +1276,6 @@ SEP = "|"
 _LIMITE = re.compile(r"[,.;:!?()\n]|\s[-—–]\s|\s[—–]|[—–]\s")
 
 
-def _tokens(texto) -> list:
-    """Las palabras del parte, ya en raíz, con `SEP` donde acaba una oración."""
-    out = []
-    for trozo in _LIMITE.split(str(texto or "")):
-        t = normaliza(trozo).split()
-        if t:
-            if out:
-                out.append(SEP)
-            out.extend(t)
-    return out
-
-
 def _casa(toks, palabras, tapado):
     """Posiciones donde aparecen las `palabras` EN ORDEN, con como mucho `HUECO`
     intrusas entre cada dos, sin pisar ninguna ya tapada ni cruzar un `SEP`.

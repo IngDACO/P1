@@ -277,7 +277,8 @@ class _Msgs:
 
 _man = types.SimpleNamespace(is_available=lambda: False)
 _dig = types.SimpleNamespace(group_snapshot_text=lambda g: "VIVO", group_digest=lambda g: {}, digest_text=lambda d: "h")
-CA.anthropic = types.SimpleNamespace(Anthropic=lambda api_key=None: types.SimpleNamespace(beta=types.SimpleNamespace(messages=_Msgs())),
+# ⚠️ v655 · `**_kw`: el cliente de verdad lleva ahora timeout y max_retries (antes, solo la clave)
+CA.anthropic = types.SimpleNamespace(Anthropic=lambda api_key=None, **_kw: types.SimpleNamespace(beta=types.SimpleNamespace(messages=_Msgs())),
                                      AuthenticationError=type("A", (Exception,), {}), RateLimitError=type("R", (Exception,), {}))
 CA.st = types.SimpleNamespace(secrets={"ANTHROPIC_API_KEY": "x"})
 sys.modules["core.manuals"] = _man

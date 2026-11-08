@@ -86,10 +86,16 @@ def _headers():
 
 
 # ── Carpetas ─────────────────────────────────────────────────────
+def _q(v) -> str:
+    """Un valor DENTRO de las comillas de una consulta de Drive (v655): «\\» y «'» escapados.
+    Un nombre con apóstrofo («O'Brien») rompía la consulta y se creaba otra carpeta igual."""
+    return str(v).replace("\\", "\\\\").replace("'", "\\'")
+
+
 def _find_folder(name, parent=None):
-    q = f"name = '{name}' and mimeType = '{FOLDER_MIME}' and trashed = false"
+    q = f"name = '{_q(name)}' and mimeType = '{FOLDER_MIME}' and trashed = false"
     if parent:
-        q += f" and '{parent}' in parents"
+        q += f" and '{_q(parent)}' in parents"
     r = requests.get(_API, headers=_headers(),
                      params={"q": q, "fields": "files(id,name)", "spaces": "drive"}, timeout=_T)
     r.raise_for_status()
@@ -226,7 +232,8 @@ def _hacer_miniatura(datos: bytes, lado: int) -> bytes:
     lo aplica a la foto entera pero PIL no — sin esto la miniatura saldría tumbada."""
     import io
     from PIL import Image, ImageOps
-    with Image.open(io.BytesIO(datos)) as im:
+    from core import imagenes             # v655 · solo JPEG, PNG y WEBP
+    with imagenes.abrir(datos) as im:
         im = ImageOps.exif_transpose(im).convert("RGB")
         im = ImageOps.fit(im, (lado, lado), Image.LANCZOS)
         out = io.BytesIO()
