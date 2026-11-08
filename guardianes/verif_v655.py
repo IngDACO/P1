@@ -49,16 +49,27 @@ for ln in src("requirements.txt").splitlines():
     if ln:
         r = Requirement(ln)
         _req[r.name.lower()] = r
-# ⚠️ v656 · CADUCADO a propósito: v655 subía pillow 12.3, lxml 6.1, pyarrow 23.0.1 y cryptography 50,
-# y en el Cloud la app NO arrancó («Error running app», 08/11/2026; en local, todo en verde). v656
-# devolvió `requirements.txt` a lo de v654 hasta leer el registro del Cloud y saber cuál fue. Lo que
-# se vigila ahora: los rangos de siempre (los que arrancan) y que lo instalado en local esté dentro.
-_BUENOS = {"pillow": ("11.3.0", "12.0.0"), "lxml": ("5.4.0", "6.0.0"), "pyarrow": ("17.0.0", "18.0.0"),
-           "cryptography": ("49.0.0", "50.0.0"), "pypdf": ("6.21.4", "7.0.0")}
-for pkg, (dentro, fuera) in _BUENOS.items():
+# ⚠️ v657 · CADUCADO a propósito (2ª vez). En v655 el Cloud no arrancó y v656 volvió a lo de v654; el
+# registro no servía (el Reboot lo borra), pero resolver como el Cloud (`libs_cloud.py`: uv, Linux)
+# lo destapó: con `lxml>=6` el resolvedor elegía svglib 1.6.0, que trae pycairo, sin rueda para Linux.
+# Se vigila: svglib por debajo de 1.6; cada suelo de seguridad, de UNA en UNA (`_ESPERAN` = los que
+# aún no han subido: se vacía al subirlos); y lo instalado en local, dentro del rango (local = Cloud).
+_SVG = _req.get("svglib")
+chk("svglib por debajo de 1.6 (la 1.6.0 trae pycairo: el Cloud no la puede instalar)",
+    _SVG is not None and _SVG.specifier.contains("1.5.1") and not _SVG.specifier.contains("1.6.0"), str(_SVG))
+chk("svglib: lo instalado en local está dentro", _SVG is not None and _SVG.specifier.contains(version("svglib")))
+# paquete: (suelo de seguridad, la versión justo por debajo, que ya no debe entrar)
+_SUELO = {"pypdf": ("6.21.4", "6.21.3"), "cryptography": ("50.0.0", "49.0.0"),
+          "pyarrow": ("23.0.1", "23.0.0"), "pillow": ("12.3.0", "12.2.0"), "lxml": ("6.1.0", "6.0.2")}
+_ESPERAN = {"pyarrow", "pillow", "lxml"}          # v658, v659 y v660, de una en una
+chk("lo que espera es parte de los suelos", _ESPERAN <= set(_SUELO), _ESPERAN)
+for pkg, (suelo, debajo) in _SUELO.items():
     r = _req.get(pkg)
-    chk(f"{pkg}: el rango que arranca en el Cloud (deja {dentro}, no {fuera})",
-        r is not None and r.specifier.contains(dentro) and not r.specifier.contains(fuera), str(r))
+    if pkg in _ESPERAN:
+        chk(f"{pkg}: todavía sin subir (no deja {suelo})", r is not None and not r.specifier.contains(suelo), str(r))
+    else:
+        chk(f"{pkg}: el suelo de seguridad puesto (deja {suelo}, no {debajo})",
+            r is not None and r.specifier.contains(suelo) and not r.specifier.contains(debajo), str(r))
     chk(f"{pkg}: lo instalado en local ({version(pkg)}) está dentro (local = Cloud)",
         r is not None and r.specifier.contains(version(pkg)))
 # lo que la limitación de formatos cubre mientras Pillow no pueda subir: ver la sección 2
