@@ -30,6 +30,7 @@ dónde escribir o qué ID toca es como se corrompen los datos (v323). Este módu
 solo para LECTURA de display.
 """
 import logging
+import threading
 import time
 
 import streamlit as st
@@ -509,6 +510,24 @@ def siguiente_id_libre(prefijo: str, maximo: int, propia: str = "",
                                  tope=tope)[0]
 
 
+# ── v654 · Los IDs recién dados quedan RESERVADOS unos minutos ───────────────
+# Cada generador lee el mayor ID de su hoja y pide el siguiente; entre eso y escribir la fila
+# pasan segundos, y dos personas creando a la vez (dos facturas) salían con el MISMO número.
+# Lo que se da aquí queda apartado RESERVA_S s para ese libro y prefijo: el segundo salta al
+# siguiente. Pasado ese tiempo, un ID que no llegó a escribirse se puede volver a dar. Es del
+# PROCESO (la app en el Cloud es uno): un script de fuera no lo ve.
+RESERVA_S = 300
+_RESERVA_LOCK = threading.Lock()
+_RESERVADOS = {}          # (libro, prefijo) → {id: epoch en que se dio}
+
+
+def _libro_de(propia: str) -> str:
+    try:
+        return str(timeclock.sheet_id_para(propia or "Sheet1") or "")
+    except Exception:
+        return ""
+
+
 def siguientes_ids_libres(prefijo: str, maximo: int, cuantos: int = 1, propia: str = "",
                           ancho: int = 4, tope: int = 200) -> list:
     """Los `cuantos` IDs siguientes que nadie referencia, con UNA sola lectura (v581).
@@ -530,14 +549,21 @@ def siguientes_ids_libres(prefijo: str, maximo: int, cuantos: int = 1, propia: s
         usados = set()
     n = int(maximo) + 1
     saltados, out = [], []
-    for _k in range(max(1, int(cuantos or 1))):
-        for _ in range(tope):
-            if f"{prefijo}{n:0{ancho}d}" not in usados:
-                break
-            saltados.append(n)
+    _clave = (_libro_de(propia), prefijo)
+    with _RESERVA_LOCK:
+        ahora = time.time()
+        _res = {k: v for k, v in (_RESERVADOS.get(_clave) or {}).items() if ahora - v < RESERVA_S}
+        for _k in range(max(1, int(cuantos or 1))):
+            for _ in range(tope):
+                _id = f"{prefijo}{n:0{ancho}d}"
+                if _id not in usados and _id not in _res:
+                    break
+                saltados.append(n)
+                n += 1
+            out.append(f"{prefijo}{n:0{ancho}d}")
+            _res[out[-1]] = ahora
             n += 1
-        out.append(f"{prefijo}{n:0{ancho}d}")
-        n += 1
+        _RESERVADOS[_clave] = _res
     if saltados:
         logger.info("hojas: %s salta %s (referenciados en otras hojas)",
                     prefijo, saltados)

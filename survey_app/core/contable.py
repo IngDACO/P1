@@ -31,6 +31,7 @@ import json
 import logging
 
 from core import auth, clientes, expenses, invoices
+from core import csv_seguro          # v654 · ninguna celda empieza como una fórmula
 from core.num import num as _num, parse_date as _parse_date
 
 from core.i18n import t
@@ -324,9 +325,9 @@ def _etiquetas(grupo: str) -> dict:
 def _escribe(columnas, filas) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\r\n")
-    w.writerow(columnas)
+    w.writerow(csv_seguro.fila(columnas))
     for f in filas:
-        w.writerow(f)
+        w.writerow(csv_seguro.fila(f))
     return buf.getvalue()
 
 

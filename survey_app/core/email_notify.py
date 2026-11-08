@@ -195,7 +195,8 @@ def send_usage_notification(
         # Adjunto: matriz survey como CSV
         if survey_df is not None:
             try:
-                csv_bytes = survey_df.to_csv(index_label="Stop").encode("utf-8")
+                from core import csv_seguro          # v654
+                csv_bytes = csv_seguro.tabla(survey_df).to_csv(index_label="Stop").encode("utf-8")
                 csv_part  = MIMEApplication(csv_bytes, _subtype="octet-stream")
                 csv_part.add_header(
                     "Content-Disposition", "attachment",

@@ -253,10 +253,36 @@ def invalidar_libros():
         pass
 
 
+def _update_cell_en_crudo(self, row, col, value):
+    """`Worksheet.update_cell`, escribiendo el valor TAL CUAL (RAW) — v654.
+
+    ⚠️ El de gspread manda SIEMPRE `USER_ENTERED`: Sheets interpreta lo escrito como si lo
+    tecleara una persona, así que «00123» se guardaba como 123, un texto que empieza por «=» o
+    «+» como una fórmula (o «#ERROR!») y una fecha como un número. Todo lo demás de la app ya
+    escribía RAW (`append_row`, `update`, `batch_update` lo hacen por defecto); esta era la
+    excepción, con 36 llamadas. Es el mismo cuerpo que el de gspread 6 con la otra opción."""
+    from gspread.utils import ValueInputOption, absolute_range_name, rowcol_to_a1
+    return self.client.values_update(
+        self.spreadsheet_id,
+        absolute_range_name(self.title, rowcol_to_a1(row, col)),
+        params={"valueInputOption": ValueInputOption.raw},
+        body={"values": [[value]]},
+    )
+
+
+def _instalar_escritura_cruda():
+    """Pone `_update_cell_en_crudo` en `gspread.Worksheet` (una vez; repetirlo no hace nada).
+    Lo llama `_abrir`, que es el ÚNICO sitio donde la app abre un libro: ninguna hoja existe
+    antes de pasar por aquí."""
+    from gspread.worksheet import Worksheet
+    Worksheet.update_cell = _update_cell_en_crudo
+
+
 @st.cache_resource(show_spinner=False)
 def _abrir(sheet_id: str):
     """El Spreadsheet, cacheado POR LIBRO. Se autentica una vez por proceso."""
     import gspread
+    _instalar_escritura_cruda()                  # v654 · `update_cell` en RAW
     from google.oauth2.service_account import Credentials
     creds = Credentials.from_service_account_info(
         dict(st.secrets["gcp_service_account"]), scopes=SCOPES)

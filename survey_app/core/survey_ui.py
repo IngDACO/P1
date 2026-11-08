@@ -1762,7 +1762,8 @@ def render_survey_tab(_ROL, _GRUPO):
                                     except Exception:
                                         _fallos.append(t("the drawing"))
                                     try:
-                                        csv = r["survey_orig"].to_csv(index=False).encode("utf-8")
+                                        from core import csv_seguro
+                                        csv = csv_seguro.tabla(r["survey_orig"]).to_csv(index=False).encode("utf-8")   # v654
                                         fid = drive_store.upload(_pid, "survey_matrix.csv", csv,
                                                                  "text/csv")
                                         projects_data.add_document(_pid, "survey_matrix.csv",

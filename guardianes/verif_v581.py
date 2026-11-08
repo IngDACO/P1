@@ -62,6 +62,9 @@ import streamlit as st                                                      # no
 st.session_state["auth"] = {"usuario": "Admin2", "rol": "administrator", "grupo": "g"}
 
 from core import hojas as H, timeclock as TC                                # noqa: E402
+# ⚠️ v654 · CADUCADO a propósito: la reserva de IDs de v654 hace que dos peticiones con el mismo
+# máximo den dos números; aquí cada caso va solo (la reserva la prueba verif_v654).
+H.RESERVA_S = 0
 from core import alerts as AL, catalogo as CAT, inventory as INV            # noqa: E402
 from core import invoices as INVC, orders as ORD, prestart as PS            # noqa: E402
 from core import quotes as Q, payroll as PR, roster as RO                   # noqa: E402

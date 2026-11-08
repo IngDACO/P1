@@ -154,6 +154,10 @@ print("\n== y la regla funciona ==")
 import streamlit as st                                               # noqa: E402
 st.session_state["auth"] = {"usuario": "v", "rol": "administrator", "grupo": "g"}
 from core import hojas                                               # noqa: E402
+# ⚠️ v654 · CADUCADO a propósito: desde v654 un ID recién dado queda RESERVADO unos minutos en el
+# proceso, así que pedir dos veces con el mismo máximo da dos números. Aquí se prueba el salto por
+# REFERENCIAS (cada caso, solo): sin reserva. La reserva la prueba verif_v654.
+hojas.RESERVA_S = 0
 
 _orig = hojas.ids_referenciados
 try:

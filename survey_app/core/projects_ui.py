@@ -35,6 +35,7 @@ from core import clock
 from core import tabla
 from core import baseline as _BL          # v501: la línea base (módulo HOJA)
 from core import incrustar
+from core import csv_seguro          # v654 · el CSV, sin fórmulas
 
 logger = logging.getLogger(__name__)
 
@@ -6182,7 +6183,7 @@ def render_group_expenses(grupo: str):
         "% used": f["pct"], "Progress %": f["avance"], "Forecast": f["proyectado"],
     } for f in filas])
     st.download_button(t(":material/download: Export CSV (accounting)"),
-                       data=_csv.to_csv(index=False).encode("utf-8"),
+                       data=csv_seguro.tabla(_csv).to_csv(index=False).encode("utf-8"),   # v654
                        file_name=f"expenses_{grupo}.csv", mime="text/csv", key="ge_csv")
 
 
