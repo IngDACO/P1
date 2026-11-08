@@ -388,6 +388,57 @@ _l = open(_red, encoding="utf-8").read().splitlines() if os.path.exists(_red) el
 if os.path.exists(_red):
     os.remove(_red)
 chk("⚠️ nada salió a la red, y cada intento queda apuntado", len(_l) == 8 and all(x.endswith(" BLOQUEADA") for x in _l), _l)
+# ⚠️ v658 · Con el registro bloqueado un instante (el antivirus; Windows con otro proceso dentro) el arnés perdía la
+# línea EN SILENCIO y la suite no veía el intento: provocado con 1 s de bloqueo, se perdían las 8 y el hijo seguía
+# diciendo «parado». Lo destapó un rojo de la comprobación de arriba en la tanda de v658 (1 de ~20 suites).
+if os.name == "nt":
+    import ctypes                                                  # noqa: E402
+    import ctypes.wintypes as _w                                   # noqa: E402
+    import shutil                                                  # noqa: E402
+    import threading                                               # noqa: E402
+    import time                                                    # noqa: E402
+    _k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _k32.CreateFileW.restype = _w.HANDLE
+    _k32.CreateFileW.argtypes = [_w.LPCWSTR, _w.DWORD, _w.DWORD, _w.LPVOID, _w.DWORD, _w.DWORD, _w.HANDLE]
+    _d = tempfile.mkdtemp(prefix="verif_v643_bloqueo_")
+    _red2, _listo, _bloq = os.path.join(_d, "red.txt"), os.path.join(_d, "listo"), os.path.join(_d, "bloqueado")
+    open(_red2, "w").close()
+    _bloqueo = []
+    _INVALIDO = (None, 0, -1, 0xFFFFFFFFFFFFFFFF)
+
+    # ⚠️ Apretón de manos en los DOS sentidos: el antivirus puede tener el fichero recién creado abierto (lo
+    # mismo que aquí se prueba), así que el bloqueo se reintenta hasta tenerlo, y el hijo no apunta nada hasta
+    # que existe. La 1ª versión bloqueaba una vez y esperaba 0,3 s: la batería la vio roja sin romper nada.
+    def _bloquear():
+        _t0 = time.time()
+        while not os.path.exists(_listo) and time.time() - _t0 < 60:
+            time.sleep(0.005)
+        _h = None
+        while time.time() - _t0 < 65:
+            _h = _k32.CreateFileW(_red2, 0x80000000, 0, None, 3, 0x80, None)    # leer, SIN compartir
+            if _h not in _INVALIDO:
+                break
+            time.sleep(0.005)
+        _bloqueo.append(_h not in _INVALIDO)
+        open(_bloq, "w").close()                  # el hijo apunta a partir de aquí, con el registro bloqueado
+        time.sleep(1.0)
+        if _h not in _INVALIDO:
+            _k32.CloseHandle(_h)
+
+    _th = threading.Thread(target=_bloquear)
+    _th.start()
+    _hijo2 = _hijo.replace("print(json.dumps({", ("open(%r, 'w').close()\nimport os, time\n_t0 = time.time()\n"
+                                                    "while not os.path.exists(%r) and time.time() - _t0 < 70:\n"
+                                                    "    time.sleep(0.005)\nprint(json.dumps({") % (_listo, _bloq), 1)
+    _r2 = subprocess.run([sys.executable, "-c", _hijo2], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         timeout=90, cwd=_d, env={**_ent, "PYTHONPATH": os.path.join(_G, "arnes"), "COPEX_RED": _red2,
+                                                  "PYTHONIOENCODING": "utf-8"})
+    _th.join()
+    _l2 = open(_red2, encoding="utf-8").read().splitlines()
+    shutil.rmtree(_d, ignore_errors=True)
+    chk("la sonda: el registro estuvo bloqueado de verdad mientras el hijo apuntaba", _bloqueo == [True], _bloqueo)
+    chk("⚠️ con el registro bloqueado 1 s, ningún intento se pierde (se reintenta)",
+        _hijo2 != _hijo and len(_l2) == 8 and all(x.endswith(" BLOQUEADA") for x in _l2), (_l2, _r2.stdout[-200:], _r2.stderr[-200:]))
 with open(os.path.join(_G, "run_suite.py"), encoding="utf-8") as _f:
     _s = _f.read()
 chk("⚠️ un intento pone la suite en rojo", '"BLOQUEADA" in m' in _s and 'rojo.append((_n, "intentó escribir de verdad' in _s)

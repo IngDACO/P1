@@ -89,6 +89,7 @@ def _huella():
 
 
 SIN_DATOS = 2
+DETALLE = {}              # guardián rojo → su primer FALLO y la línea siguiente (v658)
 
 
 def _correr(p, carpeta_red):
@@ -105,6 +106,12 @@ def _correr(p, carpeta_red):
         if cod not in (0, SIN_DATOS):
             cola = (([l for l in (r.stderr or "").splitlines() if l.strip()][-1:] or [""])[0][:70]
                     + " | " + cola)
+            # ⚠️ v658 · un rojo enseña SU primer fallo y la línea siguiente (suele ser el detalle): el de
+            # verif_v643 en la tanda de v658 salió solo con 90 caracteres de la lista final, sin qué faltaba.
+            _ls = (r.stdout or "").splitlines()
+            _i = next((i for i, l in enumerate(_ls) if l.strip(" *").startswith("FALLO")), None)
+            if _i is not None:
+                DETALLE[p.name] = [l.strip()[:220] for l in _ls[_i:_i + 2] if l.strip()]
     except subprocess.TimeoutExpired:
         cod, cola = None, "timeout 240 s"
     except Exception as e:                                   # noqa: BLE001
@@ -162,6 +169,8 @@ with ThreadPoolExecutor(PROCESOS) as _varios:
         else:
             rojo.append((p.name, cola[:90]))
             print(f"  ROJO  {p.name}   {cola[:90]}", flush=True)
+            for _l in DETALLE.get(p.name, []):
+                print(f"  ROJO      ↳ {_l}", flush=True)
 
 _dur = time.time() - t0
 _lect = [n for n, v in salidas.items() for h, *m in v if _HOST_HOJA in h and m[:1] == ["GET"]]

@@ -28,6 +28,25 @@ valen para los 400 ficheros de guardianes y baterías sin tocar ni uno.
 import os
 import sys
 import threading
+import time
+
+# ⚠️ v658 · Windows (o el antivirus, que abre el fichero recién escrito) puede tener el registro bloqueado
+# un instante. Sin reintentar, la línea se perdía EN SILENCIO: provocado con el fichero bloqueado 1 s, se
+# perdían las 8 de verif_v643 y el hijo seguía diciendo «parado». Una BLOQUEADA perdida es un intento de
+# escritura que la suite no ve. Lo destapó un rojo de esa comprobación en la tanda de v658 (1 de ~20).
+_REINTENTOS = 100         # × 50 ms = 5 s
+
+
+def _anotar(fichero, linea):
+    for _ in range(_REINTENTOS):
+        try:
+            with open(fichero, "a", encoding="utf-8") as f:
+                f.write(linea)
+            return True
+        except OSError:
+            time.sleep(0.05)
+    sys.stderr.write("arnés: NO se pudo apuntar en %s: %s" % (fichero, linea))
+    return False
 
 
 def _es_guardian():
@@ -42,11 +61,8 @@ def _apuntar_red(fichero):
     _cerrojo = threading.Lock()
 
     def putrequest(self, method, url, *a, **k):
-        try:
-            with _cerrojo, open(fichero, "a", encoding="utf-8") as f:
-                f.write("%s %s\n" % (self.host, method))
-        except OSError:
-            pass
+        with _cerrojo:
+            _anotar(fichero, "%s %s\n" % (self.host, method))
         return _real(self, method, url, *a, **k)
 
     http.client.HTTPConnection.putrequest = putrequest
@@ -122,12 +138,11 @@ def _sin_escrituras():
     _fichero = os.environ.get("COPEX_RED")
 
     def _parar(host, metodo):
-        if _fichero:
-            try:
-                with open(_fichero, "a", encoding="utf-8") as f:
-                    f.write("%s %s BLOQUEADA\n" % (host, metodo))
-            except OSError:
-                pass
+        if _fichero and not _anotar(_fichero, "%s %s BLOQUEADA\n" % (host, metodo)):
+            # ⚠️ v658 · sin el apunte la suite no vería el intento: que el proceso salga en rojo él mismo
+            sys.stdout.write("arnés: un intento de escribir (%s %s) que no se pudo apuntar\n" % (metodo, host))
+            sys.stdout.flush()
+            os._exit(1)   # (no es la salida del corte: romper_arnes ancla en aquella)
         return "arnés: una prueba no escribe de verdad ni avisa a nadie (%s %s)" % (metodo, host)
 
     def send(self, request, *a, **k):

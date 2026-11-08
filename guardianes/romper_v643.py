@@ -203,8 +203,12 @@ ROTURAS = [
      [("""    smtplib.SMTP.__init__ = correo\n    smtplib.SMTP_SSL.__init__ = correo\n""", "")]),
     ("⚠️ el cerrojo no se pone", H,
      [("""_sin_escrituras()         # ⚠️ El último: envuelve a `_guardar_lecturas`, y lo parado no le llega\n""", "")]),
+    # ⚠️ v658 · re-anclada: lo parado se apunta con `_anotar` (reintenta si el registro está bloqueado), y si
+    # aun así no puede, el proceso sale en rojo. La rotura quita las dos cosas: ni apunte ni salida.
     ("⚠️ lo parado no se apunta", H,
-     [("""                    f.write("%s %s BLOQUEADA\\n" % (host, metodo))\n""", """                    pass\n""")]),
+     [("""        if _fichero and not _anotar(_fichero, "%s %s BLOQUEADA\\n" % (host, metodo)):\n""", """        if False:\n""")]),
+    ("⚠️ un bloqueo momentáneo del registro pierde la línea (sin reintentos)", H,
+     [("""_REINTENTOS = 100         # × 50 ms = 5 s\n""", """_REINTENTOS = 1\n""")]),
     ("⚠️ también para las lecturas", H,
      [("""    if str(metodo).upper() in ("GET", "HEAD"):\n        return False\n""", "")]),
     ("⚠️ un intento ya no pone la suite en rojo", R,

@@ -61,7 +61,7 @@ chk("svglib: lo instalado en local está dentro", _SVG is not None and _SVG.spec
 # paquete: (suelo de seguridad, la versión justo por debajo, que ya no debe entrar)
 _SUELO = {"pypdf": ("6.21.4", "6.21.3"), "cryptography": ("50.0.0", "49.0.0"),
           "pyarrow": ("23.0.1", "23.0.0"), "pillow": ("12.3.0", "12.2.0"), "lxml": ("6.1.0", "6.0.2")}
-_ESPERAN = {"pyarrow", "pillow", "lxml"}          # v658, v659 y v660, de una en una
+_ESPERAN = {"pillow", "lxml"}                     # v659 y v660, de una en una (pyarrow subió en v658)
 chk("lo que espera es parte de los suelos", _ESPERAN <= set(_SUELO), _ESPERAN)
 for pkg, (suelo, debajo) in _SUELO.items():
     r = _req.get(pkg)
