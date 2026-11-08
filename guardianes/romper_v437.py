@@ -34,15 +34,18 @@ ROTURAS = [
     ("la firma vuelve al español",
      UR, "d('PREPARED BY')", "'PREPARADO POR'"),
     ("el prompt de la IA vuelve a pedir español",
-     IN, 'Each value must be a string of professional ENGLISH text.',
-     'Cada valor es una cadena de texto en español profesional.'),
+     # v652 · re-anclada: el mensaje nuevo termina en «:» (sigue la lista de apartados)
+     IN, 'Each value must be a string of professional ENGLISH text:',
+     'Cada valor es una cadena de texto en español profesional:'),
     ("la variable del glosario vuelve a llamarse `d` (tapa la función)",
      UR, 'for i, (_term, _def) in enumerate(_terms):\n'
          '        _fila_t.append(Paragraph(f"<b>{_term}</b><br/><font size=8 color=\'#555555\'>{_def}</font>",',
      'for i, (t, d) in enumerate(_terms):\n'
      '        _fila_t.append(Paragraph(f"<b>{t}</b><br/><font size=8 color=\'#555555\'>{d}</font>",'),
     ("el payload de la IA deja de compartir la definición de cortes",
-     IN, 'cortes = cortes_por_piso(lim, best)', 'cortes = []'),
+     # v652 · re-anclada: los cortes de los hechos, de `cortes_por_piso`
+     IN, 'f["cuts"] = _cortes(cortes_por_piso(r.get("limits") or {}, (r.get("optimizer_result") or {}).get("best") or {}))',
+     'f["cuts"] = []'),
 ]
 
 

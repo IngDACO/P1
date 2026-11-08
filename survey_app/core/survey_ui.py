@@ -26,7 +26,7 @@ from core.bs_logic     import find_bs_step
 from core.report       import generate_report
 from core.excel_io     import export_survey_excel, import_survey_excel
 from core.highlighting import cell_state, ctrl_applies_to_cell, streamlit_style, OR_OL_COLS
-from core.interpretation  import generate_interpretation, generate_user_interpretation
+from core.interpretation  import generate_interpretation, generate_user_interpretation, USER_SCHEMA
 from core.email_notify    import send_usage_notification
 from core.user_report     import generate_user_report
 from core.diagrams        import (render_floor_plans_html, floors_with_issues,
@@ -201,6 +201,54 @@ def _survey_para_la_oficina(prj, params, matriz, resumen, usuario, grupo) -> str
                                                                          "reach Drive")))
         return ""
     return str(res.get("id"))
+
+
+# ═════════════════════════════════════════════════════════════════
+# v652 · Las interpretaciones, SIEMPRE de la solución ACTIVA (C) y revisadas por la oficina antes del PDF (D)
+# ═════════════════════════════════════════════════════════════════
+# Decisión del usuario (08/11/2026): al elegir otra solución se rehacían diagramas, tabla y plomado, pero el texto seguía
+# siendo el de la recomendada, y el PDF del cliente salía con números de una y texto de otra. Y si la IA fallaba, para
+# reintentar había que recalcular (y volver a mandar el correo interno).
+_IU_TITULOS = {"resumen": "Summary", "desplazamientos": "Shifts — written by the app from the calculation",
+               "cortes": "Opening cuts — written by the app from the calculation",
+               "implementacion": "Implementation steps", "verificacion": "Final checks"}
+
+
+def _calc_ia(r) -> dict:
+    """Lo que leen las dos interpretaciones, del cálculo guardado (con la solución ACTIVA en `best`)."""
+    return {"limits": r.get("limits"), "analysis": r.get("analysis"), "optimizer_result": r.get("optimizer_result"),
+            "bs_result": r.get("bs_result"), "survey_adj": r.get("survey_adj")}
+
+
+def _ia_vieja(r) -> bool:
+    """¿El texto es de OTRA solución que la activa? ⚠️ Solo si sabe de cuál es (`_sol`, desde v652)."""
+    from core.interpretation import solucion_de
+    iu = r.get("interpretation_user") or {}
+    return "_sol" in iu and iu.get("_sol") != solucion_de(_calc_ia(r))
+
+
+def _reescribir_ia(r) -> None:
+    """Las dos, de nuevo, para la solución activa: sin recalcular y sin volver a mandar el correo interno."""
+    _c = _calc_ia(r)
+    r["interpretation"] = generate_interpretation(_c, r["all_params"])
+    r["interpretation_user"] = generate_user_interpretation(_c, r["all_params"])
+    r["_iu_v"] = int(r.get("_iu_v", 0) or 0) + 1
+
+
+def _clave_iu(r, k) -> str:
+    """Una caja por cálculo y por versión del texto: al reescribirlo nace OTRA (trampa 31: con la misma clave el
+    navegador devolvería lo que tenía)."""
+    return "sv_iu_%s_%s_%s" % (k, r.get("_n", 0), r.get("_iu_v", 0))
+
+
+def _iu_final(r) -> dict:
+    """Lo que va al PDF y a la obra: lo que dejó la oficina en las cajas, o el texto tal cual si no se pintaron."""
+    iu = dict(r.get("interpretation_user") or {})
+    for k in USER_SCHEMA:
+        v = st.session_state.get(_clave_iu(r, k))
+        if v is not None:
+            iu[k] = str(v).strip() or None
+    return iu
 
 
 def render_survey_tab(_ROL, _GRUPO):
@@ -896,6 +944,7 @@ def render_survey_tab(_ROL, _GRUPO):
             "analysis":         analysis,
             "optimizer_result": opt_result,
             "bs_result":        bs_result,
+            "survey_adj":       survey_adj_df,      # v652 · los pisos fuera de límite ANTES de desplazar
         }
         with st.spinner(t(":material/smart_toy: Generating the technical interpretation with AI...")):
             interpretation = generate_interpretation(_calc_for_ia, all_params)
@@ -1478,16 +1527,40 @@ def render_survey_tab(_ROL, _GRUPO):
 
             if st.session_state.calc_results:
                 r          = st.session_state.calc_results
+                # v652 · C: el texto es de la solución ACTIVA. Si se eligió otra, se reescribe antes de enseñarlo.
+                if _ia_vieja(r):
+                    with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
+                        _reescribir_ia(r)
                 interp     = r.get("interpretation") or {}
                 interp_usr = r.get("interpretation_user") or {}
+                _gen_cli = False
                 if not interp_usr.get("_ok"):
                     st.error(t(
                         ":red[:material/block:] **The report cannot be generated without the AI "
-                        "interpretation.**\n\nReason: {e}.\n\nConfigure `ANTHROPIC_API_KEY` in the "
-                        "Streamlit Cloud Secrets and calculate again.",
+                        "interpretation.**\n\nReason: {e}.\n\nPress «Rewrite the interpretation» to try again: "
+                        "it does not recalculate or send the internal email again.",
                         e=interp_usr.get('_error', interp.get('_error', t('not available')))))
-                elif st.button(t(":material/description: Generate the client report"), width="stretch",
-                               key="sv_gen_informe_cliente"):
+                else:
+                    # v652 · D: lo que el asistente dejó sin escribir (o no casaba con el cálculo), dicho
+                    for _av in interp_usr.get("_avisos") or []:
+                        st.warning(":material/warning: " + literal_md(_av))
+                    with st.expander(t(":material/edit_note: Text of the client report — check it before the PDF"),
+                                     expanded=True, key="exp_sv_iu"):
+                        st.caption(t("This is what goes into the client's PDF. The shifts and the cuts come straight "
+                                     "from the calculation; the rest is the assistant's draft. Change anything you need."))
+                        for _k in USER_SCHEMA:
+                            st.text_area(t(_IU_TITULOS[_k]), value=interp_usr.get(_k) or "", key=_clave_iu(r, _k),
+                                         height=170 if _k in ("implementacion", "verificacion", "cortes") else 120)
+                    _gen_cli = st.button(t(":material/description: Generate the client report"), width="stretch",
+                                         key="sv_gen_informe_cliente")
+                if st.button(t(":material/refresh: Rewrite the interpretation"), key="sv_reescribir_ia",
+                             type="tertiary",
+                             help=t("Writes both interpretations again for the active solution, without recalculating "
+                                    "or sending the internal email.")):
+                    with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
+                        _reescribir_ia(r)
+                    st.rerun()
+                if _gen_cli:
                     with st.spinner(t("Generating the client report...")):
                         user_pdf = generate_user_report(
                             project_params      = r["all_params"],
@@ -1495,7 +1568,7 @@ def render_survey_tab(_ROL, _GRUPO):
                             optimizer_result    = r["optimizer_result"],
                             lim_map             = r["lim_map"],
                             survey_cols         = SURVEY_COLS,
-                            interpretation_user = r.get("interpretation_user"),
+                            interpretation_user = _iu_final(r),       # v652 · D: lo que dejó la oficina
                             schedule            = r.get("schedule"),
                             plumb               = r.get("plumb"),
                         )
@@ -1619,6 +1692,11 @@ def render_survey_tab(_ROL, _GRUPO):
                                  width="stretch", key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
+                        # v652 · C: lo que se guarda es de la solución ACTIVA (el campo no ve el informe del cliente,
+                        # donde se reescribe; si eligió otra, aquí).
+                        if _ia_vieja(r):
+                            with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
+                                _reescribir_ia(r)
                         _matriz = (r["survey_orig"].to_dict("records")
                                    if hasattr(r.get("survey_orig"), "to_dict") else [])
                         _best = (r.get("optimizer_result") or {}).get("best") or {}
@@ -1633,7 +1711,7 @@ def render_survey_tab(_ROL, _GRUPO):
                                    projects_data.attach_survey(
                                        _pid, params=ap, matriz=_matriz,
                                        interp={"admin": r.get("interpretation"),
-                                               "user":  r.get("interpretation_user")}))
+                                               "user":  _iu_final(r)}))
                         if _a_oficina:
                             if ok:
                                 flash.exito(t(":material/check_circle: Saved in **{x}** as a new "
@@ -1692,14 +1770,14 @@ def render_survey_tab(_ROL, _GRUPO):
                                     except Exception:
                                         _fallos.append(t("the matrix"))
                                     try:
-                                        if (r.get("interpretation_user") or {}).get("_ok"):
+                                        if _iu_final(r).get("_ok"):
                                             pdfb = generate_user_report(
                                                 project_params=r["all_params"],
                                                 calculated=r["limits"],
                                                 optimizer_result=r["optimizer_result"],
                                                 lim_map=r["lim_map"],
                                                 survey_cols=SURVEY_COLS,
-                                                interpretation_user=r.get("interpretation_user"),
+                                                interpretation_user=_iu_final(r),
                                                 schedule=r.get("schedule"), plumb=r.get("plumb"))
                                             fid = drive_store.upload(_pid, "client_report.pdf",
                                                                      pdfb, "application/pdf")
