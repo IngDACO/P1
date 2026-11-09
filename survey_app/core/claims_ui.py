@@ -142,55 +142,81 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
 
         # ── Lo que se puede reclamar hoy ──
         st.markdown(t("**:material/calculate: What can be claimed now**"))
-        st.markdown(
-            t("Progress **{p}%** → work done {h} · already claimed {a} · "
-              "**this claim {b}** − retention {r} ({rp}%) = **net {n}**",
-              p=("%.1f" % d["pct"]), h=_dinero(d["hecho"]), a=_dinero(d["antes"]),
-              b=_dinero(d["bruto"]), r=_dinero(d["retencion"]),
-              rp=("%.1f" % d["retencion_pct"]), n=_dinero(d["neto"])))
-        if _fact > 0.5 and d["bruto"] > 0:
-            st.warning(t(":material/warning: **{f}** of this job is already invoiced through Invoices. Claims are "
-                         "worked out from the contract alone and do not subtract it: if those invoices already "
-                         "bill this work, this claim would charge it twice.", f=_dinero(_fact)))
+        try:
+            from core import projects as _P
+            _cancelada = _P.es_cancelada(prj)
+        except Exception:
+            _cancelada = False
+        if _cancelada:
+            # ⚠️ v670 · una obra CANCELADA ya no certifica (ciclo 2, H21: seguía ofreciendo «Issue claim»)
+            st.info(t(":material/block: This job is cancelled: no more progress claims. The retention still held "
+                      "can be claimed back below."))
+        else:
+            # ⚠️ v670 · el % FUERA del formulario (ciclo 2, H13): dentro, la vista previa no se movía al escribirlo
+            # y se emitía a ciegas. Con clave: lo escrito sobrevive a la pasada.
+            _pct = float(d["pct"])
+            if editable:
+                _pct = st.number_input(t("Progress to claim (%)"), min_value=0.0, max_value=100.0,
+                                       value=float(d["pct"]), step=1.0, key=f"{key_prefix}_pct_{pid}",
+                                       help=t("Defaults to the job's real progress. Lower it to claim less "
+                                              "than what is done."))
+            dv = d if abs(_pct - float(d["pct"])) < 1e-9 else CL.calcular(pid, grupo, _pct, prj)
+            st.markdown(
+                t("Progress **{p}%** → work done {h} · already claimed {a} · "
+                  "**this claim {b}** − retention {r} ({rp}%) = **net {n}**",
+                  p=("%.1f" % dv["pct"]), h=_dinero(dv["hecho"]), a=_dinero(dv["antes"]),
+                  b=_dinero(dv["bruto"]), r=_dinero(dv["retencion"]),
+                  rp=("%.1f" % dv["retencion_pct"]), n=_dinero(dv["neto"])))
+            # ⚠️ v670 · certificar MÁS de lo hecho se dice (H13: el 10 % con la obra al 0 % no avisaba de nada)
+            if _pct > float(d["pct"]) + 1e-9 and dv["bruto"] > 0:
+                _adel = round(min(dv["bruto"], dv["valor"] * (_pct - float(d["pct"])) / 100.0), 2)
+                st.warning(t(":material/warning: This claims **{p}%** with the job at **{r}%**: {x} of it is work "
+                             "not done yet — it would be claimed in advance.",
+                             p=("%.1f" % _pct), r=("%.1f" % float(d["pct"])), x=_dinero(_adel)))
+            if _fact > 0.5 and dv["bruto"] > 0:
+                st.warning(t(":material/warning: **{f}** of this job is already invoiced through Invoices. Claims are "
+                             "worked out from the contract alone and do not subtract it: if those invoices already "
+                             "bill this work, this claim would charge it twice.", f=_dinero(_fact)))
 
-        if editable:
-            with st.form(f"{key_prefix}_new_{pid}", enter_to_submit=False):
-                k1, k2 = st.columns(2)
-                _pct = k1.number_input(t("Progress to claim (%)"), min_value=0.0,
-                                       max_value=100.0, value=float(d["pct"]), step=1.0,
-                                       help=t("Defaults to the job's real progress. Lower "
-                                              "it to claim less than what is done."))
-                _hasta = k2.date_input(t("Period to"), value=None, format="DD/MM/YYYY")
-                _nota = st.text_input(t("Note"), placeholder=t("Optional"))
-                if st.form_submit_button(t(":material/send: Issue claim"), width="stretch"):
-                    ok, msg = CL.crear_reclamacion(
-                        pid, grupo, _pct, _hasta.strftime("%Y-%m-%d") if _hasta else "",
-                        _nota, st.session_state.get("auth", {}).get("usuario", ""), prj)
-                    (flash.exito if ok else st.error)(msg)
-                    if ok:
-                        st.rerun()
+            if editable:
+                with st.form(f"{key_prefix}_new_{pid}", enter_to_submit=False):
+                    k1, k2 = st.columns(2)
+                    _hasta = k1.date_input(t("Period to"), value=None, format="DD/MM/YYYY")
+                    _nota = k2.text_input(t("Note"), placeholder=t("Optional"))
+                    if st.form_submit_button(t(":material/send: Issue claim"), width="stretch"):
+                        ok, msg = CL.crear_reclamacion(
+                            pid, grupo, _pct, _hasta.strftime("%Y-%m-%d") if _hasta else "",
+                            _nota, st.session_state.get("auth", {}).get("usuario", ""), prj)
+                        (flash.exito if ok else st.error)(msg)
+                        if ok:
+                            st.rerun()
 
         # ── Lo ya emitido ──
-        if recs:
+        # v670 · también las ANULADAS, tachadas (H21: una emitida y anulada desaparecía sin rastro)
+        _todas = CL.reclamaciones(pid, incluir_anuladas=True)
+        if _todas:
             st.markdown(t("**:material/receipt_long: Claims issued**"))
-            for r in recs:
+            for r in _todas:
                 _est = str(r.get("Status", ""))
                 _ic = (":green[:material/paid:]" if _est == CL.PAGADA
+                       else ":gray[:material/block:]" if _est == CL.ANULADA
                        else ":blue[:material/schedule:]")
                 _neto = _num(r.get("ThisClaim")) - _num(r.get("Retention"))
                 # ⚠️ Una liberación se lee distinta o se confunde con una reclamación de
                 # avance del mismo importe: no lleva % ni retención, y el porqué del
                 # dinero es otro.
                 if CL.es_liberacion(r):
-                    st.markdown("%s **#%s** %s · %s — %s"
-                                % (":violet[:material/lock_open:]", r.get("Number", "?"),
-                                   r.get("Date", ""), t("retention release"),
-                                   _dinero(r.get("ThisClaim"))))
+                    _txt = "**#%s** %s · %s — %s" % (r.get("Number", "?"), r.get("Date", ""),
+                                                     t("retention release"), _dinero(r.get("ThisClaim")))
+                    _ic = ":violet[:material/lock_open:]" if _est != CL.ANULADA else _ic
                 else:
-                    st.markdown("%s **#%s** %s · %s%% · %s %s — %s %s"
-                                % (_ic, r.get("Number", "?"), r.get("Date", ""),
-                                   r.get("PctComplete", "0"), t("net"), _dinero(_neto),
-                                   t("retention"), _dinero(r.get("Retention"))))
+                    _txt = "**#%s** %s · %s%% · %s %s — %s %s" % (
+                        r.get("Number", "?"), r.get("Date", ""), r.get("PctComplete", "0"), t("net"),
+                        _dinero(_neto), t("retention"), _dinero(r.get("Retention")))
+                if _est == CL.ANULADA:
+                    st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, t("cancelled")))
+                    continue
+                st.markdown("%s %s" % (_ic, _txt))
                 _descarga(pid, grupo, r, vars_, prj, d, key_prefix)
                 if editable and _est == CL.EMITIDA:
                     b1, b2 = st.columns(2)
@@ -199,10 +225,21 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
+                    # ⚠️ v670 · PREGUNTA antes (H21: anulaba una emitida —ya enviada al cliente— de un clic)
                     if b2.button(t("Cancel"), key=f"{key_prefix}_void_{r.get('ID')}"):
-                        ok, msg = CL.anular(r.get("ID"))
-                        (flash.exito if ok else st.error)(msg)
-                        if ok:
+                        st.session_state[f"_{key_prefix}_clmconf"] = r.get("ID")
+                        st.rerun()
+                    if st.session_state.get(f"_{key_prefix}_clmconf") == r.get("ID"):
+                        st.warning(t("Cancel claim #{n} (net {m})? It stops counting as claimed and stays in the "
+                                     "list as cancelled.", n=r.get("Number", "?"), m=_dinero(_neto)))
+                        _y, _k = st.columns(2)
+                        if _y.button(t("Yes, cancel it"), key=f"{key_prefix}_voidsi_{r.get('ID')}", type="primary"):
+                            st.session_state.pop(f"_{key_prefix}_clmconf", None)
+                            ok, msg = CL.anular(r.get("ID"))
+                            (flash.exito if ok else flash.error)(msg)
+                            st.rerun()
+                        if _k.button(t("Keep it"), key=f"{key_prefix}_voidno_{r.get('ID')}"):
+                            st.session_state.pop(f"_{key_prefix}_clmconf", None)
                             st.rerun()
 
         # ── Retención: pedirla de vuelta al terminar (v510) ──

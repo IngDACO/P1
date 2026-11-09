@@ -416,6 +416,16 @@ def _destino_cobros(f, clave):
     return st.radio(t("What happens with the money collected"), _ops, format_func=_rot, key=clave)
 
 
+def _nombre_de(login: str) -> str:
+    """El NOMBRE de quien hizo el movimiento (v670: el historial decía «Admin2», el login). Sin cuenta, el login."""
+    if not login:
+        return ""
+    try:
+        return str((auth.get_user(login) or {}).get("Name") or login)
+    except Exception:
+        return login
+
+
 def _historial_cobros(f):
     """Los cobros con sus movimientos (v669): quitado, devuelto, pasado a otra factura o desde ella, de Xero."""
     from core import theme as _T
@@ -432,7 +442,7 @@ def _historial_cobros(f):
                  "xero": t("from Xero")}.get(_o, "")
         if i in _quitados:
             _nota = t("removed later")
-        _por = str(cb.get("por", "") or "")
+        _por = _nombre_de(str(cb.get("por", "") or ""))
         _txt = f"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**"
         if _nota:
             _txt += " · " + _nota + (f" ({literal_md(_por)})" if _por else "")
@@ -468,10 +478,16 @@ def avisos_de_mas(lineas, grupo, pend_de=None, prjs=None) -> list:
             out.append(t(":material/warning: **{p}** is cancelled, so nothing is left of its price: these lines "
                          "({s}) are a charge outside it (a cancellation charge, for instance).",
                          p=_nom, s=_T0.dinero(suma)))
-        else:
+        elif I.es_cotizada(pid):
             out.append(t(":material/warning: **{p}**: only {r} is left to invoice and these lines add {s} — "
                          "**{o} over the agreed price**. If it is extra work, record it as a variation first "
                          "(Costs → Progress claims) so the price includes it.",
+                         p=_nom, r=_T0.dinero(pend), s=_T0.dinero(suma), o=_T0.dinero(round(suma - pend, 2))))
+        else:
+            # v670 · sin cotización no hay variaciones: su precio es costo + la ganancia puesta en Costs
+            out.append(t(":material/warning: **{p}**: only {r} is left to invoice and these lines add {s} — "
+                         "**{o} over its price**. It has no quote, so its price is its cost plus the profit set in "
+                         "Costs: if the client agreed to pay this, add it there as a fixed profit first.",
                          p=_nom, r=_T0.dinero(pend), s=_T0.dinero(suma), o=_T0.dinero(round(suma - pend, 2))))
     return out
 

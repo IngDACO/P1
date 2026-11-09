@@ -2660,6 +2660,164 @@ def _completada(prj) -> bool:
     return P._num((prj or {}).get("Progress")) >= 99.95 or str((prj or {}).get("Status", "")) == "Completed"
 
 
+def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
+    """Guarda el formulario «Project data» y avisa (lo que hacía el botón, v670 sacado aquí para poder confirmarlo
+    antes al cancelar o pausar). `cierre` = «Cancelled» / «On hold» cuando viene de `_confirmar_cierre`: entonces el
+    aviso a la gente lo DICE (ciclo 2: les llegó «The project details were updated.») y, con `liberar`, se les quita
+    del tablero desde hoy. Acaba en `st.rerun()`."""
+    nombre, asignados, actuales = ctx["nombre"], list(ctx["asignados"]), list(ctx["actuales"])
+    P.update_project(pid, campos)
+    # Notificar a los usuarios de campo recién asignados
+    nuevos = [x for x in asignados if x not in actuales]
+    _sent, _avisados = 0, []
+    if nuevos and not cierre:
+        _info = {"Name": nombre, "Client": ctx["cliente"], "Location": ctx["ubic"],
+                 "StartDate": ctx["f_ini"], "EndDateEst": ctx["f_fin"], "InductionLinks": ctx["ind"]}
+        for un in nuevos:
+            try:
+                rr = notify.notify_assignment(un, _info)
+                if rr.get("email") or rr.get("telegram"):
+                    _sent += 1
+                    _avisados.append(un)
+            except Exception:
+                pass
+    # Si cambiaron las inducciones, reenviarlas a los ya asignados
+    if not cierre and str(ctx["ind"]).strip() != str(prj.get("InductionLinks", "")).strip():
+        _links = P.parse_links(ctx["ind"])
+        if _links:
+            for un in [x for x in asignados if x not in nuevos]:
+                try:
+                    notify.notify_induction(un, nombre, _links)
+                except Exception:
+                    pass
+
+    # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación). v670 · al cancelar o pausar,
+    # el aviso DICE qué pasó, a todos los asignados.
+    _txt = {"Cancelled": "This job has been cancelled. You are off it from today.",
+            "On hold": "This job is on hold from today. You are off it until it restarts."}.get(
+        cierre, "The project details were updated.")
+    try:
+        alerts.notify_change(pid, grupo, _txt, st.session_state.get("auth", {}).get("usuario", ""),
+                             asignados if cierre else [x for x in asignados if x not in nuevos], nombre)
+    except Exception:
+        pass
+    # v219: sincronizar el planificador — poner a los nuevos en el
+    # proyecto entre sus fechas y quitar del roster a los desasignados.
+    _quitados = [x for x in actuales if x not in asignados]
+    # ⚠️ v667 · por `flash`: el `st.toast` y los avisos del tablero se pintaban justo antes
+    # del `st.rerun()` y se perdían (ciclo 1: «Save changes» asignó y avisó a 3 sin decir nada,
+    # mientras el alta sí dice «2 field user(s) notified»)
+    if cierre:
+        flash.exito(t("Job cancelled.") if cierre == "Cancelled" else t("Job put on hold."))
+    else:
+        flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",
+                                                  n=_sent, l=", ".join(_nombres_de(_avisados, grupo)))
+                                           if _sent else ""))
+    if liberar:
+        try:
+            from core import roster as _R
+            _n = _R.limpiar_proyecto(grupo, pid, desde=clock.today(grupo))
+            if _n:
+                flash.info(t(":material/calendar_month: Board: {n} day(s) cleared from today.", n=_n))
+        except Exception as e:
+            logger.warning("_guardar_datos_obra liberar %s: %s", pid, e)
+            flash.aviso(t("The board could not be cleared: do it in Planning."))
+    _autoagenda(grupo, pid, [] if cierre else nuevos, _quitados, ctx["f_ini"], ctx["f_fin"], al_flash=True)
+    st.rerun()
+
+
+def _confirmar_cierre(pid, grupo, prj, pend):
+    """«¿Cancelar esta obra?» con lo que queda abierto (v670, H18 del ciclo 2), encima del formulario de datos."""
+    _canc = pend.get("est") == "Cancelled"
+    # clave LITERAL (verif_v585): hay una sola ficha abierta a la vez
+    with st.container(border=True, key="cpx_cierre_obra"):
+        _bajar_a("cpx_cierre_obra", "_cierre_bajar")       # el botón quedó al pie del formulario
+        st.markdown(t("#### :material/block: Cancel this job?") if _canc
+                    else t("#### :material/pause_circle: Put this job on hold?"))
+        _l = lista_abierta(pid, grupo, prj)
+        if _l:
+            st.warning(t(":material/flag: **Still open on it:**") + "\n\n" + "\n".join(f"- {x}" for x in _l))
+        else:
+            st.caption(t("Nothing is left open on it (invoices, claims, orders, board, people)."))
+        try:
+            from core import roster as _R
+            _n_tab = sum(_R.dias_desde(grupo, pid, clock.today(grupo)).values())
+        except Exception:
+            _n_tab = 0
+        _lib = (st.checkbox(t("Take it off the board from today ({n} day(s))", n=_n_tab), value=True,
+                            key=f"cierre_lib_{pid}") if _n_tab else False)
+        if [x for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]:
+            st.caption(t("The people assigned are told the job is cancelled.") if _canc
+                       else t("The people assigned are told the job is on hold."))
+        _y, _k = st.columns(2)
+        if _y.button(t(":material/block: Yes, cancel it") if _canc else t(":material/pause_circle: Yes, put it on hold"),
+                     key=f"cierre_si_{pid}", type="primary", width="stretch"):
+            st.session_state.pop(f"_prj_cierre_{pid}", None)
+            _guardar_datos_obra(pid, grupo, prj, pend["campos"], pend["ctx"], cierre=pend["est"], liberar=_lib)
+        if _k.button(t("Back (nothing saved)"), key=f"cierre_no_{pid}", width="stretch"):
+            st.session_state.pop(f"_prj_cierre_{pid}", None)
+            st.rerun()
+
+
+def lista_abierta(pid: str, grupo: str, prj: dict) -> list:
+    """Lo que queda ABIERTO al CANCELAR o PAUSAR una obra, como frases (v670, H18 del ciclo 2).
+
+    Ciclo 2: PRJ-0043 se canceló con «Changes saved.» y nada más, con una factura por cobrar, una certificación
+    emitida y su retención, $39,200 gastados, una persona asignada y en el tablero HOY. Cada fuente en su `try`: una
+    que falle se dice, y no se afirma «nada abierto» de lo que no se miró (como `lista_cierre`)."""
+    from core import theme as _T
+    out = []
+    try:
+        from core import invoices as _I
+        if _I.is_configured():
+            for f in _I.list_facturas(grupo):
+                if _I.estado_cobro(f) in ("anulada", "cobrada"):
+                    continue
+                if any(str(ln.get("proyecto_id", "")) == str(pid) for ln in _I.lineas_de(f)):
+                    _s = round(P._num(f.get("Total")) - P._num(f.get("Collected")), 2)
+                    if _s > 0.005:
+                        out.append(t("Invoice No. {n}: **{x}** still to collect.", n=f.get("Number", ""),
+                                     x=_T.dinero(_s)))
+    except Exception as e:
+        logger.warning("lista_abierta facturas %s: %s", pid, e)
+        out.append(t("The invoices could not be checked."))
+    try:
+        from core import claims as _CL
+        if _CL.is_configured():
+            for r in _CL.reclamaciones(pid):
+                if str(r.get("Status", "")) == _CL.EMITIDA and not _CL.es_liberacion(r):
+                    out.append(t("Claim #{n} issued and not paid: net **{x}**.", n=r.get("Number", "?"),
+                                 x=_T.dinero(P._num(r.get("ThisClaim")) - P._num(r.get("Retention")))))
+            _ret = _CL.retenido(pid)["pendiente"]
+            if _ret > 0.005:
+                out.append(t("**{x}** of retention still held by the client.", x=_T.dinero(_ret)))
+    except Exception as e:
+        logger.warning("lista_abierta certificaciones %s: %s", pid, e)
+        out.append(t("The progress claims could not be checked."))
+    try:
+        from core import orders as _O
+        if _O.is_configured():
+            for o in _O.list_for(pid, _O.PENDIENTE):
+                out.append(t("Order {o} ({s}): **{x}** ordered and not received.", o=o.get("ID", ""),
+                             s=maps.literal_md(str(o.get("Supplier", ""))), x=_T.dinero(P._num(o.get("Amount")))))
+    except Exception as e:
+        logger.warning("lista_abierta órdenes %s: %s", pid, e)
+        out.append(t("The purchase orders could not be checked."))
+    try:
+        from core import roster as _R
+        _d = _R.dias_desde(grupo, pid, clock.today(grupo))
+        if _d:
+            out.append(t("**{n} day(s)** on the board from today: {l}.", n=sum(_d.values()),
+                         l=", ".join(maps.literal_md(x) for x in _nombres_de(sorted(_d), grupo))))
+    except Exception as e:
+        logger.warning("lista_abierta tablero %s: %s", pid, e)
+        out.append(t("The board could not be checked."))
+    _as = [x.strip() for x in str((prj or {}).get("FieldAssigned", "")).split(";") if x.strip()]
+    if _as:
+        out.append(t("Assigned to it: {l}.", l=", ".join(maps.literal_md(x) for x in _nombres_de(_as, grupo))))
+    return out
+
+
 def lista_cierre(pid: str, grupo: str, prj: dict) -> list:
     """Lo que sigue ABIERTO en una obra terminada, como frases (v665).
 
@@ -3115,9 +3273,15 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             st.caption(t(":material/block: Cancelled · nothing more to invoice. Anything the client still owes "
                          "(a cancellation charge) goes in a new invoice."))
         if _demas_cab > 0.5:
-            st.warning(t(":material/warning: Invoiced **{x}** over the price of this job. If it was extra work, "
-                         "record it as a variation (Costs → Progress claims) so the price includes it.",
-                         x=_Tc.dinero(_demas_cab)))
+            # v670 · la salida depende del precio: con cotización, una variación; por horas, la ganancia fija
+            if _INV.es_cotizada(pid):
+                st.warning(t(":material/warning: Invoiced **{x}** over the price of this job. If it was extra work, "
+                             "record it as a variation (Costs → Progress claims) so the price includes it.",
+                             x=_Tc.dinero(_demas_cab)))
+            else:
+                st.warning(t(":material/warning: Invoiced **{x}** over the price of this job. It has no quote, so its "
+                             "price is its cost plus the profit set in Costs: if the client agreed to pay this, add it "
+                             "there as a fixed profit.", x=_Tc.dinero(_demas_cab)))
         if _pend_cab > 0:
             _fc1, _fc2 = st.columns([3, 1])
             _fc1.markdown(f":material/receipt: Not invoiced: **{_Tc.dinero(_pend_cab, 0)}**")
@@ -3252,6 +3416,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                       key=f"ed_clinew_{pid}")
 
         # ── Editar datos ──
+        # v670 · cancelar o pausar, pendiente de confirmar (H18): la pregunta va encima del formulario
+        _cierre_pend = st.session_state.get(f"_prj_cierre_{pid}")
+        if _cierre_pend:
+            _confirmar_cierre(pid, grupo, prj, _cierre_pend)
         with st.form(f"edit_{pid}", enter_to_submit=False):
             st.markdown(t("**Project data**"))
             nombre   = st.text_input(t("Name"), value=prj.get("Name", ""))
@@ -3359,7 +3527,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         cliente, _ecli_id = _ecli_new.strip(), ""
                     else:
                         cliente, _ecli_id = "", ""
-                    P.update_project(pid, {   # todo en UNA escritura (batch) → sin rate limit
+                    _campos = {   # todo en UNA escritura (batch) → sin rate limit
                         "Name": nombre, "Client": cliente, "ClientID": _ecli_id,
                         "Type": ("" if tipo == _TIPO_VACIO else tipo),
                         "Location": ubic, "Model": modelo,
@@ -3377,49 +3545,17 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Lat": "" if _plat is None else _plat,
                         "Lng": "" if _plng is None else _plng,
                         "RequiredCerts": ";".join(_ecerts),
-                    })
-                    # Notificar a los usuarios de campo recién asignados
-                    nuevos = [x for x in asignados if x not in actuales]
-                    _sent, _avisados = 0, []
-                    if nuevos:
-                        _info = {"Name": nombre, "Client": cliente, "Location": ubic,
-                                 "StartDate": f_ini, "EndDateEst": f_fin, "InductionLinks": ind}
-                        for un in nuevos:
-                            try:
-                                rr = notify.notify_assignment(un, _info)
-                                if rr.get("email") or rr.get("telegram"):
-                                    _sent += 1
-                                    _avisados.append(un)
-                            except Exception:
-                                pass
-                    # Si cambiaron las inducciones, reenviarlas a los ya asignados
-                    if str(ind).strip() != str(prj.get("InductionLinks", "")).strip():
-                        _links = P.parse_links(ind)
-                        if _links:
-                            for un in [x for x in asignados if x not in nuevos]:
-                                try:
-                                    notify.notify_induction(un, nombre, _links)
-                                except Exception:
-                                    pass
-
-                    # Aviso de cambio al campo ya asignado (los nuevos ya recibieron la asignación)
-                    try:
-                        alerts.notify_change(pid, grupo, "The project details were updated.",
-                                             st.session_state.get("auth", {}).get("usuario", ""),
-                                             [x for x in asignados if x not in nuevos], nombre)
-                    except Exception:
-                        pass
-                    # v219: sincronizar el planificador — poner a los nuevos en el
-                    # proyecto entre sus fechas y quitar del roster a los desasignados.
-                    _quitados = [x for x in actuales if x not in asignados]
-                    # ⚠️ v667 · por `flash`: el `st.toast` y los avisos del tablero se pintaban justo antes
-                    # del `st.rerun()` y se perdían (ciclo 1: «Save changes» asignó y avisó a 3 sin decir nada,
-                    # mientras el alta sí dice «2 field user(s) notified»)
-                    flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",
-                                                              n=_sent, l=", ".join(_nombres_de(_avisados, grupo)))
-                                                       if _sent else ""))
-                    _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin, al_flash=True)
-                    st.rerun()
+                    }
+                    _ctx = {"nombre": nombre, "cliente": cliente, "ubic": ubic, "f_ini": f_ini, "f_fin": f_fin,
+                            "ind": ind, "asignados": list(asignados), "actuales": list(actuales)}
+                    # ⚠️ v670 · CANCELAR o PAUSAR se confirma con la lista de lo que queda abierto (ciclo 2, H18:
+                    # «Changes saved.» y nada más, con factura por cobrar, certificación, retención y gente en el
+                    # tablero de hoy). Se guarda lo del formulario y se pregunta arriba (`_confirmar_cierre`).
+                    if est_man in ("Cancelled", "On hold") and est_man != str(prj.get("ManualStatus", "") or ""):
+                        st.session_state[f"_prj_cierre_{pid}"] = {"campos": _campos, "ctx": _ctx, "est": est_man}
+                        st.session_state["_cierre_bajar"] = True
+                        st.rerun()
+                    _guardar_datos_obra(pid, grupo, prj, _campos, _ctx)
 
         # helper: avisar al campo asignado de un cambio del admin
         _asig_now = [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()]
@@ -4647,12 +4783,43 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
+                    # ⚠️ v670 · PREGUNTA antes (ciclo 2, H7: cancelaba de un clic y sin vuelta atrás)
                     if _c2.button(t("Cancel"), key=f"{key_prefix}_ordc_{_oid}",
                                   width="stretch"):
-                        ok, msg = O.cancelar(_oid)
+                        st.session_state[f"_{key_prefix}_ordconf"] = ("cancelar", _oid)
+                        st.rerun()
+                # v670 · la vuelta atrás: reabrir una cancelada; deshacer la recepción (lo único que quita su gasto)
+                if editable and _est == O.CANCELADA:
+                    if st.button(t(":material/undo: Reopen"), key=f"{key_prefix}_ordre_{_oid}"):
+                        ok, msg = O.reabrir(_oid)
                         (flash.exito if ok else st.error)(msg)
                         if ok:
                             st.rerun()
+                if editable and _est == O.RECIBIDA and str(o.get("ExpenseID", "")).strip():
+                    if st.button(t(":material/undo: Undo the receipt"), key=f"{key_prefix}_ordun_{_oid}",
+                                 type="tertiary"):
+                        st.session_state[f"_{key_prefix}_ordconf"] = ("deshacer", _oid)
+                        st.rerun()
+                _conf = st.session_state.get(f"_{key_prefix}_ordconf")
+                if editable and _conf and _conf[1] == _oid:
+                    _qui = theme.dinero(_n(o.get("Amount")))
+                    if _conf[0] == "cancelar":
+                        st.warning(t("Cancel order {o} for {m} ({s})? You can reopen it later.",
+                                     o=_oid, m=_qui, s=maps.literal_md(str(o.get("Supplier", "")))))
+                    else:
+                        _rv = O.valor_recibido(o)
+                        st.warning(t("Undo the receipt of {o}? Its cost of {m} is taken off the project and the "
+                                     "order goes back to pending.", o=_oid,
+                                     m=theme.dinero(_rv if _rv is not None else _n(o.get("Amount")))))
+                    _y, _k = st.columns(2)
+                    if _y.button(t("Yes"), key=f"{key_prefix}_ordsi_{_oid}", type="primary"):
+                        st.session_state.pop(f"_{key_prefix}_ordconf", None)
+                        ok, msg = (O.cancelar(_oid) if _conf[0] == "cancelar" else O.deshacer_recepcion(_oid))
+                        (flash.exito if ok else flash.error)(msg)
+                        st.rerun()
+                    if _k.button(t("No, keep it"), key=f"{key_prefix}_ordno_{_oid}"):
+                        st.session_state.pop(f"_{key_prefix}_ordconf", None)
+                        st.rerun()
                 st.markdown("---")
         else:
             st.caption(t("No orders recorded on this project yet."))
@@ -5209,6 +5376,13 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
             # v618 · Solo si hay alguna foto que ver: sin ella, el recibo no se puede tocar
             if any(str(r.get("DriveID", "")).strip() for r in items):
                 st.caption(t("Tap a receipt to see the photo."))
+            # v670 · {ID del gasto: su orden} — el gasto de una orden recibida se trata aparte (H8/H9)
+            try:
+                from core import orders as _O
+                _de_orden = ({str(o.get("ExpenseID", "")).strip(): o for o in _O.list_for(pid)
+                              if str(o.get("ExpenseID", "")).strip()} if _O.is_configured() else {})
+            except Exception:
+                _de_orden = {}
             for r in items:
                 _rid = str(r.get("ID", ""))
                 _did = str(r.get("DriveID", "")).strip()
@@ -5225,6 +5399,9 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                                                              str(r.get('Description') or '')] if x)
                 if _ex:
                     _lbl += f" · {_ex}"
+                # v670 · el gasto de una ORDEN recibida (H8): su comprobante es la factura del proveedor, y se quita
+                # deshaciendo la recepción, no con la papelera (H9: la orden se quedaba «received» sin costo)
+                _ord = _de_orden.get(_rid) or {}
                 cc = st.columns([6, 1])
                 if _did:
                     if cc[0].button(_lbl, key=f"{key_prefix}_open_{_rid}",
@@ -5232,14 +5409,37 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                         _cur = st.session_state.get(f"{key_prefix}_rcb")
                         st.session_state[f"{key_prefix}_rcb"] = None if _cur == _rid else _rid
                         st.rerun()
+                elif _ord:
+                    cc[0].caption(f"{_lbl} · :orange[**{t('from order {o}, no supplier invoice', o=_ord.get('ID', ''))}**]")
                 else:
                     # v665 · «no receipt», que se vea (era «no file» en gris)
                     cc[0].caption(f"{_lbl} · :orange[**{t('no receipt')}**]")
-                if can_delete and cc[1].button(":material/delete:", key=f"{key_prefix}_del_{_rid}"):
-                    ok, msg = E.delete(r.get("ID"))
-                    (flash.exito if ok else st.error)(msg)
-                    if ok:
+                if can_delete and not _ord and cc[1].button(":material/delete:", key=f"{key_prefix}_del_{_rid}"):
+                    # ⚠️ v670 · PREGUNTA antes (ciclo 2, H9: un clic lo borraba para siempre)
+                    st.session_state[f"_{key_prefix}_delconf"] = _rid
+                    st.rerun()
+                if can_delete and st.session_state.get(f"_{key_prefix}_delconf") == _rid:
+                    st.warning(t("Delete this receipt of {m}? It cannot be undone.",
+                                 m=theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)))
+                    _y, _k = st.columns(2)
+                    if _y.button(t(":material/delete: Yes, delete it"), key=f"{key_prefix}_delsi_{_rid}",
+                                 type="primary"):
+                        st.session_state.pop(f"_{key_prefix}_delconf", None)
+                        ok, msg = E.delete(_rid)
+                        (flash.exito if ok else flash.error)(msg)
                         st.session_state.pop(f"{key_prefix}_rcb", None)
+                        st.rerun()
+                    if _k.button(t("Keep it"), key=f"{key_prefix}_delno_{_rid}"):
+                        st.session_state.pop(f"_{key_prefix}_delconf", None)
+                        st.rerun()
+                if can_delete and _ord and not _did:
+                    _fa = st.file_uploader(t("Attach the supplier invoice ({o})", o=_ord.get("ID", "")),
+                                           type=["pdf", "png", "jpg", "jpeg"], key=f"{key_prefix}_adj_{_rid}")
+                    if _fa is not None and st.button(t(":material/attach_file: Attach it"),
+                                                     key=f"{key_prefix}_adjok_{_rid}"):
+                        _dadj = E.upload_receipt(pid, _fa.name, _fa.getvalue(), _fa.type or "application/octet-stream")
+                        ok, msg = E.adjuntar(_rid, _dadj, _fa.name)
+                        (flash.exito if ok else flash.error)(msg)
                         st.rerun()
 
             # ── Recibo abierto: foto inline (imagen) o descarga (PDF) ──

@@ -52,14 +52,17 @@ ROTURAS = [
     # ── los céntimos ──
     ("⚠️ el importe vuelve a perder los céntimos", PU,
      [('f"{theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")', 'f"{theme.dinero(_amt, 0)}")')]),
+    # v670 · re-anclada: el aviso de borrar un recibo usa la misma expresión (H9 del ciclo 2)
     ("uno redondo sale con «.00»", PU,
-     [('theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)', 'theme.dinero(_amt, 2)')]),
+     [('f"{theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")', 'f"{theme.dinero(_amt, 2)}")')]),
     ("el «$» del importe sin escapar", PU,
      [('f"{theme.dinero(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")',
        'f"{theme.dinero_html(_amt, 2 if abs(_amt - round(_amt)) > 1e-9 else 0)}")')]),
     # ── los errores ──
     ("«Error leyendo» vuelve en los recibos", "core/expenses.py",
-     [('return False, t("Error reading: {e}", e=e)', 'return False, f"Error leyendo: {e}"')]),
+     # v670 · re-anclada: `adjuntar` lee la hoja igual (H8 del ciclo 2); esta es la de `delete`
+     [('return False, t("Error reading: {e}", e=e)\n    for i, r in enumerate(recs):\n        if str(r.get("ID", "")) == str(gid):\n            did = ',
+       'return False, f"Error leyendo: {e}"\n    for i, r in enumerate(recs):\n        if str(r.get("ID", "")) == str(gid):\n            did = ')]),
     ("«Error creando grupo» vuelve", "core/auth.py",
      [('return False, t("Error creating the group: {e}", e=e)', 'return False, f"Error creando grupo: {e}"')]),
     ("el mensaje interno vuelve al español", "core/correcciones.py",

@@ -174,6 +174,9 @@ finally:
         _d()
 chk("facturado_de_mas: 12.880 facturados sobre 12.780 → 100", _dm == 100.0, _dm)
 from core import invoices_ui as IU                                         # noqa: E402
+# ⚠️ v670 · el aviso depende de si la obra está COTIZADA (variación) o va por horas (ganancia fija): estas son cotizadas
+_o_cot = I.es_cotizada
+I.es_cotizada = lambda pid: True
 _P39 = {"ID": "PRJ-39", "Name": "C1 — Lift 1", "Status": "Completed"}
 _P43 = {"ID": "PRJ-43", "Name": "C2 — Lift 1", "Status": "Cancelled"}
 _av = IU.avisos_de_mas([{"concepto": "x", "importe": 100.0, "proyecto_id": "PRJ-39"}], "G",
@@ -189,6 +192,7 @@ chk("…dentro de lo que queda, nada", IU.avisos_de_mas([{"importe": 99.0, "proy
 _av3 = IU.avisos_de_mas([{"importe": 300.0, "proyecto_id": "PRJ-43"}], "G", {"PRJ-43": 0.0}, [_P43])
 chk("…en una cancelada, el aviso de cargo fuera del precio", len(_av3) == 1 and "is cancelled" in _av3[0], _av3)
 chk("…una línea sin obra no avisa", IU.avisos_de_mas([{"importe": 999.0, "proyecto_id": ""}], "G", {}, []) == [])
+I.es_cotizada = _o_cot
 _n, _nf = funcion("core/invoices_ui.py", "_nueva_factura")
 _i_av = _nf.find("for _av in avisos_de_mas(_lineas, grupo, _pend_de, prjs):")
 chk("los avisos se pintan tras el subtotal y ANTES de «Issue invoice»",
@@ -291,7 +295,8 @@ finally:
     for _d in desh:
         _d()
 chk("H20 · anular con $3,000 cobrados SIN decir adónde van: se niega y no escribe",
-    not _ok and "3000.00" in _msg and not ws.lotes and not ws.celdas, (_ok, _msg))
+    # v670 · el importe con miles («$3,000.00»)
+    not _ok and "3,000.00" in _msg and not ws.lotes and not ws.celdas, (_ok, _msg))
 # ⚠️ trampa 55: la negativa está DOBLE (anular y sacar_cobros); cada una se prueba por su camino
 chk("…y la negativa es la de `anular` (dice qué hacer con el dinero)", "say what happens with that money first" in _msg,
     _msg)

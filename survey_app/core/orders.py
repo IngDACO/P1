@@ -377,9 +377,66 @@ def cancelar(oid) -> tuple:
     if row is None:
         return False, t("Order not found.")
     if str(r.get("Status", "")) == RECIBIDA:
-        return False, t("Already received: it cannot be cancelled (delete its receipt if it was a mistake).")
+        return False, t("Already received: it cannot be cancelled (undo the receipt first if it was a mistake).")
     ok, err = _set(w, row, {"Status": CANCELADA})
     if not ok:
         return False, err
     _invalidate()
     return True, t("Order cancelled.")
+
+
+def reabrir(oid) -> tuple:
+    """Una orden CANCELADA vuelve a pendiente (v670, H7 del ciclo 2: cancelar era de un clic y sin vuelta atrás)."""
+    w = _ws()
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    row, r = _fila(w, oid)
+    if row is None:
+        return False, t("Order not found.")
+    if str(r.get("Status", "")) != CANCELADA:
+        return False, t("Only a cancelled order can be reopened.")
+    ok, err = _set(w, row, {"Status": PENDIENTE})
+    if not ok:
+        return False, err
+    _invalidate()
+    return True, t("Order {o} reopened.", o=oid)
+
+
+def de_un_gasto(gid, grupo=None):
+    """La orden cuyo gasto es `gid`, o {} (v670): ese gasto no se borra suelto, se deshace la recepción."""
+    gid = str(gid or "").strip()
+    if not gid:
+        return {}
+    for o in _records():
+        if str(o.get("ExpenseID", "")).strip() == gid and (grupo is None or str(o.get("Group", "")) == str(grupo)):
+            return o
+    return {}
+
+
+def deshacer_recepcion(oid) -> tuple:
+    """Una orden RECIBIDA vuelve a pendiente y su gasto se quita (v670, H9 del ciclo 2): es la ÚNICA forma de quitar el
+    gasto de una orden — borrarlo suelto dejaba la orden «received» sin costo.
+
+    ⚠️ El orden de las escrituras: primero la orden (pendiente, sin ExpenseID) y luego el gasto. Si fallara lo segundo,
+    el gasto queda VISIBLE en Receipts y se dice cuál borrar; al revés, una orden «received» apuntando a un gasto que ya
+    no existe no lo diría nadie."""
+    w = _ws()
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    row, r = _fila(w, oid)
+    if row is None:
+        return False, t("Order not found.")
+    if str(r.get("Status", "")) != RECIBIDA:
+        return False, t("Only a received order can have its receipt undone.")
+    gid = str(r.get("ExpenseID", "")).strip()
+    ok, err = _set(w, row, {"Status": PENDIENTE, "ExpenseID": "", "ReceivedDate": ""})
+    if not ok:
+        return False, err
+    _invalidate()
+    if gid:
+        from core import expenses as E
+        ok_e, msg_e = E.delete(gid, de_orden=True)
+        if not ok_e:
+            return False, t("The order is pending again, but its expense {g} could not be removed ({e}): delete it in "
+                            "Receipts.", g=gid, e=msg_e)
+    return True, t("Receipt of {o} undone: it is pending again and its cost was taken off the project.", o=oid)

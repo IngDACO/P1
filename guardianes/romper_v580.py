@@ -98,8 +98,9 @@ ROTURAS = [
      [('            st.caption(t(":material/sticky_note_2: Note for the client: {n}", n=str(c.get("Note"))))\n',
        "            pass\n")]),
     ("⚠️ guardar el borrador pierde la nota", QU,
-     [("                ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp, nota=nota)\n",
-       "                ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp)\n")]),
+     # v670 · re-anclada: «Save and mark as sent» también guarda (H6 del ciclo 2); esta es la de «Save changes»
+     [('width="stretch"):\n                ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp, nota=nota)\n',
+       'width="stretch"):\n                ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp)\n')]),
     ("«Discard» no repone la nota", QU,
      [('            st.session_state[f"cot_nota_{cid}"] = _nota0\n', "")]),
     ("⚠️ la obra borrada no se dice (cotización atada a nada)", QU,

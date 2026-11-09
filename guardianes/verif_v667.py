@@ -86,10 +86,14 @@ chk("H22 · «Baseline: … set on DD/MM/YYYY by <nombre>»",
 chk("…y el pie «baseline set on» y el historial de replanificaciones, igual",
     'pie=t("baseline set on {f}", f=_fmt_fecha(_cmp["fijada"][:10])))' in _es
     and 'f=_fecha_hora(_h.get("fijada", "")), q=_nombres_de([_h.get("por", "?")], grupo)[0],' in _es)
+# ⚠️ v670 · el guardado se mudó a `_guardar_datos_obra` (para poder confirmar antes al cancelar o pausar, H18 del
+# ciclo 2); la regla —el aviso por flash con a quién avisó, y el del tablero también— es la misma
+_gd = funcion("core/projects_ui.py", "_guardar_datos_obra")
 chk("H11 · «Save changes» lo dice por flash (con a quién avisó) y el tablero también; sin el toast que se perdía",
-    'flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",' in _dp
-    and "_autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin, al_flash=True)" in _dp
-    and 'st.toast(t("Changes saved.")' not in _dp and "_avisados.append(un)" in _dp)
+    'flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",' in _gd
+    and '_autoagenda(grupo, pid, [] if cierre else nuevos, _quitados, ctx["f_ini"], ctx["f_fin"], al_flash=True)' in _gd
+    and 'st.toast(t("Changes saved.")' not in _gd and "_avisados.append(un)" in _gd
+    and "_guardar_datos_obra(pid, grupo, prj, _campos, _ctx)" in _dp)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════
 print("3. H41 · El buscador")

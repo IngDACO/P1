@@ -100,7 +100,8 @@ ROTURAS = [
      [('    _tit = (t("Progress claims ({n} issued · {m} claimable now · {f} already invoiced)",',
        '    _fact = 0.0\n    _tit = (t("Progress claims ({n} issued · {m} claimable now · {f} already invoiced)",')]),
     ("sin el aviso del doble cobro", CU,
-     [('        if _fact > 0.5 and d["bruto"] > 0:\n            st.warning(', '        if False:\n            st.warning(')]),
+     # v670 · re-anclada: la vista previa sigue al % escrito (`dv`, H13 del ciclo 2)
+     [('            if _fact > 0.5 and dv["bruto"] > 0:\n                st.warning(', '            if False:\n                st.warning(')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", AL,

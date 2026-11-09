@@ -812,9 +812,38 @@ def autopoblar_proyecto(grupo, pid, usuarios, fecha_ini, fecha_fin,
             "actualizadas": len(updates), "nuevas": len(nuevas), "semanas": len(semanas)}
 
 
-def limpiar_proyecto(grupo, pid, usuarios=None) -> int:
+def _dia_de_fila(semana, dk):
+    """La fecha de la celda `dk` de la fila de la semana `semana` (ISO), o None si no se puede leer."""
+    lun = _a_date(semana)
+    if lun is None or dk not in DIAS_TODOS:
+        return None
+    return fecha_de_dia(lun, dk)
+
+
+def dias_desde(grupo, pid, desde) -> dict:
+    """{usuario: nº de días} que el tablero tiene a la obra desde `desde` (incluido) (v670: lo que se libera al
+    cancelar o pausar una obra, H18 del ciclo 2). Lee de la caché: es para enseñar, no para escribir."""
+    out = {}
+    for r in _roster_records():
+        if str(r.get("Group", "")) != str(grupo):
+            continue
+        try:
+            datos = json.loads(r.get("DataJSON") or "{}")
+        except Exception:
+            continue
+        for dk, cel in (datos or {}).items():
+            _f = _dia_de_fila(r.get("Week"), dk)
+            if _f is not None and _f >= desde and str(pid) in _norm_cell(cel)["asigs"]:
+                u = str(r.get("User", ""))
+                out[u] = out.get(u, 0) + 1
+    return out
+
+
+def limpiar_proyecto(grupo, pid, usuarios=None, desde=None) -> int:
     """Quita del planificador TODAS las celdas asignadas a un proyecto (para cuando se
-    desasigna a alguien). Si `usuarios` se da, solo esas personas. 1 `batch_update`. v219."""
+    desasigna a alguien). Si `usuarios` se da, solo esas personas. 1 `batch_update`. v219.
+    v670 · con `desde` (una fecha), solo los días a partir de ella: al cancelar o pausar una obra el pasado se queda
+    como estaba planificado (H18 del ciclo 2)."""
     w = _ws_roster()
     if w is None or not pid:
         return 0
@@ -838,6 +867,10 @@ def limpiar_proyecto(grupo, pid, usuarios=None) -> int:
             continue
         ch = False
         for dk in list(datos.keys()):
+            if desde is not None:
+                _f = _dia_de_fila(r[2], dk)
+                if _f is None or _f < desde:
+                    continue
             n = _norm_cell(datos.get(dk))
             if str(pid) in n["asigs"]:
                 rest = [it for it in n["items"] if it["asig"] != str(pid)]

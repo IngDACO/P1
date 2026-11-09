@@ -38,10 +38,13 @@ ROTURAS = [
     ("la línea base vuelve al login", PU,
      [('q=_nombres_de([_o.get("por", "?")], grupo)[0]))', 'q=_o.get("por", "?")))')]),
     ("⚠️ «Save changes» vuelve al toast que se pierde", PU,
-     [('                    flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",',
-       '                    st.toast(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",')]),
+     # v670 · re-anclada: el guardado vive en `_guardar_datos_obra` (H18 del ciclo 2)
+     [('        flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",',
+       '        st.toast(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",')]),
     ("los avisos del tablero se vuelven a perder al guardar", PU,
-     [("_autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin, al_flash=True)", "_autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin)")]),
+     # v670 · re-anclada (`_guardar_datos_obra`)
+     [('_autoagenda(grupo, pid, [] if cierre else nuevos, _quitados, ctx["f_ini"], ctx["f_fin"], al_flash=True)',
+       '_autoagenda(grupo, pid, [] if cierre else nuevos, _quitados, ctx["f_ini"], ctx["f_fin"])')]),
     # ── H41 ──
     ("el buscador enseña activos y facturas también al campo", H,
      [('    if _rol() == "administrator":\n        try:\n            from core import inventory as INV',

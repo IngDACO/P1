@@ -237,6 +237,17 @@ def dinero_por_proyecto(grupo: str, incluir_archivados: bool = True) -> dict:
     return out
 
 
+def es_cotizada(pid: str) -> bool:
+    """¿La obra tiene precio cerrado (cotización aceptada)? Solo ahí una VARIACIÓN cambia el precio (v670: en una obra
+    por horas el aviso de facturar de más sugería una variación, que no cuenta; allí va la ganancia fija)."""
+    try:
+        from core import quotes as _Q
+        return bool(_Q.cotizacion_de_proyecto(pid))
+    except Exception as e:
+        logger.warning("invoices.es_cotizada %s: %s", pid, e)
+        return False
+
+
 def facturado_de_mas(pid: str, grupo: str, prj: dict = None) -> float:
     """Lo facturado POR ENCIMA del precio de la obra (v669, H29). `pendiente_de_facturar` lo esconde con su
     `max(0, …)`: una línea de más dejaba la obra en «Everything invoiced» sin decir que se pasó."""
@@ -566,6 +577,12 @@ def ultimo_cobro_quitable(f: dict):
     return None, None
 
 
+def _dinero(v) -> str:
+    """«$3,000.00» con separador de miles (v670: los avisos decían «$3000.00»). Un solo importe por mensaje: dos «$»
+    en el mismo markdown abren una fórmula (v309)."""
+    return "${:,.2f}".format(round(_num(v), 2))
+
+
 def _hoy_iso() -> str:
     return clock.today().isoformat()
 
@@ -600,7 +617,7 @@ def quitar_ultimo_cobro(fid: str, quien: str = "") -> tuple:
         return False, str(e)
     _invalidate()
     _rastro(fid, f, {"Collected": [prev, nuevo]}, "quitar_cobro")
-    return True, t("Payment of {m} removed.", m="$%.2f" % monto)
+    return True, t("Payment of {m} removed.", m=_dinero(monto))
 
 
 def _rastro(fid, f, cambios, accion):
@@ -668,7 +685,7 @@ def sacar_cobros(fid: str, destino: str, quien: str = "", anular_tambien: bool =
     if cob > 0:
         if destino == DEVOLVER:
             cobros.append({"fecha": hoy, "monto": -cob, "origen": DEVUELTO, "por": str(quien or "")})
-            msg_dest = t("{m} recorded as refunded to the client.", m="$%.2f" % cob)
+            msg_dest = t("{m} recorded as refunded to the client.", m=_dinero(cob))
         else:
             g = frescas.get(str(destino), (None, None))[1]
             _ok_g = bool(g) and str(destino) != str(fid) and estado_cobro(g) != "anulada" \
@@ -677,7 +694,7 @@ def sacar_cobros(fid: str, destino: str, quien: str = "", anular_tambien: bool =
                 and round(_num(g.get("Total")) - _num(g.get("Collected")), 2) + 0.005 >= cob
             if not _ok_g:
                 return False, t("Choose what happens with the {m} collected: refund it, or move it to another "
-                                "open invoice of this client.", m="$%.2f" % cob)
+                                "open invoice of this client.", m=_dinero(cob))
             n_g = filas[str(destino)]
             prev_g = round(_num(g.get("Collected")), 2)
             hist_g = cobros_de(g) + [{"fecha": hoy, "monto": cob, "origen": TRASPASO_ENTRA,
@@ -686,7 +703,7 @@ def sacar_cobros(fid: str, destino: str, quien: str = "", anular_tambien: bool =
                        {"range": f"{_col_letter(cj + 1)}{n_g}", "values": [[json.dumps(hist_g, ensure_ascii=False)]]}]
             cobros.append({"fecha": hoy, "monto": -cob, "origen": TRASPASO_SALE, "a": str(g.get("Number", "")),
                            "por": str(quien or "")})
-            msg_dest = t("{m} moved to invoice No. {n}.", m="$%.2f" % cob, n=str(g.get("Number", "")))
+            msg_dest = t("{m} moved to invoice No. {n}.", m=_dinero(cob), n=str(g.get("Number", "")))
         n_f = filas[fid]
         rangos += [{"range": f"{_col_letter(cc + 1)}{n_f}", "values": [["0"]]},
                    {"range": f"{_col_letter(cj + 1)}{n_f}", "values": [[json.dumps(cobros, ensure_ascii=False)]]}]
@@ -711,7 +728,7 @@ def anular(fid: str, destino_cobros: str = None, quien: str = "") -> tuple:
         if not destino_cobros:
             return False, t("This invoice has {m} collected: say what happens with that money first (refund it, "
                             "or move it to another invoice of this client).",
-                            m="$%.2f" % round(_num(f.get("Collected")), 2))
+                            m=_dinero(_num(f.get("Collected"))))
         return sacar_cobros(fid, destino_cobros, quien, anular_tambien=True)
     w, err = _ws()
     if err:

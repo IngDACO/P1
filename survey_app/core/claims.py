@@ -361,11 +361,17 @@ def puede_liberar(pid, prj=None) -> tuple:
     # override manual (pausada, archivada) y una obra archivada al 90% no está acabada.
     try:
         from core import projects as P
-        _av = _num((prj or P.get_project(pid) or {}).get("Progress"))
+        # ⚠️ `_prj`, no `_p`: `_p` ya es lo retenido, y el mensaje de abajo lo formatea (lo cazó verif_v510)
+        _prj = prj or P.get_project(pid) or {}
+        _av = _num(_prj.get("Progress"))
     except Exception as e:
         # No poder leer el avance no es «está terminada»: ante la duda, NO se libera.
         logger.warning("claims.puede_liberar(%s): %s", pid, e)
         return False, t("The job progress could not be read, so the release is on hold.")
+    # ⚠️ v670 · una obra CANCELADA no llegará al 100 %: lo retenido se pide de vuelta igual (ciclo 2, H21: decía
+    # «se libera al completar», que ya no pasará)
+    if P.es_cancelada(_prj):
+        return True, t("The job was cancelled: the retention still held can be claimed back.")
     if _av < 100:
         return False, t("Retention is released once the job is complete; this one is "
                         "at {pct}%.", pct=round(_av, 1))

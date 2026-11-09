@@ -619,9 +619,21 @@ def _detalle(grupo, cid):
     st.markdown("---")
     a1, a2, a3 = st.columns(3)
     if est == Q.BORRADOR:
-        if a1.button(t(":material/send: Mark as sent"), key=f"cot_env_{cid}",
-                     type="primary", width="stretch"):
-            ok, msg = Q.set_estado(cid, Q.ENVIADA)
+        # ⚠️ v670 · con cambios SIN guardar, enviar los GUARDA antes (ciclo 2, H6: rebajado el beneficio en la tabla,
+        # «Mark as sent» la marcó enviada con el precio viejo y el cliente recibía ese)
+        _lbl_env = (t(":material/send: Save and mark as sent") if _cambia
+                    else t(":material/send: Mark as sent"))
+        if a1.button(_lbl_env, key=f"cot_env_{cid}", type="primary", width="stretch"):
+            ok, msg = True, ""
+            if _cambia:
+                ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp, nota=nota)
+                if ok:
+                    st.session_state.pop(f"{_k}_lineas", None)
+                    st.session_state[f"{_k}_edgen"] = st.session_state.get(f"{_k}_edgen", 0) + 1
+            if ok:
+                ok, msg = Q.set_estado(cid, Q.ENVIADA)
+                if ok and _cambia:
+                    msg = t("Changes saved and marked as sent.")
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()

@@ -18,7 +18,7 @@ from core import timeclock
 from core import clock
 from core import columnas
 from core import valores
-from core.num import num as _num
+from core.num import col_letter as _col_letter, num as _num
 
 from core.i18n import t
 logger = logging.getLogger(__name__)
@@ -547,7 +547,45 @@ def asignar_proyecto(gid, pid, grupo) -> tuple:
     return False, t("Receipt not found.")
 
 
-def delete(gid) -> tuple:
+def adjuntar(gid, drive_id, archivo) -> tuple:
+    """Pone el comprobante (la factura del proveedor) a un gasto que no lo tiene (v670, H8 del ciclo 2: el gasto de una
+    orden recibida salía «no receipt» y no había forma de adjuntarle nada). Lee FRESCO para decidir la fila (v323)."""
+    w = _ws()
+    if w is None:
+        return False, t("Google Sheets is not configured.")
+    if not str(drive_id or "").strip():
+        return False, t("The file could not be uploaded.")
+    try:
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
+    except Exception as e:
+        return False, t("Error reading: {e}", e=e)
+    for i, r in enumerate(recs):
+        if str(r.get("ID", "")) == str(gid):
+            try:
+                w.batch_update([
+                    {"range": f"{_col_letter(_ECOL['DriveID'])}{i + 2}", "values": [[str(drive_id)]]},
+                    {"range": f"{_col_letter(_ECOL['File'])}{i + 2}", "values": [[str(archivo)]]},
+                ], value_input_option="RAW")
+            except Exception as e:
+                return False, t("Error saving") + f": {e}"
+            _invalidate()
+            return True, t("Supplier invoice attached.")
+    return False, t("Receipt not found.")
+
+
+def delete(gid, de_orden=False) -> tuple:
+    """Borra un recibo. ⚠️ v670 · el GASTO de una orden recibida no se borra suelto (la orden se quedaba «received»
+    sin costo): se deshace su recepción (`orders.deshacer_recepcion`, que pasa `de_orden=True`)."""
+    if not de_orden:
+        try:
+            from core import orders as _O
+            _o = _O.de_un_gasto(gid)
+        except Exception as e:
+            logger.warning("expenses.delete: no se pudo mirar si %s es de una orden: %s", gid, e)
+            _o = {}
+        if _o:
+            return False, t("It is the cost of order {o}: undo the order's receipt in Purchase orders instead.",
+                            o=str(_o.get("ID", "")))
     w = _ws()
     if w is None:
         return False, t("Google Sheets is not configured.")
