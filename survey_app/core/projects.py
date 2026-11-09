@@ -246,6 +246,14 @@ _PCOL = {h: i + 1 for i, h in enumerate(PROJECTS_HEADERS)}
 _ACOL = {h: i + 1 for i, h in enumerate(ACTIVITIES_HEADERS)}
 
 ESTADOS_MANUAL = ["", "On hold", "Cancelled", "Archived"]
+# ⚠️ v667 · UNA definición de obra ACTIVA: Home decía «ACTIVE 11» en la tarjeta y «10 active» en la lista de
+# al lado (ciclo 1): la tarjeta contaba también «On hold», la lista no. Una obra en pausa no está activa.
+ESTADOS_ACTIVOS = ("Planned", "In progress")
+
+
+def es_activa(p) -> bool:
+    """¿Obra activa (planificada o en curso)? (v667)"""
+    return str((p or {}).get("Status", "")) in ESTADOS_ACTIVOS
 FMT_DATE = "%Y-%m-%d"
 
 
@@ -291,6 +299,25 @@ def etiqueta_proyectos(proys) -> dict:
         _pid = str(p.get("ID") or "")
         _nom = str(p.get("Name") or "") or t("(no name)")
         out[_pid] = f"{_nom} ({_pid})" if _vistos.get(str(p.get("Name") or ""), 0) > 1 else _nom
+    return out
+
+
+# ⚠️ v667 · Lo que ya no admite trabajo: no se ficha en ello ni se le manda un activo.
+CERRADAS = ("Completed", "Cancelled", "Archived", INTERNO_CERRADA)
+
+
+def etiqueta_con_id(proys) -> dict:
+    """`{ID: «Nombre (PRJ-####)»}` con el ID SIEMPRE, y «location» si es una localización (v667).
+
+    Para los selectores donde se elige DÓNDE se trabaja o dónde va algo (el fichaje, un activo): ahí
+    la identidad tiene que verse aunque el nombre no se repita, y una localización no puede pasar por
+    una obra (ciclo 1: el selector del fichaje listaba por nombre e incluía «Alexandria Warehouse»
+    como si fuera otra obra). Las demás pantallas siguen con `etiqueta_proyectos` (limpia)."""
+    out = {}
+    for p in proys or []:
+        _pid = str(p.get("ID") or "")
+        _nom = str(p.get("Name") or "") or t("(no name)")
+        out[_pid] = f"{_nom} ({_pid} · {t('location')})" if es_interno(p) else f"{_nom} ({_pid})"
     return out
 
 

@@ -62,7 +62,11 @@ if auth_ui.render_login():
 
 
 def entrar(desmarcar=False):
-    at = AppTest.from_string(APP, default_timeout=60).run()
+    # ⚠️ v667 · CADUCADO a propósito: mientras el componente de cookies no ha contestado se ve «Restoring your
+    # session…» y no el formulario (ciclo 1, H19). Aquí ya contestó, sin cookie: su clave está en la sesión.
+    at = AppTest.from_string(APP, default_timeout=60)
+    at.session_state["copex_cookie_get"] = {}
+    at.run()
     chk("se pinta sin excepción", not at.exception, [e.value for e in at.exception][:1])
     c = at.checkbox(key="login_remember")
     v0 = c.value

@@ -10,7 +10,7 @@ import functools
 import logging
 import zlib
 
-from core.i18n import t, etiqueta as _etq
+from core.i18n import t, etiqueta as _etiqueta
 import pandas as pd
 import streamlit as st
 
@@ -25,6 +25,19 @@ from core import ui_common as ui
 from core import theme as T
 
 logger = logging.getLogger(__name__)
+
+# ⚠️ v667 · Los CÓDIGOS del inventario (estado, condición, tipo de ubicación y de movimiento) se guardan en
+# inglés en minúscula («good», «available», «warehouse») y salían así en pantalla, junto a «Equipment» con
+# mayúscula (ciclo 1, H17). Se muestran con la primera en mayúscula; lo que escribe una persona (una
+# categoría propia, el nombre del almacén) sale tal cual.
+_CODIGOS = (set(INV.ESTADOS) | set(INV.CONDICIONES) | set(INV.UBIC_TIPOS) | set(INV.MOV_TIPOS)
+            | {"other", "project", "user", "warehouse"})
+
+
+def _etq(v, defecto=None) -> str:
+    s = _etiqueta(v, defecto)
+    return s[:1].upper() + s[1:] if s and (str(v) in _CODIGOS or s in _CODIGOS) else s
+
 
 # v599 · el filtro de la cifra «Service overdue» (no es un estado guardado: es la fecha)
 _FILTRO_MANT = "__mant__"
@@ -136,7 +149,7 @@ def _proyectos(grupo):
         # que en ninguna obra: excluirlas dejaría el inventario sin su ubicación natural.
         _ps = [p for p in P.list_projects(grupo=grupo, incluir_internos=True)
                if str(p.get("ID", "")).strip() and str(p.get("Status", "")) not in _CERRADAS]
-        _lbl = P.etiqueta_proyectos(_ps)
+        _lbl = P.etiqueta_con_id(_ps)          # v667 · con el ID y «location» a la vista (ciclo 1)
         return [str(p.get("ID", "")) for p in _ps], _lbl
     except Exception:
         return [], {}
@@ -417,7 +430,9 @@ def _detalle(grupo, aid):
                         st.rerun()
         else:
             with st.expander(t(":material/login: Check in / return"), expanded=True, key=f"exp_inv_ent_{aid}"):
-                _bod = st.text_input(t("Store / return location"), value=t("Store"), key=f"inv_ebod_{aid}_{_ag}")
+                # v667 · nace con el sitio de donde salió (su balda), no con «Store» (ciclo 1: se perdía)
+                _bod = st.text_input(t("Store / return location"), value=INV.ultima_bodega(grupo, aid) or t("Store"),
+                                     key=f"inv_ebod_{aid}_{_ag}")
                 _n = st.text_input(t("Note"), key=f"inv_enota_{aid}_{_ag}")
                 if st.button(t(":material/check: Record check-in"), type="primary", key=f"inv_ebtn_{aid}_{_ag}"):
                     ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota=_n, creado_por=_cp)
@@ -619,7 +634,8 @@ def _detalle(grupo, aid):
         with c3:                                   # v599 · era una columna vacía
             f_compra = _fecha_input(t("Purchase date"), a.get("PurchaseDate"),
                                     f"inv_fc_{aid}_{a.get('PurchaseDate', '')}")
-        vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
+        # v667 · «%g»: 5 años se ve «5», no «5.00» (ciclo 1); medio año sigue cabiendo («2.5»)
+        vida = c4.number_input(t("Useful life (years)"), min_value=0.0, step=1.0, format="%g",
                                value=_num(a.get("UsefulLifeYears")))
         with c3:
             prox = _fecha_input(t("Next maintenance"), a.get("NextService"),
@@ -682,7 +698,7 @@ def _registro(grupo):
         ubic_r = c2.text_input(t("Location (detail)"), help=t("Store or workshop."),
                                key=f"inv_reg_ur_{_g}")
         vc = c1.number_input(t("Purchase value"), min_value=0.0, step=10.0, key=f"inv_reg_vc_{_g}")
-        vida = c2.number_input(t("Useful life (years)"), min_value=0.0, step=1.0,
+        vida = c2.number_input(t("Useful life (years)"), min_value=0.0, step=1.0, format="%g",   # v667
                                help=t("Used for depreciation. 0 = do not depreciate."),
                                key=f"inv_reg_vida_{_g}")
         c3, c4 = st.columns(2)

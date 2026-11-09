@@ -82,4 +82,8 @@ def fecha_opcional(label: str, valor, key: str, **kw):
     if key not in st.session_state:
         st.session_state[key] = valor or None
     kw.pop("format", None)                      # v584: en la app, TODA fecha va en DD/MM/YYYY
+    # ⚠️ v667 · sin icono en la etiqueta de una fecha: Streamlit lo mete en el aria-label de cada
+    # segmento y el lector de pantalla lo lee como texto (ciclo 1, H3)
+    import re as _re
+    label = _re.sub(r":material/[a-z0-9_]+:\s*", "", str(label or "")).strip()
     return st.date_input(label, value=None, key=key, format="DD/MM/YYYY", **kw)

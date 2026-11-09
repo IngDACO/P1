@@ -547,6 +547,24 @@ def salida(aid, grupo, usuario="", hacia_tipo="user", hacia_ref="",
     return True, t("Check-out recorded.")
 
 
+def ultima_bodega(grupo, aid) -> str:
+    """El sitio del almacén de donde SALIÓ el activo la última vez (v667), o "".
+
+    Ciclo 1 (H42): al devolver ACT-0005 la caja nacía con «Store» y la balda donde vivía se perdía.
+    Sale del historial: el movimiento más reciente que partió de «warehouse: …» (las filas viejas en
+    español se migraron en v600, así que no se buscan)."""
+    try:
+        movs = list_movimientos(grupo, activo_id=aid)
+    except Exception as e:
+        logger.warning("inventory.ultima_bodega %s: %s", aid, e)
+        return ""
+    for m in sorted(movs, key=lambda m: (str(m.get("Date", "")), str(m.get("ID", ""))), reverse=True):
+        de = str(m.get("FromLocation", "") or "").strip()
+        if de.startswith("warehouse: ") and de[len("warehouse: "):].strip():
+            return de[len("warehouse: "):].strip()
+    return ""
+
+
 def entrada(aid, grupo, bodega="", nota="", creado_por="") -> tuple:
     """Check-in: el activo vuelve a bodega. Estado→disponible."""
     a = get_activo(aid)

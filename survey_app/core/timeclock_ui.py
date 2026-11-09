@@ -439,7 +439,8 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
         return
 
     from core import projects as _P
-    idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
+    # ⚠️ v667 · con el ID y «location» a la vista: aquí se elige DÓNDE se trabaja (`etiqueta_con_id`)
+    idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_con_id(proys).items()}
     # ⚠️ El NOMBRE limpio va aparte de la etiqueta: la etiqueta puede llevar el ID
     # detrás (`prueba (PRJ-0007)`) y `fichar_proyecto` lo escribe TAL CUAL en la
     # columna `Proyecto` de la hoja — el fallo que v308 tuvo que corregir.
@@ -810,19 +811,23 @@ def _proyectos_para(rol, usuario, grupo):
     cualquiera. Ese agujero ya existía para las obras; aquí se cierra al menos para lo
     interno, que es lo que se acaba de crear.
     """
+    # ⚠️ v667 · ni completadas, ni canceladas, ni localizaciones cerradas: ahí no se trabaja (ciclo 1: la
+    # oficina las veía al fichar). UN sitio para la barra lateral y la pantalla de Fichaje.
+    def _abiertas(lst):
+        return [p for p in lst if str(p.get("Status", "")) not in projects_data.CERRADAS]
     try:
         _hoy = _asignadas_hoy(usuario, grupo)
         if rol == "field":
             asignados = projects_data.list_projects_for_field(
                 usuario, grupo=grupo, incluir_internos=True)
             if asignados or _hoy:
-                return _mezclar(asignados, _hoy), True
+                return _abiertas(_mezclar(asignados, _hoy)), True
             # Sin nada asignado: las obras del grupo, NUNCA las localizaciones.
-            return projects_data.list_projects(grupo=grupo), False
+            return _abiertas(projects_data.list_projects(grupo=grupo)), False
         # Gestión (administrador/propietario) sí ficha en la oficina.
         if rol == "owner":
-            return projects_data.list_projects(incluir_internos=True), True
-        return projects_data.list_projects(grupo=grupo, incluir_internos=True), True
+            return _abiertas(projects_data.list_projects(incluir_internos=True)), True
+        return _abiertas(projects_data.list_projects(grupo=grupo, incluir_internos=True)), True
     except Exception:
         return [], True
 
@@ -977,7 +982,8 @@ def render_timeclock_tab():
         # (el primero se quedaba sin ID, asi que seguian sin poder distinguirse). Ahora sale
         # de `P.etiqueta_proyectos`, la misma que usan Panel/Facturas/Inventario.
         from core import projects as _P
-        idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_proyectos(proys).items()}
+        # v667 · con el ID y «location» a la vista, como en la barra lateral (`etiqueta_con_id`)
+        idmap = {_lbl: _pid for _pid, _lbl in _P.etiqueta_con_id(proys).items()}
         # ⚠️ v308: el NOMBRE limpio, aparte de la etiqueta. La etiqueta puede llevar el ID
         # detrás (`prueba (PRJ-0007)`) y se estaba pasando como nombre a `fichar_proyecto`,
         # que lo escribe TAL CUAL en la columna `Proyecto` de la hoja → el fichaje quedaba

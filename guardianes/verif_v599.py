@@ -205,7 +205,8 @@ _sb = next(s for s in at.selectbox if _es_de(s.key, "inv_sdt_ACT-1"))
 _sb.set_value("project").run()
 _pr = next(s for s in at.selectbox if _es_de(s.key, "inv_srp_ACT-1"))
 chk("⚠️ ni la cancelada ni la entregada ni el almacén cerrado (salían Penrith y Mascot)",
-    list(_pr.options) == ["Open job", "Store A"], list(_pr.options))
+    # ⚠️ v667 · CADUCADO a propósito: con el ID a la vista (`etiqueta_con_id`, ciclo 1 H18)
+    list(_pr.options) == ["Open job (PRJ-1)", "Store A (LOC-1)"], list(_pr.options))
 _dev = next(d for d in at.date_input if _es_de(d.key, "inv_sdev_ACT-1"))
 chk("…la devolución prevista no deja elegir un día pasado (`min_value` = hoy)",
     str(_dev.proto.min) == HOY.isoformat(), _dev.proto.min)
@@ -254,7 +255,8 @@ chk("⚠️ tras un mantenimiento, el formulario trae la NUEVA (con clave fija t
     str(_d1.value) == "2027-04-01", (_d1.key, _d1.value))
 _st = next(s for s in at.selectbox if s.label == "Status")
 chk("⚠️ el estado editable: available · maintenance · damaged (sin «in use» ni «written off»)",
-    list(_st.options) == ["available", "maintenance", "damaged"], list(_st.options))
+    # ⚠️ v667 · CADUCADO a propósito: los códigos del inventario se ven con mayúscula (ciclo 1, H17)
+    list(_st.options) == ["Available", "Maintenance", "Damaged"], list(_st.options))
 next(t_ for t_ in at.text_input if t_.label == "Name").set_value("")
 next(b for b in at.button if "Save changes" in str(b.label)).click()
 at.run()
@@ -297,7 +299,7 @@ at.session_state["_inv_nuevo"] = True
 at.run()
 _ut = next(s for s in at.selectbox if s.label == "Location (type)")
 chk("nace en el almacén o en reparación (a una obra, con la salida)",
-    list(_ut.options) == ["warehouse", "under repair"], list(_ut.options))
+    list(_ut.options) == ["Warehouse", "Under repair"], list(_ut.options))   # v667 · con mayúscula (H17)
 next(t_ for t_ in at.text_input if t_.label == "Asset name *").set_value("taladro ")
 next(b for b in at.button if "Register" in str(b.label)).click()
 at.run()

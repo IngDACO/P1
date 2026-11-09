@@ -145,6 +145,7 @@ def location_picker(key, lat=None, lng=None, direccion=""):
     if c2.button(t("Search"), key=f"{key}_btn", width="stretch"):
         _cands = geocode_candidates(q)
         st.session_state[f"{key}_cands"] = _cands
+        st.session_state[f"{key}_qbusq"] = str(q or "").strip()      # v667 · lo que se ESCRIBIÓ
         st.session_state.pop(f"{key}_applied", None)     # reaplicar el mejor de esta búsqueda
         st.session_state.pop(f"{key}_candsel", None)
         if not _cands:
@@ -166,8 +167,17 @@ def location_picker(key, lat=None, lng=None, direccion=""):
         if st.session_state.get(f"{key}_applied") != _sel:
             st.session_state[f"{key}_applied"] = _sel
             st.session_state[klat], st.session_state[klng] = _c["lat"], _c["lon"]
-            st.session_state[f"{key}_addr"] = _sel
             st.rerun()
+        # ⚠️ v667 · El texto que se GUARDA es el que se escribió; Google solo pone el punto. Ciclo 1 (H10):
+        # «1 Macquarie St, Sydney NSW 2000» se cambió por «Bennelong Apartments, 1, Macquarie Street, Quay
+        # Quarter, …», que salía en la cabecera, los PDF y los avisos. La versión de Google, si se marca.
+        _escrito = str(st.session_state.get(f"{key}_qbusq") or "").strip()
+        _usar_g = False
+        if _escrito and _escrito != _sel:
+            from core.maps import literal_md as _lmd
+            _usar_g = st.checkbox(t("Save the address as Google writes it: «{x}»", x=_lmd(_sel)),
+                                  key=f"{key}_usar_g", value=False)
+        st.session_state[f"{key}_addr"] = _sel if (_usar_g or not _escrito) else _escrito
 
     try:
         import folium

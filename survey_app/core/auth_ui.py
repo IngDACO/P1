@@ -428,6 +428,19 @@ def render_login() -> bool:
                 st.session_state["_hb_last"] = time.time()
                 st.session_state["_remember_session"] = True   # v222: había cookie → recordar
                 st.rerun()
+        # ⚠️ v667 · Mientras el componente de cookies NO ha contestado, no se sabe si hay una sesión
+        # guardada: se dice «Restoring your session…» en vez de enseñar el formulario (ciclo 1, H19: a los
+        # 9 s seguía el «Sign in» y se podía empezar a teclear la contraseña). Contestó = su clave está
+        # en la sesión, o ya van 3 pasadas. Si no contesta nunca, el botón deja entrar con contraseña.
+        st.session_state["_ck_pasadas"] = int(st.session_state.get("_ck_pasadas", 0)) + 1
+        _contesto = ("copex_cookie_get" in st.session_state) or st.session_state["_ck_pasadas"] >= 3
+        if not _contesto and not st.session_state.get("_ver_login"):
+            _cr = st.columns([1, 2, 1])[1]
+            _cr.info(t(":material/hourglass_top: Restoring your session…"))
+            if _cr.button(t("Sign in with your password instead"), key="ck_ver_login"):
+                st.session_state["_ver_login"] = True
+                st.rerun()
+            return False
 
     # ── Logo COPEX centrado (v201: ~40% más pequeño → columnas [2,1,2]) ──
     c = st.columns([2, 1, 2])
@@ -1313,7 +1326,11 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
               if es_campo else ""),
              (":red[:material/error:] " + t("Invalid email") if _ce == "invalido" else
               ":orange[:material/help:] " + t("Check the email") if _ce == "errata" else "")]
-    st.markdown(f"**{u.get('Name') or sel}**  ·  _{_etq(str(u['Role']))}_  ·  "
+    # v667 · y su USUARIO, que es la identidad (ciclo 1: solo «hjg,ujgjg»; el login era campo000). Como
+    # código: se lee tal cual, sin que el markdown toque nada.
+    _nom_f = str(u.get("Name") or sel)
+    _login = f"  `{sel}`" if _nom_f.strip() != str(sel).strip() and "`" not in str(sel) else ""
+    st.markdown(f"**{_nom_f}**{_login}  ·  _{_etq(str(u['Role']))}_  ·  "
                 + "  ·  ".join(c for c in chips if c))
 
     # v237: format_func muestra iconos Material; las OPCIONES siguen siendo el ID (emoji)
@@ -1370,7 +1387,9 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             _fi = auth.fecha_ingreso(sel)
             # ⚠️ v600 · `fecha_opcional`: creada con la fecha, vaciarla no la quitaba (se enviaba la
             # de antes); y la clave lleva LO GUARDADO, para que la precarga siga al dato
-            _nf = ui.fecha_opcional(t(":material/event_available: Start date at the company"),
+            # v667 · sin el icono en la etiqueta: un campo de fecha lo pone en su aria-label y el lector
+            # de pantalla leía «day, :material/event_available: Start date…» (ciclo 1, H3)
+            _nf = ui.fecha_opcional(t("Start date at the company"),
                                     _fi, f"{k}_fing_{_fi or ''}", format="DD/MM/YYYY",   # v557
                                     min_value=date(1990, 1, 1), max_value=date(2100, 12, 31),
                                     help=t("Their leave year is counted from here."))

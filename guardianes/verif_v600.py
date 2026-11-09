@@ -303,12 +303,13 @@ at.session_state["_inv_open"] = "ACT-2"
 at.run()
 _st = next((s for s in at.selectbox if s.label == "Status"), None)
 chk("⚠️ en uno PRESTADO el estado está FIJO («in use»: sale con la devolución)",
-    _st is not None and _st.disabled is True and list(_st.options) == ["in use"], getattr(_st, "options", None))
+    # ⚠️ v667 · CADUCADO a propósito: los códigos del inventario se ven con mayúscula (ciclo 1, H17)
+    _st is not None and _st.disabled is True and list(_st.options) == ["In use"], getattr(_st, "options", None))
 at.session_state["_inv_open"] = "ACT-3"
 at.run()
 _st = next((s for s in at.selectbox if s.label == "Status"), None)
 chk("⚠️ en uno de BAJA el estado está FIJO («written off»: sale con «Reactivate»)",
-    _st is not None and _st.disabled is True and list(_st.options) == ["written off"], getattr(_st, "options", None))
+    _st is not None and _st.disabled is True and list(_st.options) == ["Written off"], getattr(_st, "options", None))   # v667
 
 print("\n4. La lista: filtros RECORDADOS, por ubicación, «nada coincide» con salida, todo activo")
 _ui = ast.parse(fuente("core/inventory_ui.py"))

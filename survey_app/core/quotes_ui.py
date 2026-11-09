@@ -19,6 +19,9 @@ from core.num import num as _num, dmy as _dmy
 from core import tabla
 from core.maps import literal_md
 
+import logging
+logger = logging.getLogger(__name__)
+
 # ⚠️ SIN `t()`: se construye al IMPORTAR, cuando no hay sesión, así que la traducción
 # quedaría congelada — el fallo de `invoices_ui._EST_FMT` (v449) y de otros cinco. Las
 # CLAVES son el estado que guarda la hoja. El icono va aquí y la palabra la pone
@@ -677,6 +680,26 @@ def _detalle(grupo, cid):
         _comparacion(cid, c)
 
 
+def _ubicar_obra(pid: str, direccion: str) -> None:
+    """v667 · Pone el punto en el mapa de una obra recién creada desde una cotización, con su dirección.
+
+    Ciclo 1 (H44): PRJ-0042 nació con la dirección de la ficha del cliente pero SIN punto, así que no
+    salía en el mapa de Home ni en la ruta del día. El texto se queda tal cual (H10): solo se añade el
+    punto. Best-effort: sin encontrarla, se dice y se pone a mano en Data, como antes."""
+    if not str(direccion or "").strip() or not str(pid or "").startswith("PRJ-"):
+        return
+    try:
+        from core import location_ui as LU, projects as _P
+        _ll = LU.geocode(direccion)
+        if _ll:
+            _P.update_project(pid, {"Lat": _ll[0], "Lng": _ll[1]})
+        else:
+            flash.aviso(t(":material/wrong_location: The address could not be placed on the map: set the point in "
+                          "the project's Data."))
+    except Exception as e:
+        logger.warning("quotes_ui._ubicar_obra %s: %s", pid, e)
+
+
 def _crear_proyecto(grupo, c, _tot):
     """Aceptada y sin obra todavía: darla de alta con lo ya pactado."""
     from core import projects as P
@@ -744,6 +767,7 @@ def _crear_proyecto(grupo, c, _tot):
                 condicionales=_PU._cond_elegidas(_kalta), fecha_fin=fin)
             if ok:
                 flash.exito(t("Project") + " " + str(msg) + " " + t("created from this quote."))
+                _ubicar_obra(str(msg), ubic)          # v667 · que salga en el mapa
                 st.rerun()
             else:
                 st.error(msg)

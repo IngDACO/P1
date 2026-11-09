@@ -91,8 +91,9 @@ chk("inventory: `alertas` compara contra el canonico",
 
 sec("3. Lo que ve la persona")
 import core.inventory_ui as IU                   # noqa: E402
+# ⚠️ v667 · CADUCADO a propósito: los códigos del inventario se ven con mayúscula («Available»; ciclo 1, H17)
 chk("la ficha del activo pinta el estado con su color",
-    IU._est_lbl("available") == ":green[available]", IU._est_lbl("available"))
+    IU._est_lbl("available") == ":green[Available]", IU._est_lbl("available"))
 import core.invoices_ui as VU                    # noqa: E402
 from core import invoices as I                   # noqa: E402
 _est = I.estado_cobro({"Total": "100", "Collected": "0",

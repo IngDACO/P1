@@ -288,7 +288,7 @@ def _kpis(grupo=None) -> dict:
     horas   = P.project_hours_bulk(grupo)
     alarmas = alerts.open_counts_all() if alerts.is_configured() else {}
     ids     = {str(p.get("ID", "")) for p in proys}
-    activos = [p for p in proys if str(p.get("Status", "")) not in ("Completed", "Cancelled")]
+    activos = [p for p in proys if P.es_activa(p)]           # v667 · la misma definición que la lista de Home
     avances = [P._num(p.get("Progress")) for p in proys]
     return {
         "total":   len(proys),
@@ -2835,7 +2835,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         _n_re = _cmp["replanificaciones"]
         st.markdown('<div class="cpx-kpis" style="margin:0 0 10px">'           # v581
                     + _kpi_card(t("Agreed delivery"), _fmt_fecha(_cmp["entrega_base"]),
-                                pie=t("baseline set on {f}", f=_cmp["fijada"][:10]))
+                                pie=t("baseline set on {f}", f=_fmt_fecha(_cmp["fijada"][:10])))   # v667 · DD/MM/YYYY
                     + _kpi_card(t("Vs the agreed plan"),
                                 (t("on the agreed plan") if abs(_mv) < 0.5
                                  else f"{_mv:+.0f} d"), _c_bl)
@@ -2867,7 +2867,8 @@ def _estado_section(pid: str, grupo: str, prj: dict):
                 for _h in _cmp["historial"]:
                     st.markdown(t("· {f} — {q} moved the delivery {m} d "
                                   "(from {a} to {b})",
-                                  f=_h.get("fijada", "")[:16], q=_h.get("por", "?"),
+                                  # v667 · DD/MM/YYYY HH:MM y la persona por su NOMBRE
+                                  f=_fecha_hora(_h.get("fijada", "")), q=_nombres_de([_h.get("por", "?")], grupo)[0],
                                   m=f"{_h.get('movio', 0):+.0f}",
                                   a=_fmt_fecha(_h.get("desde", "")),
                                   b=_fmt_fecha(_h.get("entrega", ""))))
@@ -3369,7 +3370,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     })
                     # Notificar a los usuarios de campo recién asignados
                     nuevos = [x for x in asignados if x not in actuales]
-                    _sent = 0
+                    _sent, _avisados = 0, []
                     if nuevos:
                         _info = {"Name": nombre, "Client": cliente, "Location": ubic,
                                  "StartDate": f_ini, "EndDateEst": f_fin, "InductionLinks": ind}
@@ -3378,6 +3379,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                                 rr = notify.notify_assignment(un, _info)
                                 if rr.get("email") or rr.get("telegram"):
                                     _sent += 1
+                                    _avisados.append(un)
                             except Exception:
                                 pass
                     # Si cambiaron las inducciones, reenviarlas a los ya asignados
@@ -3400,8 +3402,13 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     # v219: sincronizar el planificador — poner a los nuevos en el
                     # proyecto entre sus fechas y quitar del roster a los desasignados.
                     _quitados = [x for x in actuales if x not in asignados]
-                    _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin)
-                    st.toast(t("Changes saved.") + (f"  :material/send: {_sent} {t('notified')}." if _sent else ""))
+                    # ⚠️ v667 · por `flash`: el `st.toast` y los avisos del tablero se pintaban justo antes
+                    # del `st.rerun()` y se perdían (ciclo 1: «Save changes» asignó y avisó a 3 sin decir nada,
+                    # mientras el alta sí dice «2 field user(s) notified»)
+                    flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",
+                                                              n=_sent, l=", ".join(_nombres_de(_avisados, grupo)))
+                                                       if _sent else ""))
+                    _autoagenda(grupo, pid, nuevos, _quitados, f_ini, f_fin, al_flash=True)
                     st.rerun()
 
         # helper: avisar al campo asignado de un cambio del admin
@@ -3520,9 +3527,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _tiene = bool(_bl_act.get("original"))
             if _tiene:
                 _o = _bl_act["original"]
+                # v667 · la fecha DD/MM/YYYY y la persona por su NOMBRE (salía «2026-11-09 by Admin2», ciclo 1)
                 st.caption(t("Baseline: delivery {f}, set on {c} by {q}.",
                              f=_fmt_fecha(_o.get("entrega", "")),
-                             c=str(_o.get("fijada", ""))[:10], q=_o.get("por", "?")))
+                             c=_fmt_fecha(str(_o.get("fijada", ""))[:10]),
+                             q=_nombres_de([_o.get("por", "?")], grupo)[0]))
             else:
                 st.caption(t("No baseline yet: until you freeze it, changing a duration "
                              "rewrites the plan and nothing records that it moved."))

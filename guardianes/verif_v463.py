@@ -278,9 +278,11 @@ from core.inventory_ui import _est_lbl
 # que ve la persona no cambie**, asi que se indexa por el valor canonico y se compara
 # contra el MISMO resultado verbatim de v463. Si el dia de manana alguien toca el
 # color o el texto, sigue saltando.
-ANTES = {"available": ":green[available]", "in use": ":blue[in use]",
-         "maintenance": ":orange[maintenance]", "damaged": ":red[damaged]",
-         "written off": ":gray[written off]"}
+# ⚠️ v667 · CADUCADO a propósito: el texto va con la primera en mayúscula («Available», ciclo 1 H17);
+# el color y que la fila vieja resuelva al mismo texto, igual que antes.
+ANTES = {"available": ":green[Available]", "in use": ":blue[In use]",
+         "maintenance": ":orange[Maintenance]", "damaged": ":red[Damaged]",
+         "written off": ":gray[Written off]"}
 _dif = [e for e in inventory.ESTADOS if _est_lbl(e) != ANTES.get(e)]
 if not _dif:
     ok("la ficha del activo pinta lo mismo que antes de v463")

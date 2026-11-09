@@ -184,8 +184,10 @@ def pantalla(**kw):
     return corre(at)
 
 
+# ⚠️ v667 · CADUCADO a propósito: al fichar, la obra se elige con su ID a la vista («Obra A (PRJ-A)»,
+# `etiqueta_con_id`, ciclo 1 H13); lo que se ficha sigue siendo el NOMBRE limpio y el ID.
 at = pantalla()
-at.selectbox(key="tc_prj_sel").select("Obra A")
+at.selectbox(key="tc_prj_sel").select("Obra A (PRJ-A)")
 corre(at)
 at.button(key="tc_prj_in").click()
 corre(at)
@@ -195,7 +197,7 @@ chk("⚠️ ...y deja el aviso del Pre-Start de ESA obra (antes solo lo hacía e
     (ss(at, "_ps_aviso") or {}).get("pid") == "PRJ-A", ss(at, "_ps_aviso"))
 
 at = pantalla(**{"_ps_visto_PRJ-A": True})
-at.selectbox(key="tc_prj_sel").select("Obra A")
+at.selectbox(key="tc_prj_sel").select("Obra A (PRJ-A)")
 corre(at)
 at.button(key="tc_prj_in").click()
 corre(at)
@@ -203,7 +205,7 @@ chk("si lo habías descartado antes, volver a fichar lo re-arma (igual que el la
     ss(at, "_ps_visto_PRJ-A") is None and (ss(at, "_ps_aviso") or {}).get("pid") == "PRJ-A")
 
 at = pantalla(_fk_hecho=True)
-at.selectbox(key="tc_prj_sel").select("Obra A")
+at.selectbox(key="tc_prj_sel").select("Obra A (PRJ-A)")
 corre(at)
 at.button(key="tc_prj_in").click()
 corre(at)
@@ -217,8 +219,9 @@ _sel = at.selectbox(key="tc_switch")
 chk("⚠️ «Switch project» en inglés (decía «— cambiar a… —»)",
     _sel.options[0] == "— switch to… —" and all("cambiar" not in o for o in _sel.options),
     _sel.options)
-chk("...y no ofrece la obra en la que ya estás", "Obra A" not in _sel.options, _sel.options)
-_sel.select("Obra B")
+chk("...y no ofrece la obra en la que ya estás", "Obra A (PRJ-A)" not in _sel.options and "Obra B (PRJ-B)" in _sel.options,
+    _sel.options)
+_sel.select("Obra B (PRJ-B)")
 corre(at)
 at.button(key="tc_switch_btn").click()
 corre(at)

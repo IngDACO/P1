@@ -466,8 +466,36 @@ def subir_si_cambia_la_vista():
     from core import projects_ui as _PU
     if ant is not None and ant != v:
         _PU._subir_arriba()
+        # v667 · y en el móvil se pliega el menú (ciclo 1, H36: se quedaba abierto tapando la pantalla)
+        if ant[0] != v[0]:
+            _plegar_menu_movil()
     elif _nuevo:
         _PU._subir_arriba(solo_si_aviso_oculto=True)
+
+
+def _plegar_menu_movil():
+    """v667 · Con la pantalla ESTRECHA (< 768 px, donde el menú lateral va encima del contenido), lo
+    pliega al cambiar de sección. Ciclo 1 (H36, con clics reales a 375 px): tras tocar «Library» la
+    página cambiaba y el menú seguía abierto (x=0, 300 px), y el campo tenía que cerrarlo a mano cada
+    vez. Abierto = mide más de 50 px y no está fuera de la pantalla (en el Cloud no lleva aria-expanded,
+    medido); se pliega con SU botón. En el escritorio no hace nada."""
+    _n = st.session_state.get("_plegar_n", 0) + 1
+    st.session_state["_plegar_n"] = _n
+    with st.container(key="cpx_plegar"):
+        st.markdown("<style>.st-key-cpx_plegar,[data-testid=\"stLayoutWrapper\"]:has(> "
+                    ".st-key-cpx_plegar){position:absolute!important;width:1px;"
+                    "height:1px;overflow:hidden;opacity:0;pointer-events:none;}"
+                    "</style>", unsafe_allow_html=True)
+        incrustar.script(
+            "<script>/*" + str(_n) + "*/(function(){try{var W=window.parent,D=W.document,n=0;"
+            "function ir(){if(W.innerWidth>=768)return;"
+            "var a=D.querySelector('[data-testid=\"stApp\"]'),"
+            "s=a?a.getAttribute('data-test-script-state'):'notRunning';"
+            "if(s==='running'){if(++n<40)setTimeout(ir,100);return;}"
+            "var sb=D.querySelector('[data-testid=\"stSidebar\"]');if(!sb)return;"
+            "var r=sb.getBoundingClientRect();if(r.width<=50||r.right<=1)return;"
+            "var b=sb.querySelector('[data-testid=\"stSidebarCollapseButton\"] button');if(b)b.click();}"
+            "setTimeout(ir,150);}catch(e){}})();</script>")
 
 
 def _foto_abierta() -> bool:
@@ -690,7 +718,7 @@ def render_topbar(grupo):
             if st.session_state.pop("_search_clear", False):
                 st.session_state["topbar_search"] = ""
             st.text_input(t("Search"), key="topbar_search", label_visibility="collapsed",
-                          placeholder=t("Search projects, people, jobs…"))
+                          placeholder=t("Search projects, people, assets, invoices…"))   # v667
     with cver:
         # v297: la versión vivía en la banda azul COPEX de la nav vieja. Esa banda no
         # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la
@@ -950,7 +978,52 @@ def buscar(q: str, grupo) -> list:
     except Exception as e:
         logger.warning("buscar: biblioteca falló: %s", e)
 
-    _peso = {"proyecto": 0, "persona": 1, "trabajo": 2, "biblioteca": 3}
+    # ⚠️ v667 · activos, facturas y cotizaciones (ciclo 1: «ACT-0005» no daba nada). Solo la oficina: el
+    # propietario no tiene Inventory ni Finance. Lecturas ya cacheadas por sus pantallas.
+    if _rol() == "administrator":
+        try:
+            from core import inventory as INV
+            for a in INV.list_activos(grupo, incluir_baja=True):
+                aid = str(a.get("ID", ""))
+                r = _rank(aid, a.get("Name"), a.get("Serial"), a.get("Brand"), a.get("Model"))
+                if r is None:
+                    continue
+                _pie = " · ".join(x for x in [aid, str(a.get("Category", "")).strip(),
+                                              str(a.get("Status", "")).strip()] if x)
+                out.append({"tipo": "activo", "icono": ":material/inventory_2:", "orden": r,
+                            "titulo": str(a.get("Name", "")) or aid, "pie": _pie, "id": aid})
+        except Exception as e:
+            logger.warning("buscar: activos falló: %s", e)
+        try:
+            from core import invoices as INVC
+            from core.num import dmy as _dmy
+            for f in INVC.list_facturas(grupo):
+                fid, num = str(f.get("ID", "")), str(f.get("Number", "")).strip()
+                r = _rank(num, fid, f.get("ClientName"))
+                if r is None:
+                    continue
+                out.append({"tipo": "factura", "icono": ":material/receipt_long:", "orden": r,
+                            "titulo": t("Invoice No. {n}", n=num or fid),
+                            "pie": " · ".join(x for x in [str(f.get("ClientName", "")).strip(),
+                                                          _dmy(f.get("Date", ""))] if x), "id": fid})
+        except Exception as e:
+            logger.warning("buscar: facturas falló: %s", e)
+        try:
+            from core import quotes as QT
+            for c in QT.list_cotizaciones(grupo):
+                cid, num = str(c.get("ID", "")), str(c.get("Number", "")).strip()
+                r = _rank(num, cid, c.get("ClientName"))
+                if r is None:
+                    continue
+                _v = str(c.get("Version", "") or "").strip()
+                out.append({"tipo": "cotizacion", "icono": ":material/request_quote:", "orden": r,
+                            "titulo": t("Quote No. {n}", n=num or cid) + (f" v{_v}" if _v and _v != "1" else ""),
+                            "pie": " · ".join(x for x in [str(c.get("ClientName", "")).strip(),
+                                                          str(c.get("Status", "")).strip()] if x), "id": cid})
+        except Exception as e:
+            logger.warning("buscar: cotizaciones falló: %s", e)
+
+    _peso = {"proyecto": 0, "persona": 1, "trabajo": 2, "biblioteca": 3, "activo": 4, "factura": 5, "cotizacion": 6}
     out.sort(key=lambda x: (x["orden"], _peso.get(x["tipo"], 9), _norm_busq(x["titulo"])))
     return out
 
@@ -968,6 +1041,16 @@ def _abrir_resultado(res: dict):
         # v472 · la biblioteca no tiene sub-pestañas: se abre la ficha directamente.
         st.session_state["_lib_open"] = res["id"]
         navegar("biblioteca")
+    elif res["tipo"] == "activo":                     # v667 · como la alerta de un activo (v599)
+        st.session_state.pop("_inv_nuevo", None)
+        st.session_state["_inv_open"] = res["id"]
+        navegar("inventario", None)
+    elif res["tipo"] == "factura":                    # v667
+        st.session_state["_fac_open"] = res["id"]
+        navegar("finanzas", "🧾 Facturas")
+    elif res["tipo"] == "cotizacion":                 # v667
+        st.session_state["_cot_open"] = res["id"]
+        navegar("finanzas", "📄 Cotizaciones")
     else:
         navegar("planificacion", "🎛 Panel")
 
@@ -989,12 +1072,12 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
         st.rerun()
 
     if not res:
-        st.info(t(":material/search_off: No matches in projects, people, jobs or the library. The search covers name, ID, client, location, login, email, brand and model."))
+        st.info(t(":material/search_off: No matches in projects, people, jobs, the library, assets, invoices or quotes. The search covers name, ID, number, client, location, login, email, brand, model and serial."))
         return True
 
     _ETQ = {"proyecto": "Projects", "persona": "People", "trabajo": "Jobs",
-            "biblioteca": "Library"}
-    for _tipo in ("proyecto", "persona", "trabajo", "biblioteca"):
+            "biblioteca": "Library", "activo": "Assets", "factura": "Invoices", "cotizacion": "Quotes"}   # v667
+    for _tipo in ("proyecto", "persona", "trabajo", "biblioteca", "activo", "factura", "cotizacion"):
         _grupo_res = [r for r in res if r["tipo"] == _tipo]
         if not _grupo_res:
             continue
@@ -1711,9 +1794,8 @@ def _proyectos_home(grupo):
         return
     from core import projects as P
     from core import alerts
-    _ACTIVOS = ("Planned", "In progress")
     try:
-        proys = [p for p in P.list_projects(grupo) if str(p.get("Status", "")) in _ACTIVOS]
+        proys = [p for p in P.list_projects(grupo) if P.es_activa(p)]     # v667 · la de la tarjeta «Active»
     except Exception:
         proys = []
     if not proys:
@@ -1732,7 +1814,7 @@ def _proyectos_home(grupo):
         return (-delays.get(_pid, 0), -alarmas.get(_pid, 0), P._num(p.get("Progress")))
     proys.sort(key=_urg)
 
-    st.caption(f"{len(proys)} active · sorted by urgency")
+    st.caption(t("{n} active · sorted by urgency", n=len(proys)))
     _css = ["<style>"]
     for _i, p in enumerate(proys):
         _pid = str(p.get("ID", ""))

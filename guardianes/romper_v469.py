@@ -37,8 +37,10 @@ ROTURAS = [
      "verif_v445"),
     ("una categoria de gasto vuelve al espanol",
      "core/expenses.py", '"Materials"', '"Materiales"', "verif_v447"),
+    # ⚠️ v667 · re-anclada: `projects.ESTADOS_ACTIVOS` lleva otro «"In progress"» ANTES, y la rotura
+    # rompía esa línea y no `derive_estado` (escapaba: 8 de 9). Ahora, la línea que devuelve el estado.
     ("derive_estado vuelve a devolver el espanol",
-     "core/projects.py", '"In progress"', '"En progreso"', "verif_v442"),
+     "core/projects.py", '    return "In progress"\n', '    return "En progreso"\n', "verif_v442"),
     ("un estado de correccion vuelve al espanol",
      "core/correcciones.py",
      'PENDIENTE, APROBADA, REVERTIDA = "pending", "approved", "reverted"',
