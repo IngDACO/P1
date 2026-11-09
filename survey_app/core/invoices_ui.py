@@ -21,6 +21,8 @@ from core import invoices as I
 from core import projects as P
 from core.num import num as _num
 from core import tabla
+from core import theme as _T0
+from core.maps import literal_md
 
 
 def _creado_por() -> str:
@@ -291,6 +293,13 @@ def _detalle_factura(grupo, fid):
                                mime="application/pdf", key=f"fac_pdf_{fid}")
         except Exception as e:
             st.caption(t(":material/warning: The PDF could not be generated: {e}").replace("{e}", str(e)))
+        # ⚠️ v664 · y al lado del PDF, si la empresa no tiene ABN (ver `_nueva_factura`)
+        try:
+            from core import contable as _CB
+            if not str(_CB.identidad(grupo).get("abn") or "").strip():
+                st.caption(t(":material/warning: This PDF says «TAX INVOICE» but the company has no ABN yet."))
+        except Exception:
+            pass
         # v488: la factura en Xero (o el botón para mandarla).
         from core import xero_ui
         xero_ui.boton_factura(grupo, f)
@@ -468,24 +477,46 @@ def _nueva_factura(grupo):
     _scope_prjs = (prjs if _scope == "__todo__"
                    else [p for p in prjs if _lbl.get(str(p.get("ID", ""))) == _scope])
 
-    # Precarga: una línea por proyecto con lo pendiente de facturar
-    _pre = []
+    # Precarga: una línea por proyecto. ⚠️ v664 · con avance, LO CERTIFICABLE (lo hecho que aún no se
+    # facturó); sin avance, lo pendiente, diciendo que eso es cobrar por adelantado (ciclo 1: proponía
+    # el 100 % del contrato con la obra al 0 %, sin decirlo).
+    _pre, _notas = [], []
     for p in _scope_prjs:
-        pend = I.pendiente_de_facturar(str(p.get("ID", "")), grupo, p)
-        if pend > 0:
-            _pre.append({"Concepto": f"{d('Works')} — {p.get('Name', '')}",
-                         "Project": _lbl.get(str(p.get("ID", "")), ""), "Importe": pend})
+        _c = I.por_certificar(str(p.get("ID", "")), grupo, p)
+        pend = _c["pendiente"]
+        if pend <= 0:
+            continue
+        _nom_p = literal_md(str(p.get("Name", "")))
+        if _c["avance"] <= 0:
+            imp = pend
+            _notas.append(t(":material/warning: **{p}** has no progress yet: its line invoices the whole "
+                            "price still to invoice ({x}) **in advance**. For a deposit, type its amount.",
+                            p=_nom_p, x=_T0.dinero(pend)))
+        elif _c["certificable"] + 0.5 < pend:
+            imp = _c["certificable"]
+            _notas.append(t(":material/info: **{p}** is at {a}%: the work done is worth {g}, so **{c}** is "
+                            "claimable now (the line takes that). The other {r} would be invoiced in advance.",
+                            p=_nom_p, a=f"{_c['avance']:.0f}", g=_T0.dinero(_c["ganado"]),
+                            c=_T0.dinero(_c["certificable"]), r=_T0.dinero(round(pend - _c["certificable"], 2))))
+        else:
+            imp = pend
+        _pre.append({"Concepto": f"{d('Works')} — {p.get('Name', '')}",
+                     "Importe": imp, "Project": _lbl.get(str(p.get("ID", "")), "")})
     if not _pre:
-        _pre = [{"Concepto": "", "Project": "(none)", "Importe": 0.0}]
+        _pre = [{"Concepto": "", "Importe": 0.0, "Project": "(none)"}]
+    for _n in _notas:
+        st.markdown(_n)
 
     st.caption(t("Invoice lines — edit, add or remove. The «Project» links the line so it is not invoiced twice."))
+    # ⚠️ v664 · el IMPORTE de segunda columna: tras «Item» (ancho) y «Project», a 1024 px quedaba fuera
+    # de la vista y había que desplazar la tabla para ver cuánto se factura.
     _ed = st.data_editor(
         pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
         column_config=tabla.cfg(None, {
-            "Concepto": st.column_config.TextColumn(t("Item"), width="large"),
+            "Concepto": st.column_config.TextColumn(t("Item"), width="medium"),
+            "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
             "Project": st.column_config.SelectboxColumn(
                 t("Project"), options=["(none)"] + prj_names, required=False),
-            "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
         }))
 
     try:
@@ -526,6 +557,16 @@ def _nueva_factura(grupo):
                 .replace("{s}", _T.dinero(_sub)).replace("{i}", _T.dinero(_impv))
                 .replace("{t}", _T.dinero(_sub + _impv)))
 
+    # ⚠️ v664 · sin ABN, aquí y no solo en Accounting: el PDF dice «TAX INVOICE» (ciclo 1)
+    try:
+        from core import contable as _CB
+        _sin_abn = not str(_CB.identidad(grupo).get("abn") or "").strip()
+    except Exception:
+        _sin_abn = False
+    if _sin_abn:
+        st.warning(t(":material/warning: This company has no ABN: this invoice will say «TAX INVOICE» "
+                     "without one, and Australia requires it above $82.50. The account owner sets it in "
+                     "Administration → Groups → «Tax identity and payment terms»."))
     if st.button(t(":material/receipt_long: Issue invoice"), type="primary", key="fac_emit"):
         if not _lineas:
             st.error(t("Add at least one line with an amount."))

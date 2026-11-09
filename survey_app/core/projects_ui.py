@@ -4447,6 +4447,14 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                     _lin += f" · due {_fesp.strftime('%d/%m')}"
                 if _tarde:
                     _lin += f"  :red[**{(_hoy - _fesp).days} d late**]"
+                # ⚠️ v664 · recibida por OTRO importe: se dice cuánto y la diferencia con lo pedido
+                if _est == O.RECIBIDA:
+                    _rv = O.valor_recibido(o)
+                    if _rv is not None and abs(_rv - _n(o.get("Amount"))) > 0.005:
+                        _df = _rv - _n(o.get("Amount"))
+                        _lin += ("  " + t("received **{r}** ({d} vs ordered)")
+                                 .replace("{r}", theme.dinero(_rv))
+                                 .replace("{d}", ("+" if _df > 0 else "−") + theme.dinero(abs(_df))))
                 st.markdown(_lin)
                 st.caption(f"{_oid} · {_etq(_est)} · ordered {_fmt_fecha(o.get('Date', ''))}")
 

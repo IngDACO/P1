@@ -177,6 +177,32 @@ def pendiente_de_facturar(pid: str, grupo: str, prj: dict = None) -> float:
     return round(max(0.0, ingreso - ya), 2)
 
 
+def por_certificar(pid: str, grupo: str, prj: dict = None) -> dict:
+    """Lo que vale el trabajo HECHO frente a lo facturado (v664).
+
+    `{pendiente, avance, ganado, certificable}`: `ganado` = ingreso × avance; `certificable` = lo
+    ganado que aún no se facturó. Ciclo 1: la factura nueva proponía el 100 % del contrato con la
+    obra al 0 % sin decir que eso es cobrar por adelantado.
+    ⚠️ `pendiente` ES `pendiente_de_facturar`: una sola definición de lo que falta por facturar. Y
+    el ingreso y lo facturado solo se leen si hay avance que repartir.
+    """
+    from core import finance as F
+    from core import projects as _P
+    p = prj or _P.get_project(pid) or {}
+    pendiente = round(_num(pendiente_de_facturar(pid, grupo, p)), 2)
+    try:
+        avance = max(0.0, min(100.0, float(str(p.get("Progress", "") or 0).replace(",", "."))))
+    except (TypeError, ValueError):
+        avance = 0.0
+    ganado = certificable = 0.0
+    if avance > 0 and pendiente > 0:
+        ingreso = _num(F.project_revenue(pid, grupo, p)["ingreso"])
+        ya = _num(facturado_por_proyecto(grupo).get(str(pid), 0.0))
+        ganado = round(ingreso * avance / 100.0, 2)
+        certificable = round(min(pendiente, max(0.0, ganado - ya)), 2)
+    return {"pendiente": pendiente, "avance": avance, "ganado": ganado, "certificable": certificable}
+
+
 def pendiente_por_proyecto(grupo: str, incluir_archivados: bool = True) -> dict:
     """{ProyectoID: pendiente de facturar} de TODO el grupo, en una pasada (v397).
 

@@ -103,6 +103,10 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         if str(l.get("tipo", "")) == "service":
             uni = ""
         cant_txt = f"{cant:g}" + (f" {uni}" if uni and uni != "unit" else "")
+        # ⚠️ v664 · un servicio con horas se cuenta en HORAS: salía «Installation labour · 1 ·
+        # $10,560» por 160 h de montaje (ciclo 1). `horas` ya es el total de la línea.
+        if str(l.get("tipo", "")) == "service" and _num(l.get("horas")) > 0:
+            cant_txt = f"{_num(l.get('horas')):g} h"
         filas.append([celda, Paragraph(esc_pdf(cant_txt), H),
                       Paragraph(_money(l.get("precio_total")), H)])
     tab = Table(filas, colWidths=[112 * mm, 24 * mm, 42 * mm], repeatRows=1)

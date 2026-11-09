@@ -17,6 +17,7 @@ from core import tenant
 from core import theme as T
 from core.num import num as _num, dmy as _dmy
 from core import tabla
+from core.maps import literal_md
 
 # ⚠️ SIN `t()`: se construye al IMPORTAR, cuando no hay sesión, así que la traducción
 # quedaría congelada — el fallo de `invoices_ui._EST_FMT` (v449) y de otros cinco. Las
@@ -308,42 +309,54 @@ def _desde_plano(grupo):
         _barra.empty()
 
         _items = _CAT.list_items(grupo) or []
-        _r = _QP.proponer(_plano, _items)
+        # ⚠️ v664 · con el margen de la EMPRESA, como «Add to the quote»: sin él las líneas del
+        # plano entraban a coste (0 %) y una cotización hecha desde el plano salía sin ganancia.
+        from core import auth as _A
+        _r = _QP.proponer(_plano, _items, _A.group_margin_default(grupo))
 
+        # ⚠️ v664 · TODO lo que se dice aquí va por `flash`: se pintaba justo antes del
+        # `st.rerun()` y se perdía (ciclo 1: ni «The drawing says…» ni «Not proposed…» ni las
+        # cantidades por decidir llegaban a verse; solo «1 line(s) added»).
         _p = _r["plano"]
-        st.markdown(t("**The drawing says:** stops {n} · model {m} · rail {r}",
-                      n=_p["ns"] or "—", m=_p["modelo"] or "—", r=_p["rail"] or "—"))
+        flash.info(t("**The drawing says:** stops {n} · model {m} · rail {r}",
+                     n=_p["ns"] or "—", m=_p["modelo"] or "—", r=_p["rail"] or "—"))
 
         if not _r["lineas"]:
-            st.warning(t(":material/info: No catalogue item takes its quantity from the "
-                         "drawing yet. Set the rule on the items in Catalogue."))
-            return
+            flash.aviso(t(":material/info: No catalogue item takes its quantity from the "
+                          "drawing yet. Set the rule on the items in Catalogue."))
+            st.rerun()
 
-        # ⚠️ Lo que NO se pudo calcular va ARRIBA y en rojo. Dejarlo abajo, o peor,
-        # omitir esas líneas, haría la cotización más barata sin que nadie lo note —
-        # y sub-cotizar en silencio se descubre al facturar, cuando ya se firmó.
+        # ⚠️ Lo que NO se pudo calcular va en rojo. Omitir esas líneas haría la cotización
+        # más barata sin que nadie lo note — y sub-cotizar en silencio se descubre al facturar.
         for _i in _r["incompletas"]:
-            st.error(":material/priority_high: **%s** — %s. %s"
-                     % (_i["nombre"], _i["motivo"], t("Set the quantity by hand.")))
-
-        for _l in _r["lineas"]:
-            st.markdown("· %s × **%s** = %s%s"
-                        % (_l.get("descripcion", ""), _l.get("cantidad", 0),
-                           T.dinero(_l.get("precio_total")),
-                           (" :red[← %s]" % t("decide this one")) if _l.get("_falta") else ""))
+            flash.error(":material/priority_high: **%s** — %s. %s"
+                        % (literal_md(_i["nombre"]), _i["motivo"], t("Set the quantity by hand.")))
         if _r["saltadas"]:
-            st.caption(t("Not proposed (their quantity does not come from the drawing): {l}",
-                         l=", ".join(_r["saltadas"][:8])))
+            flash.aviso(t(":material/info: Not proposed (their «Quantity from the drawing» is "
+                          "Manual): {l}. Add them by hand, or set the rule in Catalogue.",
+                          l=", ".join(literal_md(x) for x in _r["saltadas"][:8])))
 
         _st = st.session_state
-        _st["new_lineas"] = list(_st.get("new_lineas") or []) + _QP.limpiar(_r["lineas"])
+        _ya = list(_st.get("new_lineas") or [])
+        # ⚠️ v664 · AÑADE, nunca reemplaza (decisión del usuario, v509) — pero ya no en silencio:
+        # un artículo que ya estaba queda DOS veces y se dice cuál quitar (ciclo 1: 1 + 10 cerraduras).
+        _ids = {str(l.get("catalogo_id", "")): l for l in _ya if l.get("catalogo_id")}
+        _dobles = [(l, _ids[str(l.get("catalogo_id"))]) for l in _r["lineas"]
+                   if str(l.get("catalogo_id", "")) in _ids]
+        for _nuevo, _viejo in _dobles:
+            flash.aviso(t(":material/content_copy: **{c}** is now in the quote twice: {a} (already "
+                          "there) and {b} (from the drawing). Tick «Remove» on the one you do not want.",
+                          c=literal_md(_nuevo.get("concepto", "")), a=f"{_num(_viejo.get('cantidad')):g}",
+                          b=f"{_num(_nuevo.get('cantidad')):g}"))
+        _st["new_lineas"] = _ya + _QP.limpiar(_r["lineas"])
+        _st["new_plano"] = _plano                    # v664: viaja a la cotización y a la obra
         _st["new_edgen"] = _st.get("new_edgen", 0) + 1
         flash.exito(t("{n} line(s) added. Review them before saving.",
                       n=len(_r["lineas"])))
         st.rerun()
 
 
-_CLAVES_NUEVA = ("_cot_nueva", "new_lineas", "cot_new_cli", "cot_new_cli_nom", "cot_new_cli_cto",
+_CLAVES_NUEVA = ("_cot_nueva", "new_lineas", "new_plano", "cot_new_cli", "cot_new_cli_nom", "cot_new_cli_cto",
                  "cot_new_cli_tel", "cot_new_cli_mail", "_cot_borrador")
 # ⚠️ v583 · el BORRADOR del alta sobrevive a salir de Quotes (a «Set it in Catalogue», al
 # menú): Streamlit borra un widget en cuanto una pasada no lo pinta, y volvías con las
@@ -456,7 +469,8 @@ def _nueva(grupo):
             else:
                 f = _map[_cli]
             ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Name", ""), lineas,
-                              impuesto_pct=imp, nota=nota, creado_por=_creado_por())
+                              impuesto_pct=imp, nota=nota, creado_por=_creado_por(),
+                              plano=st.session_state.get("new_plano"))      # v664
             if ok:
                 _limpiar_nueva()
                 st.session_state["_cot_open"] = msg
@@ -680,6 +694,14 @@ def _crear_proyecto(grupo, c, _tot):
     _kalta = f"cot_{_k}"
     _pend = _PU._pregunta_etapas(tipo, _kalta)
     _con_plan = P.genera_cronograma(tipo)
+    # ⚠️ v664 · lo que ya se sabe, ya puesto: las paradas del PLANO con que se cotizó y la dirección
+    # de la FICHA del cliente (ciclo 1: NS venía a 2 con un plano de 10 y la ubicación vacía).
+    from core import quote_from_plan as _QP
+    _ns_pl = _QP._ns(Q.plano_de(c))
+    try:
+        _dir0 = str((C.get_cliente(str(c.get("ClientID", ""))) or {}).get("Address", "") or "")
+    except Exception:
+        _dir0 = ""                        # sin ficha legible, se escribe a mano como antes
     with st.form("cot_prj_" + _k, enter_to_submit=False):
         # v580 · «No.», no «Nº»: el nombre se GUARDA en la obra
         nombre = st.text_input(t("Project name"),
@@ -691,15 +713,19 @@ def _crear_proyecto(grupo, c, _tot):
         # «no activities» cuando nacían con una); los demás, su fecha de fin (Manly nació
         # sin ella).
         if _con_plan:
-            ns = c4.number_input(t("Stops (NS) *"), min_value=2, max_value=50, step=1, value=2,
+            ns = c4.number_input(t("Stops (NS) *"), min_value=2, max_value=50, step=1,
+                                 value=min(50, _ns_pl) if _ns_pl >= 2 else 2,
                                  help=t("It sets the schedule: which activities and how long they take."))
+            if _ns_pl >= 2:
+                c4.caption(t(":material/architecture: From the drawing this quote was priced with."))
             fin = None
         else:
             ns = 0
             fin = c4.date_input(t("Estimated finish date"), value=clock.today(grupo),
                                 format="DD/MM/YYYY",
                                 help=t("This project type has no standard schedule, so you set the date yourself."))
-        ubic = st.text_input(t("Location (optional)"))
+        ubic = st.text_input(t("Location (optional)"), value=_dir0,
+                             help=t("Taken from the client's record; change it if the site is elsewhere."))
         st.info(t(":material/savings: Project budget: **{a}** — that is your quoted **cost**, "
                   "not the price to the client ({b}). That way the over-budget alert fires when "
                   "you are eating into the margin, not when you are already losing money.")

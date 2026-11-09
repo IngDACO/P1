@@ -36,7 +36,8 @@ ROTURAS = [
     ("la pantalla de la cotización crea sin la respuesta", QU,
      [("            if _pend:\n", "            if False:\n")]),
     ("vuelve el NS 0 en la pantalla de la cotización", QU,
-     [("min_value=2, max_value=50, step=1, value=2,", "min_value=0, max_value=50, step=1, value=0,")]),
+     # ⚠️ v664 · re-anclada: el valor inicial sale ahora del plano de la cotización (línea aparte)
+     [("min_value=2, max_value=50, step=1,\n", "min_value=0, max_value=50, step=1,\n")]),
     ("una Delivery desde cotización vuelve a pedir NS y no la fecha de fin", QU,
      [("        if _con_plan:\n", "        if True:\n")]),
 ]

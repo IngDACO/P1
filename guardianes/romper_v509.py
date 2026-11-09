@@ -64,7 +64,8 @@ ROTURAS = [
     # ── la pantalla ──
     ('⚠️ la pantalla REEMPLAZA lo ya escrito en vez de añadir',
      "core/quotes_ui.py",
-     '_st["new_lineas"] = list(_st.get("new_lineas") or []) + _QP.limpiar(_r["lineas"])',
+     # ⚠️ v664 · re-anclada: lo ya escrito pasa antes por `_ya` (el aviso de repetidos)
+     '_st["new_lineas"] = _ya + _QP.limpiar(_r["lineas"])',
      '_st["new_lineas"] = _QP.limpiar(_r["lineas"])'),
 ]
 

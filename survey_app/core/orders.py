@@ -282,6 +282,24 @@ def _set(w, row, campos: dict) -> tuple:
     return True, ""
 
 
+def valor_recibido(o: dict):
+    """Lo que costó de verdad una orden RECIBIDA (el importe de su gasto), o None (v664).
+
+    Ciclo 1: pedida por 1.850 y recibida por 1.910, la línea seguía diciendo «$1,850.00 ·
+    received» y los +60 no se veían en ningún sitio de la orden."""
+    gid = str((o or {}).get("ExpenseID", "")).strip()
+    if not gid:
+        return None
+    try:
+        from core import expenses as _E
+        for g in _E._records():
+            if str(g.get("ID", "")).strip() == gid:
+                return _num(g.get("Amount"))
+    except Exception as e:
+        logger.warning("orders.valor_recibido %s: %s", gid, e)
+    return None
+
+
 def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
     """Marca la orden y crea su gasto. En ESTE orden (ver la nota del módulo)."""
     w = _ws()

@@ -46,7 +46,11 @@ logger = logging.getLogger(__name__)
 SHEET = "Quotes"
 HEADERS = ["ID", "Group", "ClientID", "ClientName", "Number", "Date", "ValidUntil",
            "LinesJSON", "Subtotal", "TaxPct", "Tax", "Total", "MarginPct",
-           "Status", "ProjectID", "Version", "Source", "Note", "CreatedBy", "Created"]
+           "Status", "ProjectID", "Version", "Source", "Note", "CreatedBy", "Created",
+           # ⚠️ v664 · los datos del PLANO con que se cotizó (los de `plan_data.extraer_todo`):
+           # viajan a la obra al aceptar. Ciclo 1: la obra nacía sin ellos y había que subir el
+           # plano otra vez (y sin modelo, y con NS = 2). Al final → migra sola.
+           "DrawingJSON"]
 
 BORRADOR, ENVIADA, ACEPTADA, RECHAZADA = "draft", "sent", "accepted", "rejected"
 VENCIDA = "vencida"                       # ⚠️ derivado, nunca se guarda
@@ -406,16 +410,39 @@ def _id_libre(mx_id: int) -> str:
         return f"COT-{mx_id + 1:04d}"
 
 
+def _plano_json(plano) -> str:
+    """Los datos del plano, como texto para la hoja (v664); "" si no hay o no se pueden guardar."""
+    if not plano:
+        return ""
+    if isinstance(plano, str):
+        return plano
+    try:
+        return json.dumps(plano, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return ""
+
+
+def plano_de(c: dict) -> dict:
+    """Los datos del plano con que se cotizó, o {} (v664)."""
+    try:
+        d = json.loads(str((c or {}).get("DrawingJSON") or "") or "{}")
+        return d if isinstance(d, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
 def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
           validez=None, nota="", creado_por="", origen="", numero=None,
-          version=1) -> tuple:
-    w = _ws()
-    if w is None:
-        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
+          version=1, plano=None) -> tuple:
+    # ⚠️ v664 · lo que no se puede guardar se rechaza ANTES de abrir la hoja: abrirla migra su
+    # cabecera (la columna DrawingJSON), y una petición inválida no tiene por qué escribir nada.
     if not lineas:
         return False, t("Add at least one line to the quote.")
     if not str(cliente_nombre or "").strip():
         return False, t("Choose who the quote is for.")
+    w = _ws()
+    if w is None:
+        return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
     _tot = totales(lineas, impuesto_pct)
     mx_id, mx_num = _ids_frescos()
     cid = _id_libre(mx_id)
@@ -431,7 +458,8 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
                       str(_tot["total"]), str(_tot["margen_pct"]), BORRADOR, "",
                       str(int(_num(version, 1)) or 1),
                       str(origen), str(nota), str(creado_por),
-                      clock.now(grupo).strftime("%Y-%m-%d %H:%M")],
+                      clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
+                      _plano_json(plano)],                         # v664
                      value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving the quote')}: {e}"
@@ -535,7 +563,8 @@ def nueva_version(cid, creado_por="") -> tuple:
                       lineas_de(c), _num(c.get("TaxPct")),
                       nota=str(c.get("Note", "")), creado_por=creado_por,
                       origen=str(c.get("ID", "")), numero=str(c.get("Number", "")) or None,
-                      version=_version_siguiente(c.get("Group"), c.get("Number")))
+                      version=_version_siguiente(c.get("Group"), c.get("Number")),
+                      plano=str(c.get("DrawingJSON") or ""))         # v664: el plano sigue con ella
     if not ok:
         return False, nuevo
     return True, nuevo
@@ -671,9 +700,11 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
         acts = [{"nombre": "Execution", "duracion": max(1, (_ff - ini).days + 1), "peso": 1}]
         fin = _ff.isoformat()
 
+    _pl = plano_de(c)                                   # v664: el plano con que se cotizó
     ok, res = P.create_project(
         c.get("Group"), str(nombre).strip() or f"{c.get('ClientName','')} — No. {c.get('Number','')}",
         cliente=str(c.get("ClientName", "")), cliente_id=str(c.get("ClientID", "")),
+        modelo=str(_pl.get("modelo") or ""),
         ubicacion=str(ubicacion), ns=int(_num(ns)), fecha_inicio=ini.isoformat(),
         fecha_fin_est=fin, activities=acts,
         presupuesto=str(_tot["costo"]),          # ⚠️ el COSTO (ver arriba)
@@ -684,6 +715,14 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
         tipo=str(tipo), creado_por=creado_por, stage_plan=plan_json)
     if not ok:
         return False, f"{t('Could not create the project')}: {res}"
+    if _pl:
+        # ⚠️ v664 · los datos del plano pasan a la obra: con ellos las 5 herramientas no piden el
+        # PDF. Best-effort: la obra ya existe; si esto fallara se sube el plano en Files, como antes.
+        try:
+            from core import plan_data as _PD
+            _PD.guardar(res, _pl)
+        except Exception as e:
+            logger.warning("quotes: el plano de %s no pasó a %s: %s", cid, res, e)
 
     w = _ws()
     row, _r = _fila(w, cid)

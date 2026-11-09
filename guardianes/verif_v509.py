@@ -193,10 +193,16 @@ _dp = next((n for n in ast.walk(_ui) if isinstance(n, ast.FunctionDef)
             and n.name == "_desde_plano"), None)
 assert _dp is not None, "no se encontro _desde_plano"
 _sd = ast.unparse(_dp)
+# ⚠️ v664 · CADUCADO a propósito: lo ya escrito se guarda antes en `_ya` (para avisar de los
+# artículos repetidos) y se suma igual; y las incompletas van por `flash.error`, porque un
+# `st.error` justo antes del `st.rerun()` se perdía. El «st.error(» de antes pasaba por OTRO
+# error de la función (el del plano ilegible): un OK en falso.
 ck("⚠️ la pantalla AÑADE, no reemplaza lo ya escrito",
-   "list(_st.get('new_lineas') or []) +" in _sd, True)
+   "_ya = list(_st.get('new_lineas') or [])" in _sd
+   and "_st['new_lineas'] = _ya + _QP.limpiar(_r['lineas'])" in _sd, True)
 ck("...y limpia las marcas antes de sembrar", "_QP.limpiar(" in _sd, True)
-ck("las incompletas se pintan como ERROR, no como nota", "st.error(" in _sd, True)
+ck("las incompletas se pintan como ERROR, no como nota",
+   "flash.error(':material/priority_high:" in _sd, True)
 
 
 # ═════ 8 · el nucleo es HOJA ═════════════════════════════════════════════════
