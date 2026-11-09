@@ -272,8 +272,10 @@ try:
     _poner(PR, "_invalidate", lambda: None)
     _poner(PR, "clock", _QC)         # sin él, la zona del grupo se leería de la hoja real
     _poner(PR, "list_nominas", lambda g, incluir_anuladas=False: [])
-    _poner(PR.timeclock, "horas_por_usuario_rango", lambda g, d, h: {
+    # ⚠️ v663 · CADUCADO a propósito: `generar` pide `solo_cerradas=True` y `jornadas_abiertas`
+    _poner(PR.timeclock, "horas_por_usuario_rango", lambda g, d, h, **_k: {
         "u1": {"nombre": "Ana", "horas": 10.0}, "u2": {"nombre": "Beto", "horas": 8.0}})
+    _poner(PR.timeclock, "jornadas_abiertas", lambda *a, **k: {})
     _poner(PR.auth, "rate_map", lambda g: {"u1": 40.0, "u2": 40.0})
     from core import ausencias as AU                                        # noqa: E402
     _poner(AU, "horas_pagadas_grupo", lambda *a, **k: {})

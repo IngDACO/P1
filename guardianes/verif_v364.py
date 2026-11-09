@@ -46,9 +46,12 @@ def escenario(existentes, desde, hasta):
     PR.list_nominas = lambda g, incluir_anuladas=False: [
         n for n in NOMINAS if incluir_anuladas or str(n.get("Status", "")).lower() != "anulada"]
     PR._max_num = lambda: 100
-    T.horas_por_usuario_rango = lambda g, d, h: {
+    # ⚠️ v663 · CADUCADO a propósito: `generar` pide `solo_cerradas=True` (no paga jornadas
+    # abiertas) y nombra las abiertas con `jornadas_abiertas`; el sustituto acepta el argumento.
+    T.horas_por_usuario_rango = lambda g, d, h, **_k: {
         "campo1": {"nombre": "lksdfkldsf", "horas": 80.0},
         "jlopez": {"nombre": "Javier López", "horas": 76.0}}
+    T.jornadas_abiertas = lambda g, d, h: {}
     auth.rate_map = lambda g: {"campo1": 40.0, "jlopez": 42.0}
     r = PR.generar(G, desde, hasta, super_pct=11.5, ret_pct=20.0, creado_por="test")
     return r, ws

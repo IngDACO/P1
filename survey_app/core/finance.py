@@ -298,10 +298,23 @@ def pnl_comparado(grupo: str, desde=None, hasta=None, modo=None) -> dict:
     if d0 is None:
         return {"actual": act, "previo": None, "var": {}, "rango_previo": None}
     prev = pnl(grupo, d0, h0)
-    campos = ("facturado", "cobrado", "costo_total", "costo_nomina", "compras", "ganancia")
+    campos = ("facturado", "ingresos", "cobrado", "costo_total", "costo_nomina", "compras", "ganancia")
     return {"actual": act, "previo": prev,
             "var": {k: variacion(act.get(k), prev.get(k)) for k in campos},
             "rango_previo": (d0, h0)}
+
+
+def _sin_impuesto(f) -> float:
+    """El importe de una factura SIN impuesto (v663): su `Subtotal`; si falta (filas viejas),
+    el total menos su `Tax`, y si tampoco, el total entre (1 + TaxPct)."""
+    sub = str(f.get("Subtotal", "")).strip()
+    if sub != "":
+        return _num(sub)
+    tot = _num(f.get("Total"))
+    if str(f.get("Tax", "")).strip() != "":
+        return round(tot - _num(f.get("Tax")), 2)
+    pct = _num(f.get("TaxPct"))
+    return round(tot / (1 + pct / 100.0), 2) if pct > 0 else tot
 
 
 def pnl(grupo: str, desde=None, hasta=None) -> dict:
@@ -312,10 +325,16 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
     Además: cuentas por cobrar (facturas) y por pagar (nóminas). Imports perezosos
     de invoices/payroll para no crear ciclos (ambos dependen de este módulo).
 
-      Ingresos    = Σ Total de facturas (no anuladas)
+      Facturado   = Σ Total de facturas (no anuladas), CON impuesto (lo que se cobra)
+      Ingresos    = Σ Subtotal (SIN impuesto) — v663
       Costo MO    = Σ Base + devengos + aportes de las nóminas (costo patronal)
       Costo total = Costo MO + compras (hoja Gastos)
-      Ganancia    = Ingresos (facturado) − Costo total
+      Ganancia    = Ingresos (sin impuesto) − Costo total
+
+    ⚠️ v663 · La ganancia salía de `facturado` (CON el GST): el impuesto cobrado no es del
+    negocio, se le debe al ATO. Medido en el ciclo 1: 14.058 $ facturados = 12.780 + 1.278 de
+    GST, y el resumen daba 11.549 $ de beneficio (82 %) en vez de 10.271 $. La rentabilidad por
+    obra (`project_revenue`) ya usaba el subtotal: ahora las dos cuentan igual.
 
     v309 — `desde`/`hasta` (date) acotan el periodo. Un P&L sin fechas decía
     "desde siempre", que no es un estado de resultados. Qué fecha manda en cada cosa:
@@ -345,6 +364,8 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
             if str(f.get("Status", "")).lower() != "anulada"
             and _en_rango(f.get("Date"), desde, hasta)]
     facturado = round(sum(_num(f.get("Total")) for f in facs), 2)
+    ingresos  = round(sum(_sin_impuesto(f) for f in facs), 2)        # v663
+    impuesto  = round(facturado - ingresos, 2)
     cobrado   = round(sum(_num(f.get("Collected")) for f in facs), 2)
     vencido   = round(sum(_num(f.get("Total")) - _num(f.get("Collected"))
                           for f in facs if INV.estado_cobro(f) == "vencida"), 2)
@@ -376,8 +397,8 @@ def pnl(grupo: str, desde=None, hasta=None) -> dict:
                         if str(r.get("Group", "")).strip() == str(grupo).strip()
                         and _en_rango(r.get("Date"), desde, hasta)), 2)
     costo_total = round(costo_nomina + compras, 2)
-    ganancia = round(facturado - costo_total, 2)
-    return {"facturado": facturado, "cobrado": cobrado,
+    ganancia = round(ingresos - costo_total, 2)                       # v663: sin el GST
+    return {"facturado": facturado, "ingresos": ingresos, "impuesto": impuesto, "cobrado": cobrado,
             "por_cobrar": round(facturado - cobrado, 2), "vencido": vencido,
             "costo_nomina": costo_nomina, "compras": compras, "costo_total": costo_total,
             "ganancia": ganancia, "por_pagar": round(por_pagar, 2), "pagado": round(pagado, 2),

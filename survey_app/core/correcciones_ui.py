@@ -61,11 +61,15 @@ def _hora_de(v):
 def _dif_horas(r) -> str:
     """Cuánto cambió, en horas. Es el dato que decide: media hora es un olvido, seis
     es otra cosa."""
+    # ⚠️ v663 · el EFECTO en horas trabajadas, no el desplazamiento de la marca: una entrada que
+    # pasa de 14:48 a 14:30 SUMA 0,30 h y salía «−0.30 h» (ciclo 1).
     try:
         a = datetime.strptime(str(r.get("OldValue")), timeclock.FMT)
         b = datetime.strptime(str(r.get("NewValue")), timeclock.FMT)
         d = (b - a).total_seconds() / 3600.0
-        return f"{d:+.2f} h"
+        if str(r.get("Field", "")) == C.CAMPO_IN:
+            d = -d
+        return t("{d} h worked", d=f"{d:+.2f}")
     except Exception:
         return "—"
 

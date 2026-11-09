@@ -215,7 +215,7 @@ def render_nominas(grupo):
         "Estado":   _est_celda(x),
         "Neto":     round(_num(x.get("Net")), 2),
         "Periodo":  _periodo(x),
-        "Horas":    round(_num(x.get("Hours")), 1),
+        "Horas":    round(_num(x.get("Hours")), 2),          # v663: «8.0 h × 55 = 439.45» no cuadraba
         "Base":     round(_num(x.get("Base")), 2),
         # ⚠️ Cadena vacía, NO NaN: un nulo se pinta «None» en gris (ver el cuadro
         # en `tabla.celda`), y el pie de ESTA tabla promete que un «Rate/h» vacío
@@ -261,11 +261,17 @@ def _generar(grupo):
                                             "Mensual": "Monthly",
                                             "Personalizado": "Custom"}.get(o, o)),
                    horizontal=True, key="cpxseg_nom_per")
-    _d0 = {"Semanal": hoy - timedelta(days=6), "Quincenal": hoy - timedelta(days=13),
-           "Mensual": hoy - timedelta(days=29)}.get(per, hoy - timedelta(days=6))
+    # ⚠️ v663 · el periodo por defecto acaba AYER: acabar hoy pagaba un día a medias (en el ciclo 1,
+    # lo que campo000 fichó esa tarde quedó dentro de un periodo ya pagado y fuera de toda colilla).
+    _h0 = hoy - timedelta(days=1)
+    _d0 = {"Semanal": _h0 - timedelta(days=6), "Quincenal": _h0 - timedelta(days=13),
+           "Mensual": _h0 - timedelta(days=29)}.get(per, _h0 - timedelta(days=6))
     c1, c2 = st.columns(2)
     desde = c1.date_input(t("From"), value=_d0, key=f"nom_desde_{per}", format="DD/MM/YYYY")
-    hasta = c2.date_input(t("To"), value=hoy, key=f"nom_hasta_{per}", format="DD/MM/YYYY")
+    hasta = c2.date_input(t("To"), value=_h0, key=f"nom_hasta_{per}", format="DD/MM/YYYY")
+    if hasta >= hoy:
+        st.warning(t(":material/today: The period reaches **today**: whatever is clocked later today "
+                     "will fall in a period that is already paid. Finish it yesterday unless the day is over."))
 
     _sup = auth.group_num_setting(grupo, "DefaultSuper", 11.5)
     _ret = auth.group_num_setting(grupo, "DefaultWithholding", 0.0)
@@ -276,8 +282,14 @@ def _generar(grupo):
                           value=float(_ret), step=1.0, key="nom_ret")
     st.caption(t(":material/info: The super and withholding percentages come from the company and can be edited here and on each payslip. This is not a certified tax calculation; check the amounts."))
 
-    horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta)
+    # v663 · lo mismo que pagará `payroll.generar`: solo jornadas cerradas, y quién se queda fuera
+    horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta, solo_cerradas=True)
     rates = auth.rate_map(grupo)
+    _abiertas = sorted(timeclock.jornadas_abiertas(grupo, desde, hasta).values())
+    if _abiertas:
+        st.warning(t(":material/schedule: **Workday still open:** {l}. An open workday is not paid "
+                     "yet (its hours keep growing): close it in Timeclock, then generate — the same "
+                     "period takes it without duplicating.", l=", ".join(literal_md(x) for x in _abiertas)))
     if horas:
         st.markdown(t("**{n} user(s)** with workday hours in the period:", n=len(horas)))
         # ⚠️ v574 · quien no tiene tarifa se dice ANTES de generar (salía a $0 en la
@@ -293,7 +305,7 @@ def _generar(grupo):
                 home_ui.navegar("planificacion", "👷 Usuarios")
         # ⚠️ v574 · `$%,d` TRUNCA (trampa 20): una tarifa de $30.55 salía «$30». Céntimos.
         st.dataframe(pd.DataFrame([{
-            "Usuario": v["nombre"], "Horas": round(v["horas"], 1),
+            "Usuario": v["nombre"], "Horas": round(v["horas"], 2),            # v663: 2 decimales
             "Rate/h": round(_num(rates.get(k, 0)), 2),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 2),
             "Nota": _nota_tarifa(rates.get(k, 0)),
@@ -334,6 +346,10 @@ def _generar(grupo):
         # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
         # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
         # entra sin duplicar (no dejó fila).
+        if res.get("abiertas"):
+            flash.aviso(t(":material/schedule: Left out because their workday is still open: **{l}**. "
+                          "Close it and generate this same period again — it will be added without "
+                          "duplicating.", l=", ".join(literal_md(x) for x in res["abiertas"])))
         _st = res.get("sin_tarifa") or []
         if _st:
             flash.aviso(t(":material/person_off: **No payslip was generated for {l}**: they have no "
@@ -389,7 +405,7 @@ def _detalle(grupo, nid):
     st.markdown(t("## :material/payments: Payslip — {n}", n=f.get("Name", "")))
     # ⚠️ v574 · fechas DD/MM/YYYY y el estado TRADUCIDO (decía «status: **emitida**»)
     st.markdown(t("Period **{p}** · {h} h × {r} = base pay **{b}** · {e}",
-                  p=_periodo(f), h=f"{_num(f.get('Hours')):.1f}", r=_T.dinero(f.get("HourlyRate")),
+                  p=_periodo(f), h=f"{_num(f.get('Hours')):.2f}", r=_T.dinero(f.get("HourlyRate")),   # v663
                   b=_T.dinero(base), e=f"{_EST_ICONO.get(est, '')} {_etq(est)}".strip()))
 
     # ⚠️ v574 · arriba lo que se decide (neto, PDF, pagar/deshacer/anular) y los conceptos
@@ -519,7 +535,7 @@ def render_mis_colillas(usuario, grupo):
             # v574 · DD/MM/YYYY (iban en ISO)
             st.markdown(f"**{_periodo(f)}**")
             st.markdown(t("Net **${m}** · {h} h", m=f"{_num(f.get('Net')):,.2f}",
-                          h=f"{_num(f.get('Hours')):.1f}"))
+                          h=f"{_num(f.get('Hours')):.2f}"))                                     # v663
             _est = _estado(f)
             _pago = str(f.get("PaymentDate", "")).strip()
             st.caption(f"{_EST_ICONO.get(_est, '')} " + (

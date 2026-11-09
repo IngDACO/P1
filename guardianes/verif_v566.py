@@ -81,14 +81,17 @@ st.session_state.setdefault("auth", {"usuario": "jefa", "rol": "administrator", 
                                      "nombre": "Jefa"})
 clock.today = lambda *a, **k: dt.date(2026, 10, 13)
 st.session_state.setdefault("_LL", [])
-_VACIO = {"facturado": 0.0, "cobrado": 0.0, "por_cobrar": 0.0, "vencido": 0.0, "costo_nomina": 0.0,
+# ⚠️ v663 · CADUCADO a propósito: la tarjeta «Income» enseña `ingresos` (SIN impuesto) y compara
+# esa cifra; el sustituto la da (sin impuesto en estas facturas de prueba: igual a lo facturado).
+_VACIO = {"facturado": 0.0, "ingresos": 0.0, "impuesto": 0.0, "cobrado": 0.0, "por_cobrar": 0.0,
+          "vencido": 0.0, "costo_nomina": 0.0,
           "compras": 0.0, "costo_total": 0.0, "ganancia": 0.0, "por_pagar": 0.0, "pagado": 0.0,
           "por_cliente": []}
-_TODO = dict(_VACIO, facturado=1500.0, cobrado=1000.0, por_cobrar=500.0, vencido=200.0,
+_TODO = dict(_VACIO, facturado=1500.0, ingresos=1500.0, cobrado=1000.0, por_cobrar=500.0, vencido=200.0,
              compras=128.0, costo_total=1628.0, ganancia=-128.0, por_pagar=300.0,
              por_cliente=[("Cliente A", 1500.0)])
 _ANIO = dict(_TODO)
-_PREV = dict(_VACIO, facturado=1000.0, costo_total=1000.0, ganancia=0.0)
+_PREV = dict(_VACIO, facturado=1000.0, ingresos=1000.0, costo_total=1000.0, ganancia=0.0)
 def _pnl(grupo, desde=None, hasta=None):
     st.session_state["_LL"].append(("pnl", desde, hasta))
     if desde is None:

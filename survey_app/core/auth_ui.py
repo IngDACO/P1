@@ -1353,10 +1353,12 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                     else:
                         st.error(msg)
         with _a2:
+            _tar0 = float(str(u.get("HourlyRate", "") or 0).replace(",", ".") or 0)
             tar = st.number_input(t(":material/payments: Hourly rate"), min_value=0.0, step=1.0,
-                                  value=float(str(u.get("HourlyRate", "") or 0).replace(",", ".") or 0),
-                                  key=f"{k}_tar", help=t("Used to cost the labour."))
-            if st.button(t("Save rate"), key=f"{k}_savetar", width="stretch"):
+                                  value=_tar0, key=f"{k}_tar", help=t("Used to cost the labour."))
+            # ⚠️ v663 · sin cambio no hay nada que guardar: con 0 decía «Rate … updated» (ciclo 1)
+            if st.button(t("Save rate"), key=f"{k}_savetar", width="stretch",
+                         disabled=abs(float(tar) - _tar0) < 0.005):
                 ok, msg = auth.set_rate(sel, tar); (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
@@ -1374,7 +1376,9 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                     help=t("Their leave year is counted from here."))
         with _f2:
             st.caption("")
-            if st.button(t("Save start date"), key=f"{k}_savefing", width="stretch"):
+            # ⚠️ v663 · con la fecha vacía (o la misma) decía «Start date updated.» sin guardar nada
+            if st.button(t("Save start date"), key=f"{k}_savefing", width="stretch",
+                         disabled=(_nf or None) == (_fi or None)):
                 ok, msg = auth.set_fecha_ingreso(sel, _nf)
                 (flash.exito if ok else st.error)(msg)
                 if ok:

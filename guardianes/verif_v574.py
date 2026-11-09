@@ -86,8 +86,10 @@ N.update_conceptos = _ll("conceptos", (True, "Payslip updated."))
 payslip_pdf.generate_payslip_pdf = lambda f, g: b"%PDF-1.4"
 auth.list_users = lambda *a, **k: [{"User": "u1", "Name": "Ana"}, {"User": "u2", "Name": "Beto"}]
 timeclock.jornada_y_proyecto = lambda *a, **k: {}
-timeclock.horas_por_usuario_rango = lambda g, d, h: {"u1": {"nombre": "Ana", "horas": 10.5},
-                                                     "u3": {"nombre": "Ciro", "horas": 2.0}}
+# ⚠️ v663 · CADUCADO a propósito: la vista previa pide `solo_cerradas=True` y `jornadas_abiertas`
+timeclock.horas_por_usuario_rango = lambda g, d, h, **_k: {"u1": {"nombre": "Ana", "horas": 10.5},
+                                                           "u3": {"nombre": "Ciro", "horas": 2.0}}
+timeclock.jornadas_abiertas = lambda *a, **k: {}
 auth.rate_map = lambda g: {"u1": 30.55}
 auth.group_num_setting = lambda g, k, d: d
 if "_INI" not in st.session_state:

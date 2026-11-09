@@ -4795,6 +4795,13 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
         # v559 · decía «Set it in ✏ Details» y la pestaña se llama Data: ahora lleva allí.
         _t = t("This project **has no budget set**, so there is nothing to compare the spend against. Set it in :material/edit: Data.")
         _c, _fn = "#6b7280", st.info
+    elif cp["total"] > 0:
+        # ⚠️ v663 · con gasto y presupuesto pero sin avance no hay proyección, y caía en «No costs
+        # have been recorded…» con 1.910 $ de coste en las tarjetas de debajo (ciclo 1).
+        _t = (t("**{g}** spent of the **{b}** budget so far. The cost at completion appears once "
+                "there is progress.").replace("{g}", _T.dinero(cp["total"], 0))
+              .replace("{b}", _T.dinero(pres, 0)))
+        _c, _fn = "#6b7280", st.info
     else:
         _t, _c, _fn = (t("No costs have been recorded on this project yet."),
                        "#6b7280", st.info)
@@ -5400,8 +5407,10 @@ def _pnl_kpis(grupo, d, desde, hasta, modo, F, T):
         return pie, None
 
     _gcol = T.VERDE if d["ganancia"] >= 0 else T.ROJO
-    _K = [("ing", t("Income"), T.dinero(d["facturado"], 0),
-           _sub(_v.get("facturado"), t("invoiced")), T.AZUL, None),
+    # ⚠️ v663 · el ingreso es lo facturado SIN impuesto (el GST se le debe al ATO); antes salía
+    # el total con GST y el beneficio quedaba inflado en ese 10 %.
+    _K = [("ing", t("Income"), T.dinero(d.get("ingresos", d["facturado"]), 0),
+           _sub(_v.get("ingresos"), t("invoiced, ex tax")), T.AZUL, None),
           # ⚠️ «What you pay», no «Costs» a secas: el P&L nombra la cifra por lo que es
           # (v313: «costo» eran tres cosas). «Costs (what you pay)» no cabe en la línea
           # única de la tarjeta-botón (se recorta con «…»).
@@ -5430,11 +5439,16 @@ def _pnl_kpis(grupo, d, desde, hasta, modo, F, T):
             st.session_state["_pnl_tool_ir"] = True
             st.rerun()
     _nfac = len(d.get("por_cliente") or [])
-    _mrg = (100 * d["ganancia"] / d["facturado"]) if d["facturado"] > 0 else None
+    _ing = d.get("ingresos", d["facturado"])                          # v663: sin impuesto
+    _mrg = (100 * d["ganancia"] / _ing) if _ing > 0 else None
     _pie = [t("{n} client(s) invoiced").replace("{n}", str(_nfac)) if _nfac
             else t("nothing invoiced")]
     if _mrg is not None:
         _pie.append(t("margin {m}%").replace("{m}", f"{_mrg:.0f}"))
+    if d.get("impuesto", 0) > 0.005:
+        # v663 · el GST cobrado, aparte: entra en caja pero no es ingreso del negocio
+        _pie.append(t("tax collected {x} (owed to the tax office, not income)")
+                    .replace("{x}", T.dinero(d["impuesto"], 0)))
     if _cmp.get("rango_previo"):
         _d0, _h0 = _cmp["rango_previo"]
         # v566 · con el AÑO: «21/03–31/12» era de 2025 y no se sabía

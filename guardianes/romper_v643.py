@@ -125,8 +125,9 @@ ROTURAS = [
        """            "pending_to_invoice_total": round(sum(v for _, v in _por[:MAX_LISTA]), 2),\n""")]),
     ("sin el total de lo por facturar", T,
      [("""            "pending_to_invoice_total": round(sum(v for _, v in _por), 2),\n""", "")]),
+    # ⚠️ v663 · re-anclada: la clave pasó a «profit_ex_tax» (el beneficio SIN impuesto)
     ("⚠️ se cambia la cifra del P&L", T,
-     [(""""profit": p["ganancia"],""", """"profit": p["facturado"],""")]),
+     [(""""profit_ex_tax": p["ganancia"],""", """"profit_ex_tax": p["facturado"],""")]),
     # ── El agente ──
     ("⚠️ sigue pagando la cartera en cada pregunta", A,
      [("""    if rol == "administrator" and grupo and not herramientas:\n""", """    if rol == "administrator" and grupo:\n""")]),

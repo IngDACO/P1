@@ -601,9 +601,12 @@ def _dinero(entrada, ctx) -> dict:
             # ⚠️ Dijo «no hubo horas en octubre» con 180 h en esa obra: un P&L a 0 no es que no se trabajara
             "profit_and_loss_counts": "Only invoices issued, payslips already generated and purchases, by date. Hours worked with no "
                                       "payslip yet are NOT in it: a 0 here does not mean nobody worked. Labour from hours is in the job costs.",
-            "profit_and_loss": {"invoiced": p["facturado"], "collected": p["cobrado"], "to_collect": p["por_cobrar"], "overdue": p["vencido"],
+            # v663 · «invoiced» lleva el impuesto; el ingreso y el beneficio van SIN él (el GST es del ATO)
+            "profit_and_loss": {"invoiced_incl_tax": p["facturado"], "income_ex_tax": p.get("ingresos", p["facturado"]),
+                                "tax_collected_owed_to_tax_office": p.get("impuesto", 0.0),
+                                "collected": p["cobrado"], "to_collect": p["por_cobrar"], "overdue": p["vencido"],
                                 "payroll_cost": p["costo_nomina"], "purchases": p["compras"], "total_cost": p["costo_total"],
-                                "profit": p["ganancia"], "payroll_to_pay": p["por_pagar"]},
+                                "profit_ex_tax": p["ganancia"], "payroll_to_pay": p["por_pagar"]},
             "all_time_estimate": rent["totales"],
             "jobs_by_estimated_profit_lowest_first": [{"project_id": x.get("id"), "name": x.get("nombre"), "cost": x.get("costo"),
                                                        "estimated_revenue": x.get("ingreso"), "estimated_profit": x.get("ganancia"),

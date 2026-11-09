@@ -195,7 +195,10 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     if err:
         return {"error": err}
     d_iso, h_iso = str(desde), str(hasta)
-    horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta)
+    # ⚠️ v663 · solo jornadas CERRADAS: una abierta contaba «hasta ahora» y lo que siguiera
+    # después de generar ya no entraba en ninguna colilla. Se nombra a quién se deja fuera.
+    horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta, solo_cerradas=True)
+    abiertas = sorted(timeclock.jornadas_abiertas(grupo, desde, hasta).values())
     rates = auth.rate_map(grupo)
     # ⚠️ v347: las ANULADAS no bloquean. Antes se contaban como existentes, así que
     # **no había forma de reemitir el periodo de nadie**: anulabas la nómina mal hecha
@@ -330,7 +333,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     for nom, _ in sin_tarifa:
         _veces[nom] = _veces.get(nom, 0) + 1
     st_txt = [f"{nom} ({clave})" if _veces[nom] > 1 else nom for nom, clave in sin_tarifa]
-    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt,
+    return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt, "abiertas": abiertas,
             "solapadas": solapadas, "recortes": recortes}
 
 

@@ -700,8 +700,32 @@ def _corregir_horas(nombre, grupo, usuario, sess):
         if not _valido:
             st.caption(t(":orange[:material/warning:] The clock in must come before "
                          "the clock out, and neither can be in the future."))
+        # ⚠️ v663 · una entrada de OBRA no puede salirse de su jornada (el motor lo impide,
+        # `timeclock.fuera_de_jornada`). Si la hora nueva la saca, se ofrece mover también la
+        # jornada: en el ciclo 1 la obra quedó en 14:30 con la jornada en 14:48 y se cargaron a
+        # la obra 0,48 h con 0,17 h pagadas.
+        _jor, _mover = _jornada_que_sale(_hoy, _r, _cual, _nuevo), False
+        if _jor and _valido:
+            _hj = str(_jor.get("entrada" if _cual == correcciones.CAMPO_IN else "salida"))[11:16]
+            _mover = st.checkbox(
+                (t("Move the workday start to {n} too (it started at {h})")
+                 if _cual == correcciones.CAMPO_IN else
+                 t("Move the workday end to {n} too (it ended at {h})")).replace(
+                    "{n}", _nuevo.strftime("%H:%M")).replace("{h}", _hj),
+                value=True, key="cor_mover_jornada")
         if st.button(t(":material/save: Apply the correct time"), key="cor_btn",
                      width="stretch", disabled=not _valido):
+            if _jor and _mover:
+                _jact = str(_jor.get("entrada" if _cual == correcciones.CAMPO_IN else "salida"))
+                _okj, _msgj = timeclock.corregir_fichaje(
+                    grupo=grupo, usuario=usuario, nombre=nombre, tipo=timeclock.TIPO_GENERAL,
+                    campo=_cual, valor_actual=_jact, valor_nuevo=_nuevo)
+                if not _okj:
+                    flash.error(_msgj)
+                    st.rerun()
+                correcciones.registrar(
+                    grupo, usuario, nombre, timeclock.TIPO_GENERAL, "",
+                    _cual, _jact, _nuevo.strftime(timeclock.FMT), motivo=_motivo)
             _ok, _msg = timeclock.corregir_fichaje(
                 grupo=grupo, usuario=usuario, nombre=nombre,
                 tipo=_r.get("tipo"), campo=_cual, valor_actual=_act,
@@ -714,6 +738,33 @@ def _corregir_horas(nombre, grupo, usuario, sess):
             else:
                 flash.error(_msg)
             st.rerun()
+
+
+def _jornada_que_sale(hoy, r, campo, nuevo):
+    """La JORNADA de hoy de la que se saldría la entrada de obra `r` con la hora `nuevo`, o None (v663)."""
+    if str(r.get("tipo", "")) != timeclock.TIPO_PROYECTO:
+        return None
+    try:
+        p0 = datetime.strptime(str(r.get("entrada")), timeclock.FMT)
+    except (TypeError, ValueError):
+        return None
+    for g in hoy:
+        if str(g.get("tipo", "")) != timeclock.TIPO_GENERAL:
+            continue
+        try:
+            g0 = datetime.strptime(str(g.get("entrada")), timeclock.FMT)
+            g1 = (datetime.strptime(str(g.get("salida")), timeclock.FMT) if g.get("salida")
+                  else datetime.max)
+        except (TypeError, ValueError):
+            continue
+        if not (g0 <= p0 <= g1):
+            continue
+        if campo == correcciones.CAMPO_IN and nuevo < g0:
+            return g
+        if campo == correcciones.CAMPO_OUT and g.get("salida") and nuevo > g1:
+            return g
+        return None
+    return None
 
 
 def _proyectos_para(rol, usuario, grupo):

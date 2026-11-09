@@ -236,7 +236,10 @@ _pnl.clear()
 x, m = ej("get_money")
 chk("⚠️ por defecto, este mes hasta hoy", _pnl == [("cliente1", dt.date(2026, 11, 1), HOY)] and x["period"] == {"from": "01/11/2026", "to": "03/11/2026"}, _pnl)
 _pl = x["profit_and_loss"]
-chk("el P&L con sus cifras exactas", _pl["invoiced"] == 5000.0 and _pl["collected"] == 3000.0 and _pl["overdue"] == 500.0 and _pl["profit"] == 3200.0 and _pl["payroll_cost"] == 1500.0, _pl)
+# ⚠️ v663 · CADUCADO a propósito: «invoiced» lleva el impuesto y se llama así; el ingreso y el
+# beneficio van SIN él (`income_ex_tax`, `profit_ex_tax`). El sustituto de `pnl` no da `ingresos`:
+# cae a lo facturado.
+chk("el P&L con sus cifras exactas", _pl["invoiced_incl_tax"] == 5000.0 and _pl["income_ex_tax"] == 5000.0 and _pl["collected"] == 3000.0 and _pl["overdue"] == 500.0 and _pl["profit_ex_tax"] == 3200.0 and _pl["payroll_cost"] == 1500.0, _pl)
 chk("⚠️ dice qué cuenta: un 0 no es que nadie trabajara", "does not mean nobody worked" in x["profit_and_loss_counts"] and "payslips already generated" in x["profit_and_loss_counts"], x)
 chk("⚠️ las obras, la peor primero", [j["project_id"] for j in x["jobs_by_estimated_profit_lowest_first"]] == ["PRJ-2", "PRJ-1"], x["jobs_by_estimated_profit_lowest_first"])
 chk("sobre presupuesto", x["over_budget"][0]["id"] == "PRJ-1")

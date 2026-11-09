@@ -761,6 +761,58 @@ def clock_out(nombre: str, grupo: str = "", tipo: str = TIPO_PROYECTO,
                           h=_ts_legible(out_ts), n=horas)
 
 
+def fuera_de_jornada(registros, usuario, nombre, grupo, fila_rec, ci, co, excluir=None) -> str:
+    """Por qué la corrección dejaría una entrada de OBRA fuera de su JORNADA, o "" (v663).
+
+    Ciclo 1: el campo movió la entrada de la obra a las 14:30 con la jornada empezada a las
+    14:48 → 0,48 h cargadas a la obra con 0,17 h pagadas, y nada lo paró. Se mira contra
+    la otra clase de entrada de la MISMA persona que se solapaba con la fila ANTES de
+    corregir: si es una obra, su jornada tiene que seguir conteniéndola; si es la jornada,
+    tiene que seguir conteniendo sus obras. Una salida vacía (abierta) cuenta hasta ahora.
+    """
+    tipo = _tipo_of(fila_rec)
+    if tipo not in (TIPO_GENERAL, TIPO_PROYECTO):
+        return ""
+    ahora = clock.now()
+    try:
+        n0 = datetime.strptime(str(ci), FMT)
+        n1 = datetime.strptime(str(co), FMT) if str(co or "").strip() else ahora
+        o0 = datetime.strptime(str(fila_rec.get("Clock In", "")), FMT)
+        _oc = str(fila_rec.get("Clock Out", "")).strip()
+        o1 = datetime.strptime(_oc, FMT) if _oc else ahora
+    except (TypeError, ValueError):
+        return ""
+    otro = TIPO_GENERAL if tipo == TIPO_PROYECTO else TIPO_PROYECTO
+    for i, r in enumerate(registros):
+        if i == excluir or _tipo_of(r) != otro or not _matches(r, usuario, nombre, grupo):
+            continue
+        try:
+            a0 = datetime.strptime(str(r.get("Clock In", "")), FMT)
+            _ac = str(r.get("Clock Out", "")).strip()
+            a1 = datetime.strptime(_ac, FMT) if _ac else ahora
+        except (TypeError, ValueError):
+            continue
+        if tipo == TIPO_PROYECTO:
+            if not (a0 <= o0 <= a1):              # no es la jornada de esta obra
+                continue
+            if n0 < a0:
+                return t("The project would start ({t1}) before your workday ({t2}). Move the "
+                         "workday start too, or correct the workday first.",
+                         t1=n0.strftime("%H:%M"), t2=a0.strftime("%H:%M"))
+            if _ac and n1 > a1:
+                return t("The project would end ({t1}) after your workday ({t2}). Move the "
+                         "workday end too, or correct the workday first.",
+                         t1=n1.strftime("%H:%M"), t2=a1.strftime("%H:%M"))
+        else:
+            if not (o0 <= a0 <= o1):              # no era una obra de esta jornada
+                continue
+            if a0 < n0 or (str(co or "").strip() and a1 > n1):
+                return t("A project entry ({p}, from {t1}) would fall outside the workday. "
+                         "Correct that entry first.",
+                         p=str(r.get("Project", "") or "—"), t1=a0.strftime("%H:%M"))
+    return ""
+
+
 def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
                      valor_actual, valor_nuevo) -> tuple:
     """Cambia la hora de entrada o de salida de UN fichaje. Devuelve (ok, msg).
@@ -813,6 +865,10 @@ def corregir_fichaje(grupo, usuario, nombre, tipo, campo,
             horas = round((_t1 - _t0).total_seconds() / 3600.0, 2)
         except Exception:
             horas = ""
+    # v663 · una entrada de OBRA no puede salirse de su JORNADA (ni la jornada dejar fuera sus obras)
+    _fuera = fuera_de_jornada(registros, usuario, nombre, grupo, actual, _ci, _co, excluir=fila - 2)
+    if _fuera:
+        return False, _fuera
     # v546 · la hora corregida tampoco puede pisar otra entrada del mismo tipo
     try:
         _r = _choca(registros, usuario, nombre, grupo, _tipo_of(actual),
@@ -1148,12 +1204,16 @@ def obras_por_dia(grupo: str, desde=None, hasta=None) -> dict:
     return out
 
 
-def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
+def horas_por_usuario_rango(grupo: str, desde, hasta, solo_cerradas: bool = False) -> dict:
     """{clave: {nombre, horas}} — horas de JORNADA (general) por usuario en [desde, hasta].
 
     Para la nómina (pago por periodo). Usa los segmentos por día (v164), así una
     sesión que cruza medianoche cuenta el tramo real de cada día dentro del rango.
     `desde`/`hasta` son date; el rango es inclusivo.
+
+    ⚠️ v663 · `solo_cerradas`: la nómina NO paga una jornada aún abierta. Contaba «hasta
+    ahora» (ciclo 1: la colilla de Bobo salió con 0,2 h y su jornada acabó en 0,31 h), y al
+    cerrarse esas horas ya no entraban en ninguna colilla. Ver `jornadas_abiertas`.
     """
     grupo = (grupo or "").strip()
     # `desde`/`hasta` pueden llegar como date (date_input) o como ISO string
@@ -1180,6 +1240,8 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
             continue
         if _tipo_of(r) != TIPO_GENERAL:
             continue
+        if solo_cerradas and str(r.get("Status", "")).strip().upper() == "ABIERTO":
+            continue
         clave = clave_de(r, _pn)
         nombre = str(r.get("Name", "")).strip() or clave
         if not clave:
@@ -1190,6 +1252,34 @@ def horas_por_usuario_rango(grupo: str, desde, hasta) -> dict:
         a = out.setdefault(clave, {"nombre": nombre, "horas": 0.0})
         a["horas"] += h
     return {k: {"nombre": v["nombre"], "horas": round(v["horas"], 2)} for k, v in out.items()}
+
+
+def jornadas_abiertas(grupo: str, desde, hasta) -> dict:
+    """`{clave: nombre}` de quien tiene una JORNADA (general) aún abierta que empezó dentro de
+    [desde, hasta] o antes (v663). La nómina las deja fuera y lo dice."""
+    from datetime import datetime as _datetime
+    try:
+        h = hasta if hasattr(hasta, "year") else _datetime.strptime(str(hasta)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return {}
+    if isinstance(h, _datetime):
+        h = h.date()
+    grupo = (grupo or "").strip()
+    _pn = mapa_nombres(grupo)
+    out = {}
+    for r in _cached_records():
+        if (str(r.get("Group", "")).strip() != grupo or _tipo_of(r) != TIPO_GENERAL
+                or str(r.get("Status", "")).strip().upper() != "ABIERTO"):
+            continue
+        try:
+            ini = _datetime.strptime(str(r.get("Clock In", "")), FMT).date()
+        except Exception:
+            continue
+        if ini <= h:
+            clave = clave_de(r, _pn)
+            if clave:
+                out[clave] = str(r.get("Name", "")).strip() or clave
+    return out
 
 
 def horas_por_usuario_dia(grupo: str, desde, hasta) -> dict:
