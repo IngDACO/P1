@@ -63,14 +63,18 @@ _doc = (F.resultado_por_proyecto.__doc__ or "")
 check("y se explica por qué en el docstring", "ACUMULADO" in _doc)
 
 print("\n== 3) «sin facturar» = trabajo hecho y no pedido ==")
-_o2 = (INV.pendiente_de_facturar, P.list_projects)
-INV.pendiente_de_facturar = lambda pid, g, prj=None: {"PRJ-0001": 0.0,
-                                                      "PRJ-0005": 900.0}.get(pid, 0.0)
+# ⚠️ CADUCADO por v669 (H22 del ciclo 2): «sin facturar» es lo GANADO y sin facturar (`certificable` de
+# `invoices.por_certificar`), no el contrato entero: una obra al 0 % salía como «trabajo hecho». El sustituto
+# contesta ahora en ESA función; la regla (solo lo que queda, con su nombre) es la misma.
+_o2 = (INV.por_certificar, P.list_projects)
+_V2 = {"PRJ-0001": 0.0, "PRJ-0005": 900.0}
+INV.por_certificar = lambda pid, g, prj=None: {"pendiente": _V2.get(pid, 0.0),
+                                               "certificable": _V2.get(pid, 0.0), "adelanto": 0.0}
 P.list_projects = lambda **k: PROYS
 try:
     sf = F.sin_facturar("cliente1")
 finally:
-    INV.pendiente_de_facturar, P.list_projects = _o2
+    INV.por_certificar, P.list_projects = _o2
 check("solo lo que queda por facturar", sf, [("prueba2", 900.0)])
 
 print("\n== 4) la rejilla: 8 fijos, en 2 filas de 4 ==")

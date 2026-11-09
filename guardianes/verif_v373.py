@@ -68,7 +68,9 @@ for pid in [str(p.get("ID")) for p in proys][:6]:
     finally:
         P.ganancia_fija = _orig
     d = P._num(r1.get("ingreso")) - P._num(r0.get("ingreso"))
-    esperado = 0.0 if str(r0.get("modelo")) == "cotizado" else 1000.0
+    # ⚠️ v669 · una obra CANCELADA vale lo facturado (H19 del ciclo 2): la fija tampoco la sube, como en la
+    # cotizada (PRJ-0030 está cancelada en la demo)
+    esperado = 0.0 if str(r0.get("modelo")) in ("cotizado", "cancelada") else 1000.0
     bien = abs(d - esperado) < 0.005
     ok &= bien
     print(f"   {pid} modelo={str(r0.get('modelo')):<10} el ingreso sube ${d:>9,.2f} "

@@ -90,11 +90,24 @@ def render_facturas(grupo):
     # factura se anulaba sin ningún mensaje.
     _anu = st.session_state.pop("_fac_anular", None)
     if _anu:
-        _ok, _msg = I.anular(_anu)
+        # v669 · (factura, adónde va lo cobrado): con cobros, `anular` exige destino (H20)
+        _fid_a, _dest_a = _anu if isinstance(_anu, (tuple, list)) else (_anu, None)
+        _ok, _msg = I.anular(_fid_a, _dest_a, quien=_creado_por())
         (flash.exito if _ok else flash.error)(_msg)
         # ⚠️ v570 · y RELANZA: la shell pinta los avisos (`flash.mostrar`) ANTES de la
         # sección, así que lo encolado aquí salía en el clic SIGUIENTE, ya en la lista
         # (visto en producción). Es lo que hacen Absences y Time fixes.
+        st.rerun()
+    # v669 · quitar el último cobro (H10) y resolver lo cobrado de una ANULADA (H20): también diferidas
+    _qui = st.session_state.pop("_fac_quitar", None)
+    if _qui:
+        _ok, _msg = I.quitar_ultimo_cobro(_qui, quien=_creado_por())
+        (flash.exito if _ok else flash.error)(_msg)
+        st.rerun()
+    _sac = st.session_state.pop("_fac_sacar", None)
+    if _sac:
+        _ok, _msg = I.sacar_cobros(_sac[0], _sac[1], quien=_creado_por())
+        (flash.exito if _ok else flash.error)(_msg)
         st.rerun()
     if st.session_state.get("_fac_nueva"):
         _nueva_factura(grupo)
@@ -229,6 +242,7 @@ def _detalle_factura(grupo, fid):
     if st.button(t(":material/arrow_back: Back to invoices"), key="fac_back"):
         st.session_state.pop("_fac_open", None)
         st.session_state.pop("_fac_anular_conf", None)
+        st.session_state.pop("_fac_quitar_conf", None)        # v669
         st.rerun()
     f = I.get_factura(fid)
     if not f:
@@ -327,24 +341,57 @@ def _detalle_factura(grupo, fid):
                         st.rerun()
         elif est == "cobrada":
             st.success(t(":material/check_circle: Invoice fully collected."))
-        _cobros = I.cobros_de(f)
-        if _cobros:
-            st.caption(t("Payments recorded:"))
-            for cb in _cobros:
-                st.markdown(f"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**")
+        # ⚠️ v669 · una ANULADA con dinero cobrado dentro: ese dinero no está en ninguna cuenta (ciclo 2, H20: la
+        # 0003 con $3,000). Se resuelve aquí: devolverlo o pasarlo a otra factura del cliente.
+        if _anulada and cob > 0.005:
+            st.warning(t(":material/warning: Voided with **{m}** collected that is not counted anywhere: refund it "
+                         "to the client, or move it to another invoice of theirs.", m=_T.dinero(cob)))
+            _dest = _destino_cobros(f, f"fac_res_{fid}")
+            if st.button(t(":material/check: Apply"), key=f"fac_res_ok_{fid}", type="primary"):
+                st.session_state["_fac_sacar"] = (fid, _dest)
+                st.rerun()
+        _historial_cobros(f)
+        # v669 · quitar el último cobro apuntado a mano (H10: uno metido por error no tenía arreglo)
+        _iq, _cq = I.ultimo_cobro_quitable(f) if not _anulada else (None, None)
+        if _iq is not None:
+            if st.session_state.get("_fac_quitar_conf") == fid:
+                st.warning(t("Remove the payment of {m} recorded on {f}? It stays in the history as removed.",
+                             m=_T.dinero(_num(_cq.get("monto"))), f=_dmy(_cq.get("fecha", ""))))
+                _y, _k = st.columns(2)
+                if _y.button(t(":material/undo: Yes, remove it"), key=f"fac_qui_si_{fid}", type="primary"):
+                    st.session_state.pop("_fac_quitar_conf", None)
+                    st.session_state["_fac_quitar"] = fid
+                    st.rerun()
+                if _k.button(t("Keep it"), key=f"fac_qui_no_{fid}"):
+                    st.session_state.pop("_fac_quitar_conf", None)
+                    st.rerun()
+            elif st.button(t(":material/undo: Remove the last payment ({m})", m=_T.dinero(_num(_cq.get("monto")))),
+                           key=f"fac_qui_{fid}", type="tertiary"):
+                st.session_state["_fac_quitar_conf"] = fid
+                st.rerun()
         if not _anulada:
             with st.expander(t(":material/block: Void invoice"), key=f"exp_fac_anul_{fid}"):
                 st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
+                # ⚠️ v669 · con dinero COBRADO, antes se dice adónde va (H20)
+                _dest = None
+                if cob > 0.005:
+                    st.caption(t("It has **{m}** collected: choose what happens with that money.",
+                                 m=_T.dinero(cob)))
+                    _dest = _destino_cobros(f, f"fac_anul_dest_{fid}")
                 # ⚠️ v569 · PREGUNTA antes (un clic anulaba, sin vuelta atrás) y la acción
                 # va diferida a `render_facturas` (trampa 37).
                 if st.session_state.get("_fac_anular_conf") == fid:
-                    st.warning(t("Void invoice No. {n}? It cannot be undone.")
-                               .replace("{n}", str(f.get("Number", ""))))
+                    if cob > 0.005:
+                        st.warning(t("Void invoice No. {n}, with {m} collected? It cannot be undone.",
+                                     n=str(f.get("Number", "")), m=_T.dinero(cob)))
+                    else:
+                        st.warning(t("Void invoice No. {n}? It cannot be undone.")
+                                   .replace("{n}", str(f.get("Number", ""))))
                     _y, _k = st.columns(2)
                     if _y.button(t(":material/block: Yes, void it"), key=f"fac_anul_si_{fid}",
                                  type="primary"):
                         st.session_state.pop("_fac_anular_conf", None)
-                        st.session_state["_fac_anular"] = fid
+                        st.session_state["_fac_anular"] = (fid, _dest)
                         st.rerun()
                     if _k.button(t("Keep it"), key=f"fac_anul_no_{fid}"):
                         st.session_state.pop("_fac_anular_conf", None)
@@ -352,6 +399,81 @@ def _detalle_factura(grupo, fid):
                 elif st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):
                     st.session_state["_fac_anular_conf"] = fid
                     st.rerun()
+
+
+def _destino_cobros(f, clave):
+    """Adónde va lo cobrado de `f` (v669, H20): devolverlo al cliente o pasarlo a otra factura suya con saldo."""
+    from core import theme as _T
+    _ops = [I.DEVOLVER] + [str(g.get("ID", "")) for g in I.destinos_de_cobro(f)]
+    _num_de = {str(g.get("ID", "")): g for g in I.destinos_de_cobro(f)}
+
+    def _rot(o):
+        if o == I.DEVOLVER:
+            return t("Refund it to the client")
+        g = _num_de.get(o, {})
+        return t("Move it to invoice No. {n} (outstanding {s})", n=str(g.get("Number", "")),
+                 s=_T.dinero(round(_num(g.get("Total")) - _num(g.get("Collected")), 2)))
+    return st.radio(t("What happens with the money collected"), _ops, format_func=_rot, key=clave)
+
+
+def _historial_cobros(f):
+    """Los cobros con sus movimientos (v669): quitado, devuelto, pasado a otra factura o desde ella, de Xero."""
+    from core import theme as _T
+    _cobros = I.cobros_de(f)
+    if not _cobros:
+        return
+    _quitados = {c.get("quita") for c in _cobros if c.get("origen") == I.QUITADO}
+    st.caption(t("Payments recorded:"))
+    for i, cb in enumerate(_cobros):
+        _o = str(cb.get("origen", "") or "")
+        _nota = {I.QUITADO: t("payment removed"), I.DEVUELTO: t("refunded to the client"),
+                 I.TRASPASO_SALE: t("moved to invoice No. {n}", n=str(cb.get("a", ""))),
+                 I.TRASPASO_ENTRA: t("moved from invoice No. {n}", n=str(cb.get("de", ""))),
+                 "xero": t("from Xero")}.get(_o, "")
+        if i in _quitados:
+            _nota = t("removed later")
+        _por = str(cb.get("por", "") or "")
+        _txt = f"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**"
+        if _nota:
+            _txt += " · " + _nota + (f" ({literal_md(_por)})" if _por else "")
+        st.markdown(_txt)
+
+
+def avisos_de_mas(lineas, grupo, pend_de=None, prjs=None) -> list:
+    """Los avisos de facturar POR ENCIMA de lo que queda en cada obra (v669, H29).
+
+    Ciclo 2: una línea de $100 en PRJ-0039, facturada entera, se emitía sin decir nada, aunque el pie de la tabla
+    promete que enlazar la obra evita facturar dos veces. No se BLOQUEA: un extra o un cargo por cancelar existen;
+    se avisa, con cuánto y qué hacer. `pend_de` = {ID: pendiente} ya calculado (el resto se calcula aquí)."""
+    pend_de = dict(pend_de or {})
+    _por = {}
+    for ln in lineas or []:
+        pid = str(ln.get("proyecto_id", "") or "")
+        if pid:
+            _por[pid] = round(_por.get(pid, 0.0) + _num(ln.get("importe")), 2)
+    _prj = {str(p.get("ID", "")): p for p in (prjs or [])}
+    out = []
+    for pid, suma in _por.items():
+        p = _prj.get(pid) or P.get_project(pid) or {}
+        if pid not in pend_de:
+            try:
+                pend_de[pid] = I.pendiente_de_facturar(pid, grupo, p)
+            except Exception:
+                continue
+        pend = _num(pend_de[pid])
+        if suma <= pend + 0.005:
+            continue
+        _nom = literal_md(str(p.get("Name", "") or pid))
+        if P.es_cancelada(p):
+            out.append(t(":material/warning: **{p}** is cancelled, so nothing is left of its price: these lines "
+                         "({s}) are a charge outside it (a cancellation charge, for instance).",
+                         p=_nom, s=_T0.dinero(suma)))
+        else:
+            out.append(t(":material/warning: **{p}**: only {r} is left to invoice and these lines add {s} — "
+                         "**{o} over the agreed price**. If it is extra work, record it as a variation first "
+                         "(Costs → Progress claims) so the price includes it.",
+                         p=_nom, r=_T0.dinero(pend), s=_T0.dinero(suma), o=_T0.dinero(round(suma - pend, 2))))
+    return out
 
 
 # ── Nueva factura ────────────────────────────────────────────────
@@ -481,17 +603,35 @@ def _nueva_factura(grupo):
     # facturó); sin avance, lo pendiente, diciendo que eso es cobrar por adelantado (ciclo 1: proponía
     # el 100 % del contrato con la obra al 0 %, sin decirlo).
     _pre, _notas = [], []
+    _pend_de = {}                       # v669 · {ID: lo que queda por facturar}, para el aviso de facturar de más
     for p in _scope_prjs:
         _c = I.por_certificar(str(p.get("ID", "")), grupo, p)
         pend = _c["pendiente"]
-        if pend <= 0:
-            continue
+        _pend_de[str(p.get("ID", ""))] = pend
         _nom_p = literal_md(str(p.get("Name", "")))
-        if _c["avance"] <= 0:
+        if pend <= 0:
+            # ⚠️ v669 · con UNA obra elegida y nada por facturar, la tabla salía con una línea vacía sin decir por
+            # qué (ciclo 2, H29: PRJ-0039 facturada entera); una cancelada lo dice a su manera (H19)
+            if len(_scope_prjs) == 1:
+                if P.es_cancelada(p):
+                    _notas.append(t(":material/block: **{p}** is cancelled: nothing is left to invoice on it. A "
+                                    "cancellation charge can go as a line.", p=_nom_p))
+                else:
+                    _notas.append(t(":material/check_circle: Nothing left to invoice on **{p}**: its price is "
+                                    "invoiced in full.", p=_nom_p))
+            continue
+        # ⚠️ v669 · el aviso de ADELANTO mira lo certificable, no el avance: en una obra por horas lo trabajado
+        # ya está ganado aunque el avance sea 0 (ciclo 2, H23: «$0.45 in advance» de 0.01 h trabajadas)
+        if _c["certificable"] <= 0.005:
             imp = pend
-            _notas.append(t(":material/warning: **{p}** has no progress yet: its line invoices the whole "
-                            "price still to invoice ({x}) **in advance**. For a deposit, type its amount.",
-                            p=_nom_p, x=_T0.dinero(pend)))
+            if _c["avance"] <= 0:
+                _notas.append(t(":material/warning: **{p}** has no progress yet: its line invoices the whole "
+                                "price still to invoice ({x}) **in advance**. For a deposit, type its amount.",
+                                p=_nom_p, x=_T0.dinero(pend)))
+            else:
+                _notas.append(t(":material/warning: **{p}** is at {a}% and what it has earned is already invoiced: "
+                                "its line ({x}) would be invoiced **in advance**.",
+                                p=_nom_p, a=f"{_c['avance']:.0f}", x=_T0.dinero(pend)))
         elif _c["certificable"] + 0.5 < pend:
             imp = _c["certificable"]
             _notas.append(t(":material/info: **{p}** is at {a}%: the work done is worth {g}, so **{c}** is "
@@ -556,6 +696,8 @@ def _nueva_factura(grupo):
     st.markdown(t("Subtotal **{s}**  ·  Tax **{i}**  ·  Total **{t}**")
                 .replace("{s}", _T.dinero(_sub)).replace("{i}", _T.dinero(_impv))
                 .replace("{t}", _T.dinero(_sub + _impv)))
+    for _av in avisos_de_mas(_lineas, grupo, _pend_de, prjs):
+        st.warning(_av)
 
     # ⚠️ v664 · sin ABN, aquí y no solo en Accounting: el PDF dice «TAX INVOICE» (ciclo 1)
     try:

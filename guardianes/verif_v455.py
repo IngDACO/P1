@@ -113,7 +113,8 @@ _vistos = set(_mods.values())
 print(f"     modelos vivos: {sorted(_vistos)}")
 chk(not any(m.startswith("margen") for m in _vistos),
     f"ninguna obra usa ya el modelo del % ({sorted(m for m in _vistos if m.startswith('margen'))})")
-chk(_vistos <= {"cotizado", "rubro", "rubro+fija", "fija", "a_costo"},
+# v669 · «cancelada»: una obra cancelada vale lo facturado (H19 del ciclo 2); tampoco es el modelo viejo
+chk(_vistos <= {"cotizado", "rubro", "rubro+fija", "fija", "a_costo", "cancelada"},
     f"solo quedan los modelos nuevos ({sorted(_vistos)})")
 # ⚠️ v456: con la demo vacía no hay obras, así que no hay variedad que ver. El resto
 # del guardián (que nadie aplique ya un % y que la fila case con la cabecera) es
@@ -148,8 +149,11 @@ print("\n== 4. ⚠️ MargenDefault SIGUE vivo: es de la COTIZACIÓN, no de la o
 from core import auth  # noqa: E402
 chk(hasattr(auth, "group_margin_default"),
     "`group_margin_default` existe (lo usa quotes_ui para la línea nueva)")
-chk("group_margin_default" in (CORE / "quotes_ui.py").read_text(encoding="utf-8"),
-    "…y quotes_ui lo sigue usando como punto de partida")
+# ⚠️ v669 · el camino CONCRETO de «Add to the quote»: desde v664 el plano también lo usa (`_A.group_margin_default`),
+# y buscar solo el nombre dejaba escapar la rotura de esta línea (romper_v455 nº3, visto en la tanda de v669)
+_qu455 = (CORE / "quotes_ui.py").read_text(encoding="utf-8")
+chk("_m = auth.group_margin_default(grupo)" in _qu455 and "lineas.append(Q.linea_de(CAT.get_item(cid), 1, _m))" in _qu455,
+    "…y quotes_ui lo sigue usando como punto de partida de la línea nueva")
 chk("group_margin_default" not in _fin,
     "…pero finance ya NO lo usa para estimar el ingreso de una obra")
 

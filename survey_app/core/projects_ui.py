@@ -3106,8 +3106,18 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         try:
             from core import invoices as _INV
             _pend_cab = _INV.pendiente_de_facturar(pid, grupo, prj)
+            _demas_cab = _INV.facturado_de_mas(pid, grupo, prj)
         except Exception:
-            _pend_cab = 0.0
+            _pend_cab = _demas_cab = 0.0
+        # v669 · una CANCELADA ya no tiene nada por facturar (ciclo 2: seguía «Not invoiced: $51,350»), y lo
+        # facturado POR ENCIMA del precio se dice (H29: el `max(0, …)` del pendiente lo escondía)
+        if P.es_cancelada(prj):
+            st.caption(t(":material/block: Cancelled · nothing more to invoice. Anything the client still owes "
+                         "(a cancellation charge) goes in a new invoice."))
+        if _demas_cab > 0.5:
+            st.warning(t(":material/warning: Invoiced **{x}** over the price of this job. If it was extra work, "
+                         "record it as a variation (Costs → Progress claims) so the price includes it.",
+                         x=_Tc.dinero(_demas_cab)))
         if _pend_cab > 0:
             _fc1, _fc2 = st.columns([3, 1])
             _fc1.markdown(f":material/receipt: Not invoiced: **{_Tc.dinero(_pend_cab, 0)}**")
@@ -5334,6 +5344,11 @@ def render_pnl(grupo: str):
     except Exception:
         _sf = []
     try:
+        # v669 · lo que el contrato tiene por delante y aún NO se ha ganado (H22): aparte, no como «trabajo hecho»
+        _sfc = F.contrato_sin_ganar_ids(grupo)
+    except Exception:
+        _sfc = []
+    try:
         # ⚠️ v579 · la obra que NO tiene ganancia (`a_costo`), la misma regla que
         # Profitability: por el % de mano de obra contaba también la de ganancia FIJA
         # (en producción, «No margin · 3 jobs» con una de ellas a $50 de ganancia)
@@ -5374,13 +5389,23 @@ def render_pnl(grupo: str):
         # `_ir_a_facturar`). Antes «→ Ir a Facturas» dejaba en «No invoices yet».
         if not _sf:
             st.caption(t("Everything worked has been invoiced."))
-            return
-        st.caption(t("Work done and not invoiced yet. Tap a job to prepare its invoice:"))
-        for _pid, _nom, _v in _sf[:8]:
-            if st.button(f":material/receipt: {_nom} · {T.dinero(_v, 0)}", key=f"pnlfac_{_pid}",
-                         type="tertiary"):
-                _ir_a_facturar(_pid, grupo)
-                st.rerun()
+        else:
+            st.caption(t("Work done and not invoiced yet. Tap a job to prepare its invoice:"))
+            for _pid, _nom, _v in _sf[:8]:
+                if st.button(f":material/receipt: {_nom} · {T.dinero(_v, 0)}", key=f"pnlfac_{_pid}",
+                             type="tertiary"):
+                    _ir_a_facturar(_pid, grupo)
+                    st.rerun()
+        # ⚠️ v669 · el contrato que queda por delante NO es trabajo hecho (ciclo 2, H22): se dice aparte, y
+        # facturarlo es pedir un adelanto
+        if _sfc:
+            st.caption(t("Contract still ahead, not earned yet: {x} on {n} job(s). Invoicing it now would be "
+                         "in advance (a deposit):", x=T.dinero(sum(v for _p, _n, v in _sfc), 0), n=len(_sfc)))
+            for _pid, _nom, _v in _sfc[:8]:
+                if st.button(f":material/schedule: {_nom} · {T.dinero(_v, 0)}", key=f"pnlcon_{_pid}",
+                             type="tertiary"):
+                    _ir_a_facturar(_pid, grupo)
+                    st.rerun()
 
     def _det_pagar():
         st.caption(t("{x} in payslips issued and not marked paid.").replace("{x}", T.dinero(_dt["por_pagar"])))
@@ -5427,8 +5452,9 @@ def render_pnl(grupo: str):
          _dt["vencido"] > 0, "finanzas", "🧾 Facturas", _det_venc),
         ("cobrar", ":material/receipt:", t("To collect"), T.dinero(_dt["por_cobrar"], 0), False,
          _dt["por_cobrar"] > 0, "finanzas", "🧾 Facturas", _det_cobrar),
-        ("sinfac", ":material/request_quote:", t("Not invoiced"),
-         T.dinero(sum(v for _p, _n, v in _sf), 0), True, bool(_sf), "finanzas", "🧾 Facturas",
+        # v669 · lo GANADO y sin facturar (H22); el contrato por delante sale en su detalle
+        ("sinfac", ":material/request_quote:", t("Earned, not invoiced"),
+         T.dinero(sum(v for _p, _n, v in _sf), 0), bool(_sf), bool(_sf) or bool(_sfc), "finanzas", "🧾 Facturas",
          _det_sinfac),
         ("pagar", ":material/payments:", t("To pay"), T.dinero(_dt["por_pagar"], 0), False,
          _dt["por_pagar"] > 0, "finanzas", "👥 Nóminas", _det_pagar),
@@ -5800,8 +5826,13 @@ def render_group_profitability(grupo: str):
     _rep = Counter(r["nombre"] for r in rows)
 
     def _rot(r):
-        """El nombre; con el ID detrás si otra obra se llama igual (el ID es la identidad)."""
-        return f"{r['nombre']} ({r['id']})" if _rep[r["nombre"]] > 1 else r["nombre"]
+        """El nombre; con el ID detrás si otra obra se llama igual (el ID es la identidad). v669 · y marcada si está
+        cancelada (su ingreso es lo facturado: ya no se le factura más) o archivada (ciclo 2: no se distinguían)."""
+        _n = f"{r['nombre']} ({r['id']})" if _rep[r["nombre"]] > 1 else r["nombre"]
+        _e = str(r.get("estado", ""))
+        if _e in ("Cancelled", "Archived"):
+            _n += " · " + _etq(_e)
+        return _n
 
     # ⚠️ v313: sin ganancia definida el "ingreso estimado" es IGUAL al costo, así que la
     # ganancia sale 0 y la pantalla parece rota. No lo está: es que nadie ha dicho cuánto

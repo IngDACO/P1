@@ -209,8 +209,10 @@ at = AppTest.from_string(CAB, default_timeout=90)
 at.session_state["_PRE"] = {"cpxseg_pnl_per": "Todo"}
 at.run()
 _kb = {b.key: b.label for b in at.button}
-chk("⚠️ etiqueta ARRIBA y cifra DEBAJO («Not invoiced\\n\\n$267»)",
-    _kb.get("pnlind_sinfac", "").endswith("Not invoiced\n\n\\$267"), _kb.get("pnlind_sinfac"))
+# ⚠️ v669 · la etiqueta es «Earned, not invoiced» (H22 del ciclo 2: es lo GANADO, no el contrato); la regla
+# —etiqueta arriba y cifra debajo— es la misma
+chk("⚠️ etiqueta ARRIBA y cifra DEBAJO («Earned, not invoiced\\n\\n$267»)",
+    _kb.get("pnlind_sinfac", "").endswith("Earned, not invoiced\n\n\\$267"), _kb.get("pnlind_sinfac"))
 chk("«Over budget» y «0 jobs» (no «Sobre ppto.»)", _kb.get("pnlind_over", "").endswith("Over budget\n\n0 jobs"),
     _kb.get("pnlind_over"))
 chk("«No margin · 1 job» en singular", _kb.get("pnlind_sinmar", "").endswith("No margin\n\n1 job"),

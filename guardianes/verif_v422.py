@@ -92,7 +92,9 @@ PROHIBIDO = {
     ("finance.py", "resultado_por_proyecto"),   # pérdida garantizada en el ranking
     # v566 · la lectura se mudó a `sin_facturar_ids` (la que da el ID para facturar cada
     # obra desde el Resumen); `sin_facturar` ya solo la resume.
-    ("finance.py", "sin_facturar_ids"),         # «$X sin facturar» de la oficina
+    # v669 · y de ahí a `_por_obra` (lo ganado y el contrato por delante, H22), que lee `dinero_por_proyecto`
+    ("finance.py", "_por_obra"),                # «$X sin facturar» de la oficina
+    ("invoices.py", "dinero_por_proyecto"),
     ("invoices.py", "pendiente_por_proyecto"),  # LA definición del pendiente
     ("invoices_ui.py", "_nueva_factura"),       # no se factura
     ("expenses.py", "over_budget"),             # sin presupuesto (decisión del usuario)

@@ -53,9 +53,10 @@ ROTURAS = [
     ("el proyecto deja de ir fijado", PU,
      [('                    "Proyecto":   st.column_config.TextColumn(t("Project"), pinned=True),\n',
        '                    "Proyecto":   st.column_config.TextColumn(t("Project")),\n')]),
+    # v669 · re-anclada: `_rot` marca además la cancelada y la archivada (H19 del ciclo 2)
     ("una obra con nombre repetido pierde su ID", PU,
-     [("""        return f"{r['nombre']} ({r['id']})" if _rep[r["nombre"]] > 1 else r["nombre"]\n""",
-       """        return r["nombre"]\n""")]),
+     [("""        _n = f"{r['nombre']} ({r['id']})" if _rep[r["nombre"]] > 1 else r["nombre"]\n""",
+       """        _n = r["nombre"]\n""")]),
     ("las cifras vuelven a no hacer nada", PU,
      [('                    st.session_state["_rent_orden"] = _ir\n', "                    pass\n")]),
     ("…o el orden pedido no se aplica", PU,

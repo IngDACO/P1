@@ -195,12 +195,55 @@ def por_certificar(pid: str, grupo: str, prj: dict = None) -> dict:
     except (TypeError, ValueError):
         avance = 0.0
     ganado = certificable = 0.0
-    if avance > 0 and pendiente > 0:
-        ingreso = _num(F.project_revenue(pid, grupo, p)["ingreso"])
+    modelo = ""
+    if pendiente > 0:
+        rev = F.project_revenue(pid, grupo, p)
+        ingreso = _num(rev["ingreso"])
+        modelo = str(rev.get("modelo", ""))
         ya = _num(facturado_por_proyecto(grupo).get(str(pid), 0.0))
-        ganado = round(ingreso * avance / 100.0, 2)
+        if modelo == "cotizado":
+            # precio CERRADO: se gana con el avance (lo que se factura antes es un adelanto)
+            ganado = round(ingreso * avance / 100.0, 2)
+        else:
+            # ⚠️ v669 · obra POR HORAS (sin cotización): su ingreso ES lo ya trabajado (costo + la ganancia de esas
+            # horas), así que está ganado al gastarse; solo la ganancia FIJA va por avance. Ciclo 2: PRJ-0040 con
+            # 0.01 h decía «no progress yet… $0.45 in advance», y con avance habría recortado lo trabajado a ingreso × %.
+            _fija = _num(rev.get("ganancia_fija"))
+            ganado = round(ingreso - _fija * (1 - avance / 100.0), 2)
         certificable = round(min(pendiente, max(0.0, ganado - ya)), 2)
-    return {"pendiente": pendiente, "avance": avance, "ganado": ganado, "certificable": certificable}
+    return {"pendiente": pendiente, "avance": avance, "ganado": ganado, "certificable": certificable,
+            "modelo": modelo, "adelanto": round(max(0.0, pendiente - certificable), 2)}
+
+
+def dinero_por_proyecto(grupo: str, incluir_archivados: bool = True) -> dict:
+    """{ProyectoID: por_certificar(...)} de las obras con algo por facturar (v669).
+
+    El Resumen separa lo GANADO y sin facturar (`certificable`) de lo que el contrato aún tiene por delante y no
+    se ha ganado (`adelanto`). Ciclo 2: «Work done and not invoiced yet» listaba Darling Park por $79,036 con la
+    obra al 0 % — el contrato entero, no el trabajo hecho; la factura nueva ya lo llamaba «in advance».
+    ⚠️ Las mismas obras que `pendiente_por_proyecto` (archivadas incluidas: archivar no es no-cobrar, v369).
+    """
+    from core import projects as _P
+    out = {}
+    for p in _P.list_projects(grupo=grupo, incluir_archivados=incluir_archivados):
+        pid = str(p.get("ID", ""))
+        try:
+            d = por_certificar(pid, grupo, p)
+        except Exception as e:
+            logger.warning("dinero_por_proyecto %s: %s", pid, e)
+            continue
+        if d["pendiente"] > 0:
+            out[pid] = d
+    return out
+
+
+def facturado_de_mas(pid: str, grupo: str, prj: dict = None) -> float:
+    """Lo facturado POR ENCIMA del precio de la obra (v669, H29). `pendiente_de_facturar` lo esconde con su
+    `max(0, …)`: una línea de más dejaba la obra en «Everything invoiced» sin decir que se pasó."""
+    from core import finance as F
+    ingreso = _num(F.project_revenue(pid, grupo, prj)["ingreso"])
+    ya = _num(facturado_por_proyecto(grupo).get(str(pid), 0.0))
+    return round(max(0.0, ya - ingreso), 2)
 
 
 def pendiente_por_proyecto(grupo: str, incluir_archivados: bool = True) -> dict:
@@ -498,7 +541,178 @@ def marcar_xero(marcas: dict, cuando: str) -> tuple:
     return True, ""
 
 
-def anular(fid: str) -> tuple:
+# ── Cobros: quitar uno y qué pasa con lo cobrado al anular (v669) ─────────────────────────
+# ⚠️ El historial de cobros NO se borra: se le añade el movimiento contrario con su origen y quién. Así el
+# detalle cuenta lo que pasó (cobrado, quitado, devuelto, pasado a otra factura) y `Collected` sigue siendo la
+# suma de los movimientos.
+QUITADO, DEVUELTO, TRASPASO_SALE, TRASPASO_ENTRA = "removed", "refunded", "moved_out", "moved_in"
+DEVOLVER = "devolver"            # destino de lo cobrado al anular: devolvérselo al cliente
+
+
+def ultimo_cobro_quitable(f: dict):
+    """(índice, cobro) del último cobro apuntado A MANO que aún se puede quitar, o (None, None).
+
+    Solo el ÚLTIMO (un cobro del medio cambiaría la historia que vino detrás) y nunca uno que vino de Xero: lo
+    manda el banco (v488) y la próxima sincronización lo volvería a poner."""
+    cobros = cobros_de(f)
+    quitados = {c.get("quita") for c in cobros if c.get("origen") == QUITADO}
+    for i in range(len(cobros) - 1, -1, -1):
+        c = cobros[i]
+        if c.get("origen") == QUITADO or i in quitados:
+            continue                   # ya quitado (y su contrapartida): se mira el anterior
+        if _num(c.get("monto")) > 0 and not c.get("origen"):
+            return i, c
+        return None, None              # lo último es de Xero, una devolución o un traspaso: no se toca
+    return None, None
+
+
+def _hoy_iso() -> str:
+    return clock.today().isoformat()
+
+
+def quitar_ultimo_cobro(fid: str, quien: str = "") -> tuple:
+    """Quita el último cobro apuntado a mano (H10, ciclo 2: uno metido por error no tenía arreglo salvo anular la
+    factura entera). Queda en el historial como movimiento contrario, y en el rastro de cambios."""
+    w, err = _ws()
+    if err:
+        return False, err
+    row = _find_row(w, fid)
+    f = get_factura(fid)
+    if row is None or not f:
+        return False, t("Invoice not found.")
+    if estado_cobro(f) == "anulada":
+        return False, t("A voided invoice has no payments to remove.")
+    i, c = ultimo_cobro_quitable(f)
+    if i is None:
+        return False, t("There is no payment recorded by hand to remove.")
+    monto = round(_num(c.get("monto")), 2)
+    prev = _num(f.get("Collected"))
+    nuevo = round(max(0.0, prev - monto), 2)
+    cobros = cobros_de(f) + [{"fecha": _hoy_iso(), "monto": -monto, "origen": QUITADO, "quita": i,
+                               "por": str(quien or "")}]
+    try:
+        w.batch_update([
+            {"range": f"{_col_letter(_FCOL['Collected'])}{row}", "values": [[str(nuevo)]]},
+            {"range": f"{_col_letter(_FCOL['CollectionsJSON'])}{row}",
+             "values": [[json.dumps(cobros, ensure_ascii=False)]]},
+        ], value_input_option="RAW")
+    except Exception as e:
+        return False, str(e)
+    _invalidate()
+    _rastro(fid, f, {"Collected": [prev, nuevo]}, "quitar_cobro")
+    return True, t("Payment of {m} removed.", m="$%.2f" % monto)
+
+
+def _rastro(fid, f, cambios, accion):
+    try:
+        from core import auditoria
+        auditoria.registrar("factura", fid, cambios, grupo=str(f.get("Group", "")), accion=accion)
+    except Exception as e:
+        logger.warning("invoices: rastro de %s %s: %s", accion, fid, e)
+
+
+def destinos_de_cobro(f: dict) -> list:
+    """Facturas a las que se puede PASAR lo cobrado de `f` al anularla: mismo grupo y cliente, no anuladas, con
+    saldo suficiente para recibirlo entero (lo cobrado no se reparte)."""
+    cob = round(_num(f.get("Collected")), 2)
+    out = []
+    for g in list_facturas(str(f.get("Group", "")), str(f.get("ClientID", ""))):
+        if str(g.get("ID", "")) == str(f.get("ID", "")) or estado_cobro(g) == "anulada":
+            continue
+        if round(_num(g.get("Total")) - _num(g.get("Collected")), 2) + 0.005 >= cob:
+            out.append(g)
+    return out
+
+
+def sacar_cobros(fid: str, destino: str, quien: str = "", anular_tambien: bool = False) -> tuple:
+    """Lo cobrado de una factura se DEVUELVE al cliente (`destino` = DEVOLVER) o se PASA a otra factura suya
+    (`destino` = su ID), en UNA escritura; con `anular_tambien`, además la anula (H20).
+
+    Ciclo 2: anular la 0003 con $3,000 cobrados la sacó de las cuentas y el cobro desapareció con ella — ni
+    devuelto ni abonado a nada. Ahora una factura con cobros no se anula sin decir adónde van, y una ya anulada
+    con cobros dentro (como la 0003) se puede resolver igual."""
+    w, err = _ws()
+    if err:
+        return False, err
+    try:
+        vals = w.get_all_values() or []
+    except Exception as e:
+        return False, str(e)
+    if not vals:
+        return False, t("Invoice not found.")
+    cab = [columnas.canon(h) for h in vals[0]]
+    for col in ("ID", "Collected", "CollectionsJSON", "Status", "Total"):
+        if col not in cab:
+            return False, t("Invoice not found.")
+    ci, cc, cj, cs = cab.index("ID"), cab.index("Collected"), cab.index("CollectionsJSON"), cab.index("Status")
+    # ⚠️ Lo que se escribe sale de la lectura FRESCA, no de la caché (v323): decide importes y filas.
+    frescas = {}
+    for n, fila in enumerate(vals[1:], start=2):
+        frescas[fila[ci] if ci < len(fila) else ""] = (n, {h: (fila[k] if k < len(fila) else "")
+                                                           for k, h in enumerate(cab)})
+    filas = {k: v[0] for k, v in frescas.items()}
+    f = frescas.get(str(fid), (None, None))[1]
+    if not f:
+        return False, t("Invoice not found.")
+    if not anular_tambien and estado_cobro(f) != "anulada":
+        # en una factura VIVA, lo cobrado se corrige quitando el cobro (`quitar_ultimo_cobro`)
+        return False, t("Only a voided invoice can have its payments moved or refunded.")
+    cob = round(_num(f.get("Collected")), 2)
+    if cob <= 0:
+        if not anular_tambien:
+            return False, t("This invoice has no payments to move.")
+        destino = ""
+    rangos, cobros = [], cobros_de(f)
+    hoy = _hoy_iso()
+    msg_dest = ""
+    if cob > 0:
+        if destino == DEVOLVER:
+            cobros.append({"fecha": hoy, "monto": -cob, "origen": DEVUELTO, "por": str(quien or "")})
+            msg_dest = t("{m} recorded as refunded to the client.", m="$%.2f" % cob)
+        else:
+            g = frescas.get(str(destino), (None, None))[1]
+            _ok_g = bool(g) and str(destino) != str(fid) and estado_cobro(g) != "anulada" \
+                and str(g.get("Group", "")) == str(f.get("Group", "")) \
+                and str(g.get("ClientID", "")) == str(f.get("ClientID", "")) \
+                and round(_num(g.get("Total")) - _num(g.get("Collected")), 2) + 0.005 >= cob
+            if not _ok_g:
+                return False, t("Choose what happens with the {m} collected: refund it, or move it to another "
+                                "open invoice of this client.", m="$%.2f" % cob)
+            n_g = filas[str(destino)]
+            prev_g = round(_num(g.get("Collected")), 2)
+            hist_g = cobros_de(g) + [{"fecha": hoy, "monto": cob, "origen": TRASPASO_ENTRA,
+                                      "de": str(f.get("Number", "")), "por": str(quien or "")}]
+            rangos += [{"range": f"{_col_letter(cc + 1)}{n_g}", "values": [[str(round(prev_g + cob, 2))]]},
+                       {"range": f"{_col_letter(cj + 1)}{n_g}", "values": [[json.dumps(hist_g, ensure_ascii=False)]]}]
+            cobros.append({"fecha": hoy, "monto": -cob, "origen": TRASPASO_SALE, "a": str(g.get("Number", "")),
+                           "por": str(quien or "")})
+            msg_dest = t("{m} moved to invoice No. {n}.", m="$%.2f" % cob, n=str(g.get("Number", "")))
+        n_f = filas[fid]
+        rangos += [{"range": f"{_col_letter(cc + 1)}{n_f}", "values": [["0"]]},
+                   {"range": f"{_col_letter(cj + 1)}{n_f}", "values": [[json.dumps(cobros, ensure_ascii=False)]]}]
+    if anular_tambien:
+        rangos.append({"range": f"{_col_letter(cs + 1)}{filas[fid]}", "values": [["anulada"]]})
+    try:
+        w.batch_update(rangos, value_input_option="RAW")
+    except Exception as e:
+        return False, str(e)
+    _invalidate()
+    if cob > 0:
+        _rastro(fid, f, {"Collected": [cob, 0]}, "devolver_cobro" if destino == DEVOLVER else "pasar_cobro")
+    partes = ([t("Invoice voided.")] if anular_tambien else []) + ([msg_dest] if msg_dest else [])
+    return True, " ".join(partes)
+
+
+def anular(fid: str, destino_cobros: str = None, quien: str = "") -> tuple:
+    """Anula la factura. ⚠️ v669 · Con dinero COBRADO hay que decir adónde va (`destino_cobros`: DEVOLVER o el ID
+    de otra factura del cliente): si no, se niega — antes el cobro se quedaba en el limbo (H20)."""
+    f = get_factura(fid)
+    if f and round(_num(f.get("Collected")), 2) > 0:
+        if not destino_cobros:
+            return False, t("This invoice has {m} collected: say what happens with that money first (refund it, "
+                            "or move it to another invoice of this client).",
+                            m="$%.2f" % round(_num(f.get("Collected")), 2))
+        return sacar_cobros(fid, destino_cobros, quien, anular_tambien=True)
     w, err = _ws()
     if err:
         return False, err

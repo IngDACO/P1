@@ -69,8 +69,9 @@ ROTURAS = [
     ("«What you pay» deja de abrir el desglose", PU,
      [('"comp" if _s == "cos" else "prj"', '"prj"')]),
     ("⚠️ la obra sin facturar deja de preparar SU factura", PU,
-     [("                _ir_a_facturar(_pid, grupo)\n                st.rerun()\n\n    def _det_pagar():",
-       "                st.rerun()\n\n    def _det_pagar():")]),
+     # v669 · re-anclada: la lista de lo ganado va ahora dentro de un `else` (H22 del ciclo 2)
+     [("key=f\"pnlfac_{_pid}\",\n                             type=\"tertiary\"):\n                    _ir_a_facturar(_pid, grupo)\n",
+       "key=f\"pnlfac_{_pid}\",\n                             type=\"tertiary\"):\n")]),
     ("⚠️ la persona sin tarifa deja de abrir su ficha", PU,
      [('                        st.session_state["gp_fichasel"] = f"{_nom} ({_cl[_nom]})"\n', "")]),
     ("la obra sin margen deja de abrir sus Costs", PU,

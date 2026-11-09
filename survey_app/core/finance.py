@@ -43,6 +43,21 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
     """
     from core import projects as P
     mat = E.project_expenses(pid)["total"]        # los materiales van a COSTO (v360)
+    # ── v669 · Una obra CANCELADA ya no se factura: vale lo FACTURADO (sin impuesto). Ciclo 2: PRJ-0043
+    # cancelada seguía con «Est. revenue $57,055 · profit +$17,768» y $57,055 «por facturar» en el Resumen,
+    # Profitability y el asistente, con $39,286 gastados y $0 de ingreso: la pérdida no se veía en ningún sitio.
+    # Lo que se le cobre aún al cliente (un cargo por cancelar) entra como una factura más y sube el ingreso.
+    _p_est = prj if prj is not None else (P.get_project(pid) or {})
+    if P.es_cancelada(_p_est):
+        from core import invoices as _INV
+        _mo = E.labor_cost(pid, grupo)
+        _ing = round(_num(_INV.facturado_por_proyecto(grupo).get(str(pid), 0.0)), 2)
+        _costo = round(_mo + mat, 2)
+        return {"costo_mo": round(_mo, 2), "materiales": round(mat, 2), "costo": _costo,
+                "margen_pct": round(100.0 * (_ing - _costo) / _costo, 2) if _costo > 0 else 0.0,
+                "mo_facturable": round(_mo, 2), "ingreso": _ing, "ganancia": round(_ing - _costo, 2),
+                "modelo": "cancelada", "ganancia_fija": 0.0, "variaciones": 0.0,
+                "por_persona": [], "sin_ganancia": []}
     gh  = P.ganancia_hora(pid, prj)
     # v373: ganancia FIJA de la obra. Se SUMA al modelo que aplique (rubro o margen),
     # porque responde a otra pregunta: «además de lo que gano con las horas, ¿cuánto
@@ -69,14 +84,23 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
         _cot = {}
     if _cot:
         _mo = E.labor_cost(pid, grupo)
-        _ing = _num(_cot.get("Subtotal"))
+        # ⚠️ v669 · + las variaciones APROBADAS: el cliente aceptó pagarlas, así que son precio pactado igual que la
+        # cotización (ciclo 2: aprobada una de $2,500, la obra seguía en «Not invoiced $51,350» y la factura, el P&L
+        # y la rentabilidad se quedaban cortos). La misma suma que `claims.calcular` («valor = contrato + variaciones»).
+        try:
+            from core import claims as _CL
+            _var = round(_num(_CL.valor_variaciones(pid)), 2)
+        except Exception as e:
+            logger.warning("project_revenue: no se pudieron leer las variaciones de %s: %s", pid, e)
+            _var = 0.0
+        _ing = round(_num(_cot.get("Subtotal")) + _var, 2)
         _costo = round(_mo + mat, 2)
         return {"costo_mo": round(_mo, 2), "materiales": round(mat, 2), "costo": _costo,
                 # el % es CONSECUENCIA del precio pactado, no una entrada
                 "margen_pct": round(100.0 * (_ing - _costo) / _costo, 2) if _costo > 0 else 0.0,
                 "mo_facturable": round(_mo, 2), "ingreso": round(_ing, 2),
                 "ganancia": round(_ing - _costo, 2), "modelo": "cotizado",
-                "cotizacion": str(_cot.get("ID", "")),
+                "cotizacion": str(_cot.get("ID", "")), "variaciones": _var,
                 # ⚠️ La ganancia fija NO se suma aquí: la cotización ES el precio que el
                 # cliente firmó. Sumarle algo encima inventaría un ingreso que nadie
                 # aceptó. Se devuelve para poder AVISAR de que no se está usando.
@@ -172,6 +196,8 @@ def group_profitability(grupo: str) -> dict:
         costo, ingreso = rev["costo"], rev["ingreso"]
         _mod = rev.get("modelo", "margen")
         rows.append({"id": pid, "nombre": r["nombre"], "costo": costo,
+                     # v669 · para marcar en la tabla la cancelada (vale lo facturado) y la archivada
+                     "estado": str((prjs.get(pid) or {}).get("Status", "")),
                      "margen": rev["margen_pct"], "ingreso": ingreso,
                      "ganancia": rev["ganancia"],
                      # v360: qué modelo aplica («rubro» = importe por trabajador;
@@ -539,14 +565,27 @@ def sin_facturar(grupo: str) -> list:
 def sin_facturar_ids(grupo: str) -> list:
     """`[(id, nombre, importe)]` — lo mismo con el ID (v566): el Resumen lleva a facturar
     CADA obra (antes «→ Ir a Facturas» dejaba en «No invoices yet» sin decir qué)."""
-    # ⚠️ v397: delega en `invoices.pendiente_por_proyecto`, que es LA definición del
-    # pendiente por obra. Antes repetía el bucle aquí y la cartera habría sido una
-    # tercera copia — el patrón que causó los cinco `_num` divergentes de v323.
+    # ⚠️ v397: delega en `invoices`, que es LA definición del pendiente por obra. Antes repetía el bucle aquí y la
+    # cartera habría sido una tercera copia — el patrón que causó los cinco `_num` divergentes de v323.
+    # ⚠️ v669 · Es lo GANADO y sin facturar (`certificable`), no el contrato entero: bajo «Work done and not invoiced
+    # yet» salía Darling Park por $79,036 con la obra al 0 % (ciclo 2, H22). El contrato por delante va en
+    # `contrato_sin_ganar_ids`.
+    return _por_obra(grupo, "certificable")
+
+
+def contrato_sin_ganar_ids(grupo: str) -> list:
+    """`[(id, nombre, importe)]` — lo que el contrato aún tiene por facturar y NO se ha ganado (v669): se facturaría
+    por adelantado. Va aparte de `sin_facturar_ids` en el Resumen."""
+    return _por_obra(grupo, "adelanto")
+
+
+def _por_obra(grupo: str, clave: str) -> list:
     from core import invoices as INV
-    _pend = INV.pendiente_por_proyecto(grupo)
+    _din = INV.dinero_por_proyecto(grupo)
     _nom = {str(p.get("ID", "")): str(p.get("Name", ""))
             for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
-    out = [(pid, _nom.get(pid, pid), v) for pid, v in _pend.items()]
+    out = [(pid, _nom.get(pid, pid), round(_num(d.get(clave)), 2)) for pid, d in _din.items()
+           if _num(d.get(clave)) > 0.005]
     return sorted(out, key=lambda x: -x[2])
 
 

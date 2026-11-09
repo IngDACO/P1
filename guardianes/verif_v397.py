@@ -127,10 +127,13 @@ _ahora = sorted(F.sin_facturar(G))
 # saltó antes porque la demo no tenía ninguna obra con pendiente. Es la cuarta vez de
 # esa clase (v475 encontró tres): algo migrado en el código y olvidado en lo que lo
 # comprueba.
+# ⚠️ CADUCADO por v669 (H22 del ciclo 2): `sin_facturar` es ahora lo GANADO y sin facturar (`certificable`), no
+# el contrato entero — bajo «Work done and not invoiced» salía Darling Park con la obra al 0 %. Se compara con
+# el cálculo directo de ESA cifra; el contrato por delante va en `contrato_sin_ganar_ids`.
 _esperado = sorted(
-    (str(p.get("Name", "")), I.pendiente_de_facturar(str(p.get("ID", "")), G, p))
+    (str(p.get("Name", "")), round(I.por_certificar(str(p.get("ID", "")), G, p)["certificable"], 2))
     for p in P.list_projects(G, incluir_archivados=True)
-    if I.pendiente_de_facturar(str(p.get("ID", "")), G, p) > 0)
+    if I.por_certificar(str(p.get("ID", "")), G, p)["certificable"] > 0.005)
 check("mismos nombres e importes que el cálculo directo", _ahora, _esperado)
 check("...y sigue ordenado de mayor a menor",
       [v for _n, v in F.sin_facturar(G)] == sorted(
@@ -138,8 +141,10 @@ check("...y sigue ordenado de mayor a menor",
 
 print("\n== 3) UNA sola definición (la lección de v323) ==")
 _fin = io.open(BASE / "core" / "finance.py", encoding="utf-8").read()
+# ⚠️ v669 · delega en `invoices.dinero_por_proyecto` (lo ganado y el contrato por delante, H22 del ciclo 2), que
+# sigue siendo UNA definición en `invoices` y recorre `por_certificar`, cuyo pendiente ES `pendiente_de_facturar`
 check("`sin_facturar` delega en el mapa",
-      "INV.pendiente_por_proyecto(grupo)" in _fin)
+      "INV.dinero_por_proyecto(grupo)" in _fin)
 check("...y ya no repite el bucle",
       "INV.pendiente_de_facturar(str(p.get(\"ID\", \"\")), grupo, p)" in _fin, False)
 _pui = io.open(BASE / "core" / "projects_ui.py", encoding="utf-8").read()

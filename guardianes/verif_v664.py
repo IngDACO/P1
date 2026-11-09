@@ -184,7 +184,9 @@ from core import invoices as I                                             # noq
 from core import finance as F                                              # noqa: E402
 
 _o4 = (F.project_revenue, I.facturado_por_proyecto)
-F.project_revenue = lambda pid, g, p=None: {"ingreso": 12780.0}
+# ⚠️ v669 · con «modelo»: lo certificable depende de él (una obra por horas tiene ganado lo trabajado, H23 del
+# ciclo 2). Esta prueba es la de una obra COTIZADA, que se gana con el avance.
+F.project_revenue = lambda pid, g, p=None: {"ingreso": 12780.0, "modelo": "cotizado"}
 I.facturado_por_proyecto = lambda g: {"PRJ-1": 3834.0}
 try:
     _c0 = I.por_certificar("PRJ-1", "g1", {"ID": "PRJ-1", "Progress": "0"})
@@ -206,7 +208,9 @@ _n, _nf = funcion("core/invoices_ui.py", "_nueva_factura")
 chk("la línea propone lo certificable con avance y avisa del adelanto",
     'imp = _c["certificable"]' in _nf and "**in advance**" in _nf and "claimable now (the line takes that)" in _nf, _nf[:300])
 chk("…cada caso por su rama: sin avance, el pendiente con aviso; con avance a medias, lo certificable",
-    'if _c["avance"] <= 0:\n            imp = pend\n            _notas.append(t(":material/warning:' in _nf
+    # ⚠️ v669 · la rama del adelanto mira lo CERTIFICABLE (no el avance): en una obra por horas lo trabajado ya
+    # está ganado con el avance a 0 (H23 del ciclo 2); el «no progress yet» sigue dentro, con avance 0
+    'if _c["certificable"] <= 0.005:\n            imp = pend\n            if _c["avance"] <= 0:\n                _notas.append(t(":material/warning:' in _nf
     and 'elif _c["certificable"] + 0.5 < pend:\n            imp = _c["certificable"]\n            _notas.append(' in _nf
     and '_c = I.por_certificar(str(p.get("ID", "")), grupo, p)' in _nf)
 chk("…y las notas se PINTAN antes de la tabla", _nf.find("    for _n in _notas:\n        st.markdown(_n)\n") >= 0

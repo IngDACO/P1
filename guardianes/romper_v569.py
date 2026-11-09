@@ -45,8 +45,10 @@ ROTURAS = [
        '                    st.session_state["_fac_anular_conf"] = fid\n',
        '                elif st.button(t("Void this invoice"), key=f"fac_anul_{fid}"):\n'
        '                    st.session_state["_fac_anular"] = fid\n')]),
+    # v669 · re-anclada: hay más acciones diferidas con la misma línea (quitar un cobro, resolver lo cobrado)
     ("⚠️ anular vuelve a no AVISAR", IU,
-     [("        (flash.exito if _ok else flash.error)(_msg)\n", "        pass\n")]),
+     [("quien=_creado_por())\n        (flash.exito if _ok else flash.error)(_msg)\n        # ⚠️ v570",
+       "quien=_creado_por())\n        pass\n        # ⚠️ v570")]),
     ("⚠️ la anulada vuelve a «deber» en pantalla", IU,
      [("        if _anulada:\n            # ⚠️ v569 · una anulada NO debe nada",
        "        if False:\n            # ⚠️ v569 · una anulada NO debe nada")]),
@@ -59,9 +61,10 @@ ROTURAS = [
      [('    st.caption(" · ".join(_fecha))\n', "")]),
     ("las fechas de la lista vuelven al ISO", IU,
      [('"Vence":     _dmy(f.get("ExpiryDate")),', '"Vence":     str(f.get("ExpiryDate", "")),')]),
+    # v669 · re-anclada: el historial de cobros vive en `_historial_cobros` y lleva sus movimientos (H10/H20)
     ("los cobros vuelven al ISO", IU,
-     [("st.markdown(f\"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**\")",
-       "st.markdown(f\"- {cb.get('fecha', '')}: **{_T.dinero(_num(cb.get('monto')))}**\")")]),
+     [("_txt = f\"- {_dmy(cb.get('fecha', ''))}: **{_T.dinero(_num(cb.get('monto')))}**\"",
+       "_txt = f\"- {cb.get('fecha', '')}: **{_T.dinero(_num(cb.get('monto')))}**\"")]),
     ("un selector de fecha vuelve al formato ISO", IU,
      [('_fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha", format="DD/MM/YYYY")',
        '_fecha = c1.date_input(t("Date"), value=clock.today(), key="fac_fecha")')]),

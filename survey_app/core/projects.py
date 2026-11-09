@@ -254,6 +254,12 @@ ESTADOS_ACTIVOS = ("Planned", "In progress")
 def es_activa(p) -> bool:
     """¿Obra activa (planificada o en curso)? (v667)"""
     return str((p or {}).get("Status", "")) in ESTADOS_ACTIVOS
+
+
+def es_cancelada(p) -> bool:
+    """¿Obra CANCELADA? (v669) Ya no se factura nada más: vale lo facturado (`finance.project_revenue`).
+    ⚠️ Archivar NO es cancelar: una archivada se sigue facturando (v369)."""
+    return str((p or {}).get("Status", "")) == "Cancelled"
 FMT_DATE = "%Y-%m-%d"
 
 

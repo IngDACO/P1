@@ -63,7 +63,8 @@ _FAC = [_f("FAC-1", "0001", 110, 0, "2026-10-13", "2026-10-27"),
 I.is_configured = lambda: True
 I.list_facturas = lambda g=None, **k: [dict(x) for x in _FAC]
 I.get_factura = lambda fid: next((dict(x) for x in _FAC if x["ID"] == fid), None)
-def _anular(fid):
+# v669 · `anular` recibe además adónde va lo cobrado y quién (H20 del ciclo 2)
+def _anular(fid, *a, **k):
     st.session_state["_LL"].append(("anular", fid))
     return True, "Invoice voided."
 I.anular = _anular
