@@ -289,7 +289,7 @@ chk("⚠️ sin respuesta aún del componente de cookies: «Restoring your sessi
 at.button(key="ck_ver_login").click().run()
 chk("…el botón «Sign in with your password instead» enseña el formulario",
     any("Username" in str(x.label) or "User" in str(x.label) for x in at.text_input), [x.label for x in at.text_input])
-at = _g8(copex_cookie_get={})
+at = _g8(_ck_respondio=True)
 chk("…cuando el componente ya contestó (sin cookie), el formulario directo",
     not any("Restoring your session" in str(i.value) for i in at.info) and len(at.text_input) >= 1)
 at = _g8(_no_cookie_restore=True)
@@ -301,7 +301,12 @@ at.run()
 chk("…y si el componente no contesta, a la 3ª pasada sale el formulario igual",
     not any("Restoring your session" in str(i.value) for i in at.info) and len(at.text_input) >= 1)
 
-# ═══════════════════════════════════════════════════════════════════════════════════════════
+# (v668 · la señal de «contestó» —el componente pedido con `default=None`— la prueba `verif_v668`, ANTES de
+# cualquier AppTest: aquí los guiones de arriba ya dejaron `session_cookie.load` sustituido, trampa 48)
+chk("render_login usa esa señal, no la clave del componente",
+    "_resp = _sc.respondio()" in funcion("core/auth_ui.py", "render_login")
+    and '"copex_cookie_get" in st.session_state' not in funcion("core/auth_ui.py", "render_login"))
+
 print("9. H36 · El menú en el móvil")
 _sv = funcion("core/home_ui.py", "subir_si_cambia_la_vista")
 _pm = funcion("core/home_ui.py", "_plegar_menu_movil")

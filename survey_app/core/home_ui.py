@@ -867,6 +867,12 @@ def _norm_busq(s) -> str:
     return "".join(c for c in _s if unicodedata.category(c) != "Mn")
 
 
+def _mayus(s) -> str:
+    """La primera letra en mayúscula (v668): un código canónico («available», «accepted») en un pie."""
+    s = str(s or "")
+    return s[:1].upper() + s[1:] if s else s
+
+
 def buscar(q: str, grupo) -> list:
     """Busca en proyectos, personas y trabajos. Devuelve [{tipo, titulo, pie, ...}].
 
@@ -911,7 +917,7 @@ def buscar(q: str, grupo) -> list:
                 continue
             _arch = "ARCHIV" in str(p.get("ManualStatus") or p.get("Status") or "").upper()
             _pie = " · ".join(x for x in [pid, str(p.get("Client", "")).strip(),
-                                          "archivado" if _arch else ""] if x)
+                                          t("archived") if _arch else ""] if x)   # v668 · era «archivado»
             out.append({"tipo": "proyecto", "icono": ":material/folder:", "orden": r,
                         "titulo": str(p.get("Name", "")) or pid, "pie": _pie, "id": pid})
     except Exception as e:
@@ -950,9 +956,10 @@ def buscar(q: str, grupo) -> list:
             # **renombrar son DOS pasos**, y el segundo se comprueba preguntándole al
             # AST por los `Name` que quedan, no con la vista.
             _num = str(_trb.get("Number", "")).strip()
-            _pie = " · ".join(x for x in [tid, f"nº {_num}" if _num else "",
+            # v668 · «nº» e «inactivo» salían en español en la pantalla inglesa
+            _pie = " · ".join(x for x in [tid, t("No. {n}", n=_num) if _num else "",
                                           "" if str(_trb.get("Active", "SI")).upper() == "SI"
-                                          else "inactivo"] if x)
+                                          else t("inactive")] if x)
             out.append({"tipo": "trabajo", "icono": ":material/construction:", "orden": r,
                         "titulo": str(_trb.get("Name", "")) or tid, "pie": _pie, "id": tid})
     except Exception as e:
@@ -988,8 +995,8 @@ def buscar(q: str, grupo) -> list:
                 r = _rank(aid, a.get("Name"), a.get("Serial"), a.get("Brand"), a.get("Model"))
                 if r is None:
                     continue
-                _pie = " · ".join(x for x in [aid, str(a.get("Category", "")).strip(),
-                                              str(a.get("Status", "")).strip()] if x)
+                _pie = " · ".join(x for x in [aid, _etq(str(a.get("Category", "")).strip()),
+                                              _mayus(_etq(str(a.get("Status", "")).strip()))] if x)   # v668
                 out.append({"tipo": "activo", "icono": ":material/inventory_2:", "orden": r,
                             "titulo": str(a.get("Name", "")) or aid, "pie": _pie, "id": aid})
         except Exception as e:
@@ -1019,7 +1026,8 @@ def buscar(q: str, grupo) -> list:
                 out.append({"tipo": "cotizacion", "icono": ":material/request_quote:", "orden": r,
                             "titulo": t("Quote No. {n}", n=num or cid) + (f" v{_v}" if _v and _v != "1" else ""),
                             "pie": " · ".join(x for x in [str(c.get("ClientName", "")).strip(),
-                                                          str(c.get("Status", "")).strip()] if x), "id": cid})
+                                                          _mayus(_etq(str(c.get("Status", "")).strip()))] if x),
+                            "id": cid})   # v668 · el estado con su etiqueta («Accepted», no «accepted»)
         except Exception as e:
             logger.warning("buscar: cotizaciones falló: %s", e)
 

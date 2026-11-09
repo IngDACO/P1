@@ -430,10 +430,16 @@ def render_login() -> bool:
                 st.rerun()
         # ⚠️ v667 · Mientras el componente de cookies NO ha contestado, no se sabe si hay una sesión
         # guardada: se dice «Restoring your session…» en vez de enseñar el formulario (ciclo 1, H19: a los
-        # 9 s seguía el «Sign in» y se podía empezar a teclear la contraseña). Contestó = su clave está
-        # en la sesión, o ya van 3 pasadas. Si no contesta nunca, el botón deja entrar con contraseña.
+        # 9 s seguía el «Sign in» y se podía empezar a teclear la contraseña). Contestó = `respondio()`
+        # (su clave en la sesión NO sirve: está desde la 1ª pasada, medido), o ya van 3 pasadas. Si no
+        # contesta nunca, el botón deja entrar con contraseña.
         st.session_state["_ck_pasadas"] = int(st.session_state.get("_ck_pasadas", 0)) + 1
-        _contesto = ("copex_cookie_get" in st.session_state) or st.session_state["_ck_pasadas"] >= 3
+        try:
+            from core import session_cookie as _sc
+            _resp = _sc.respondio()
+        except Exception:
+            _resp = True
+        _contesto = _resp or st.session_state["_ck_pasadas"] >= 3
         if not _contesto and not st.session_state.get("_ver_login"):
             _cr = st.columns([1, 2, 1])[1]
             _cr.info(t(":material/hourglass_top: Restoring your session…"))

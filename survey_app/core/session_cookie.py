@@ -37,6 +37,14 @@ def _manager():
     return st.session_state[_MGR_KEY]
 
 
+_RESPONDIO = "_ck_respondio"
+
+
+def respondio() -> bool:
+    """¿El navegador ya contestó con sus cookies (haya o no la nuestra)? (v667)"""
+    return bool(st.session_state.get(_RESPONDIO))
+
+
 def load() -> tuple:
     """(usuario, token) de la cookie, o (None, None).
 
@@ -47,7 +55,14 @@ def load() -> tuple:
     if m is None:
         return None, None
     try:
-        cookies = m.get_all(key="copex_cookie_get") or {}
+        # ⚠️ v667 · con `default=None`: el componente devuelve el default HASTA que el navegador contesta, y
+        # con `{}` no se distinguía «aún no contestó» de «contestó y no hay cookie». `respondio()` lo dice
+        # (ciclo 1, H19: el formulario de entrada se veía unos segundos antes de restaurar la sesión). Su
+        # clave en la sesión no sirve: está desde la primera pasada (medido en producción).
+        m._remove_extra_spacing()
+        _todas = m.cookie_manager(method="getAll", key="copex_cookie_get", default=None)
+        st.session_state[_RESPONDIO] = _todas is not None
+        cookies = _todas or {}
         raw = cookies.get(_COOKIE)
         if raw and "|" in str(raw):
             u, t = str(raw).split("|", 1)
