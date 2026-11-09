@@ -55,8 +55,9 @@ def caps(d1, d2):
 print("1. La frase, solo si hay algo que tocar")
 _c = caps("", "")
 chk("⚠️ ningún recibo con foto: la frase NO sale", _TXT not in _c, _c)
-chk("…y los recibos sí, con su «no file» (el barrido no vació la lista)",
-    sum("no file" in c for c in _c) == 2, _c)
+# ⚠️ v665 · CADUCADO a propósito: un recibo sin comprobante se marca «no receipt» en naranja (era «no file» en gris)
+chk("…y los recibos sí, con su «no receipt» (el barrido no vació la lista)",
+    sum("no receipt" in c for c in _c) == 2, _c)
 _c = caps("abc", "")
 chk("uno con foto y otro sin ella: la frase SALE", _TXT in _c, _c)
 _c = caps("abc", "def")

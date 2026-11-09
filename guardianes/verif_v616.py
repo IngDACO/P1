@@ -123,7 +123,7 @@ DLU.render_campo = lambda *a, **k: st.caption("PARTE")
 # ── alarmas ──
 alerts.is_configured = lambda: True
 alerts.list_alerts = lambda pid, estado=None: [a for a in ss["_alertas"] if a["Status"] == "abierta"]
-def _resolver(aid, quien, gestor=True):
+def _resolver(aid, quien, gestor=True, nota=""):   # ⚠️ v665 · CADUCADO: la llamada lleva también la nota
     ss["_res"].append((aid, quien, gestor))
     return True, "Alert resolved."
 alerts.resolve_alert = _resolver

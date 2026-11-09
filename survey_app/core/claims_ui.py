@@ -106,8 +106,18 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
         return
 
     _pend = [r for r in recs if str(r.get("Status", "")) == CL.EMITIDA]
-    _tit = t("Progress claims ({n} issued · {m} claimable now)",
-             n=len(_pend), m=_dinero(d["neto"]))
+    # ⚠️ v665 · lo facturado APARTE, por Invoices: las reclamaciones salen solo del contrato y no lo
+    # restan (ciclo 1: PRJ-0039 facturada entera decía «$12,141.00 claimable now»). No se resta solo:
+    # una reclamación suele ir seguida de SU factura, y restarla la descontaría dos veces. Se dice.
+    try:
+        from core import invoices as _I
+        _fact = round(_num(_I.facturado_por_proyecto(grupo).get(str(pid), 0.0)), 2) if _I.is_configured() else 0.0
+    except Exception:
+        _fact = 0.0
+    _tit = (t("Progress claims ({n} issued · {m} claimable now · {f} already invoiced)",
+              n=len(_pend), m=_dinero(d["neto"]), f=_dinero(_fact)) if _fact > 0.5
+            else t("Progress claims ({n} issued · {m} claimable now)",
+                   n=len(_pend), m=_dinero(d["neto"])))
     with st.expander(f":material/request_quote: {_tit}", expanded=False, key=f"{key_prefix}_exp_claims_{pid}"):
 
         # ⚠️ Sin cotización aceptada no hay contra qué reclamar, y se dice ANTES de
@@ -138,6 +148,10 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
               p=("%.1f" % d["pct"]), h=_dinero(d["hecho"]), a=_dinero(d["antes"]),
               b=_dinero(d["bruto"]), r=_dinero(d["retencion"]),
               rp=("%.1f" % d["retencion_pct"]), n=_dinero(d["neto"])))
+        if _fact > 0.5 and d["bruto"] > 0:
+            st.warning(t(":material/warning: **{f}** of this job is already invoiced through Invoices. Claims are "
+                         "worked out from the contract alone and do not subtract it: if those invoices already "
+                         "bill this work, this claim would charge it twice.", f=_dinero(_fact)))
 
         if editable:
             with st.form(f"{key_prefix}_new_{pid}", enter_to_submit=False):

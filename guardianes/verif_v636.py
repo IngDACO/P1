@@ -762,7 +762,12 @@ chk("...y calla si no hace falta", not _hay(at, "sb_fc_ir") and not _hay(at, "sb
 _a = leer("app.py")
 chk("⚠️ `app.py` abre un solo diálogo por pasada", "if not aviso_prestart_pendiente(_GRUPO):\n        aviso_falsecar_pendiente(_GRUPO)" in _a)
 _tu = leer("core/timeclock_ui.py")
-chk("`aviso_prestart_pendiente` dice si abrió uno", funcion(_tu, "aviso_prestart_pendiente").count("return True") == 2)
+# ⚠️ v665 · CADUCADO a propósito: dentro del Pre-Start no abre ninguno, y devuelve True igual (para que tampoco
+# salga el del false car con la charla pendiente). Se mira cada diálogo seguido de su `return True`.
+_ap = funcion(_tu, "aviso_prestart_pendiente")
+chk("`aviso_prestart_pendiente` dice si abrió uno",
+    "_dialogo_firmar(nombre or t(\"this site\"), str(_pf.get(\"facilitador\", \"\")))\n        return True" in _ap
+    and "_dialogo_prestart(nombre or t(\"this site\"))\n    return True" in _ap)
 chk("⚠️ `_ir_a_falsecar` lleva a la pestaña correcta", 'st.session_state["_ps_doc_pending"] = "falsecar"' in funcion(_tu, "_ir_a_falsecar"))
 chk("⚠️ se avisa aunque la charla ya esté hecha (no va dentro de su `if`)", funcion(_tu, "_armar_aviso_prestart").index("_falsecar_toca") > funcion(_tu, "_armar_aviso_prestart").index("except Exception"))
 

@@ -111,7 +111,8 @@ ROTURAS = [
     ("⚠️ confirmar no vuelve a mirar el aviso", T,
      [("""    _aviso_abierto(d, ctx)\n    return AL.resolve_alert(""", """    return AL.resolve_alert(""")]),
     ("⚠️ cierra sin ser la oficina", T,
-     [("""    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=True)\n""", """    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=False)\n""")]),
+     # ⚠️ v665 · re-anclada: Confirm pasa también la nota de una alarma de seguridad
+     [("""    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=True, nota=""", """    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=False, nota=""")]),
     ("⚠️ decide con la identidad de otro", T,
      [("""bool(d.get("approve")), ctx["usuario"], d.get("note", ""))""", """bool(d.get("approve")), "campo000", d.get("note", ""))""")]),
     ("⚠️ confirmar una tarjeta tocada", T,

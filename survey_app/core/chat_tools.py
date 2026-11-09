@@ -759,12 +759,22 @@ def _preparar_decision_fichaje(entrada, ctx) -> dict:
 
 def _preparar_cierre_aviso(entrada, ctx) -> dict:
     from core import admin_digest as AD
+    from core import alerts as AL
     r = _aviso_abierto(entrada, ctx)
+    # ⚠️ v665 · una de SEGURIDAD no se cierra sin decir qué se hizo (la misma regla que la pantalla y
+    # que `alerts.resolve_alert`, que la vuelve a mirar al confirmar)
+    nota = str((entrada or {}).get("note", "") or "").strip()[:1000]
+    if AL.es_seguridad(r) and not nota:
+        raise _Negado("This is a safety alert: it cannot be closed without a note. Ask them what was done and "
+                      "who checked it, then call this again with their answer as note.")
     _o = {str(o.get("ID", "")): o.get("Name", "") for o in _mis_obras(ctx)}.get(str(r.get("ProjectID", "")), r.get("ProjectID", ""))
     _de = AD.nombres_usuarios().get(str(r.get("CreatedBy", "")), r.get("CreatedBy", ""))
-    return _tarjeta(ctx, "aviso_cerrar", t("Close alert · {o}", o=_o),
-                    "\n".join([f"{dmy(r.get('Date', ''))} · {_de}", _corto(r.get("Message", "")), t("It is marked as resolved, by you.")]),
-                    {"alert_id": str(r.get("ID", ""))})
+    _lin = [f"{dmy(r.get('Date', ''))} · {_de}", _corto(r.get("Message", ""))]
+    if nota:
+        _lin.append(t("Note: {x}", x=nota))
+    _lin.append(t("It is marked as resolved, by you."))
+    return _tarjeta(ctx, "aviso_cerrar", t("Close alert · {o}", o=_o), "\n".join(_lin),
+                    {"alert_id": str(r.get("ID", "")), "note": nota})
 
 
 def _dias_del_tablero(prj, g):
@@ -848,7 +858,7 @@ def _confirmar_fichaje(d, ctx) -> tuple:
 def _confirmar_cierre(d, ctx) -> tuple:
     from core import alerts as AL
     _aviso_abierto(d, ctx)
-    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=True)
+    return AL.resolve_alert(d.get("alert_id"), ctx["usuario"], gestor=True, nota=d.get("note", ""))
 
 
 def _confirmar_asignacion(d, ctx) -> tuple:
@@ -1012,7 +1022,10 @@ PREPARAR_OFICINA = [
                     "you to approve, reject or revert a time fix."},
     {"name": "prepare_close_alert", "fn": _preparar_cierre_aviso,
      "input_schema": {"type": "object", "additionalProperties": False, "required": ["alert_id"],
-                      "properties": {"alert_id": {"type": "string", "description": "Like ALR-0004, from get_inbox."}}},
+                      "properties": {"alert_id": {"type": "string", "description": "Like ALR-0004, from get_inbox."},
+                                     "note": {"type": "string", "description": "What was done and who checked it, in their "
+                                              "words. Required for a safety alert (near miss, Pre-Start NO, false car X): "
+                                              "ask them first, never make it up."}}},
      "description": "Prepare marking an open alert as resolved. It shows them a card and closes nothing yet. Call it when they ask "
                     "you to close or resolve an alert."},
     {"name": "prepare_assignment", "fn": _preparar_asignacion,

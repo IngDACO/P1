@@ -169,6 +169,18 @@ def _dialogo_firmar(obra: str, quien: str = ""):
         st.rerun()
 
 
+def en_prestart() -> bool:
+    """¿Está ya en la pantalla del Pre-Start? (v665) El campo la tiene como sección («prestart»); la
+    oficina, dentro de Herramientas. Ciclo 1: la ventana «Today's Pre-Start is missing» saltaba DENTRO
+    del Pre-Start que se estaba rellenando y tapaba el formulario (2 veces)."""
+    try:
+        from core import home_ui as _h
+        sec, sub = _h._donde(st.session_state.get("_admin_sec", ""))
+    except Exception:
+        return False
+    return sec == "prestart" or (sec == "herramientas" and sub == "🦺 Pre-Start")
+
+
 def aviso_prestart_pendiente(grupo: str = ""):
     """El modal, evaluado como CONDICIÓN de estado y no como evento de un solo uso.
 
@@ -209,7 +221,13 @@ def aviso_prestart_pendiente(grupo: str = ""):
         if not _pf:
             st.session_state.pop("_ps_aviso", None)
             return
+        # ⚠️ v665 · dentro del Pre-Start, no: ya lo tiene delante (la ventana tapaba el formulario).
+        # Al salir sin hacerlo, vuelve. True: con la charla pendiente tampoco toca el false car.
+        if en_prestart():
+            return True
         _dialogo_firmar(nombre or t("this site"), str(_pf.get("facilitador", "")))
+        return True
+    if en_prestart():                           # v665 · ídem
         return True
     _dialogo_prestart(nombre or t("this site"))
     return True

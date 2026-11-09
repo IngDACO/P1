@@ -300,7 +300,12 @@ def pendiente_de_firma(pid, grupo: str = "", persona: str = "", usuario: str = "
             "drive_id": str(r.get("DriveID", "")),
             "archivo": str(r.get("File", "")),
             "asistentes": d.get("asistentes", []),
-            "otras": len(candidatos) - 1}
+            "otras": len(candidatos) - 1,
+            # ⚠️ v665 · lo que se RESPONDIÓ, para leerlo antes de firmar (ciclo 1: se firmaba un
+            # Pre-Start ajeno viendo solo la cabecera y el lienzo, sin el near miss ni los NO)
+            "hora": str(d.get("hora", "") or ""), "checks": d.get("checks", []),
+            "near_miss": bool(d.get("near_miss")), "near_miss_desc": str(d.get("near_miss_desc", "") or ""),
+            "act_notes": str(d.get("act_notes", "") or ""), "gen_notes": str(d.get("gen_notes", "") or "")}
 
 
 def firmar(ps_id: str, grupo: str, nombre: str, iniciales: str = "",

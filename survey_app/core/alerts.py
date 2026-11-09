@@ -26,8 +26,21 @@ logger = logging.getLogger(__name__)
 
 ALERTS_SHEET   = "Alerts"
 ALERTS_HEADERS = ["ID", "ProjectID", "Group", "Source", "Type", "Message",
-                  "CreatedBy", "Date", "Status", "ResolvedBy", "ResolvedDate"]
+                  "CreatedBy", "Date", "Status", "ResolvedBy", "ResolvedDate",
+                  # ⚠️ v665 · qué se hizo al cerrarla (obligatorio en una de SEGURIDAD). Al final → migra sola.
+                  "Resolution"]
 _COL = {h: i + 1 for i, h in enumerate(ALERTS_HEADERS)}
+
+# ⚠️ v665 · Las alarmas de SEGURIDAD, por cómo empieza el mensaje que escriben sus tres orígenes
+# (`prestart.submit` ×2, `falsecar.submit`). Ciclo 1: un near miss se cerraba con un clic, sin decir
+# qué se hizo ni quién lo comprobó. El texto de esas alarmas es inglés fijo (es el dato, no se traduce).
+PREFIJOS_SEGURIDAD = ("Near Miss/Hazard", "Pre-Start with", "False car check with")
+
+
+def es_seguridad(al) -> bool:
+    """¿Es una alarma de seguridad (near miss, Pre-Start con NO, false car con X)? (v665)"""
+    return (str((al or {}).get("Type", "")) == "problema"
+            and str((al or {}).get("Message", "")).strip().startswith(PREFIJOS_SEGURIDAD))
 
 
 
@@ -174,9 +187,15 @@ def puede_resolver(al, usuario, gestor) -> bool:
                                 and str((al or {}).get("CreatedBy", "")) == str(usuario))
 
 
-def resolve_alert(alert_id, resuelto_por, gestor=True) -> tuple:
+NOTA_SEGURIDAD = "A safety alert needs a note: what was done and who checked it."
+
+
+def resolve_alert(alert_id, resuelto_por, gestor=True, nota="") -> tuple:
     """`gestor` (v616): False para el campo — el permiso se mira AQUÍ, sobre la fila FRESCA, no
-    solo en la pantalla. Por defecto True: los llamadores de la oficina no cambian."""
+    solo en la pantalla. Por defecto True: los llamadores de la oficina no cambian.
+    ⚠️ v665 · `nota`: qué se hizo. Una de SEGURIDAD (`es_seguridad`) no se cierra sin ella, también
+    aquí y no solo en la pantalla (el Management assistant llama a esto sin pasar por ella)."""
+    nota = str(nota or "").strip()
     w, err = _ws()
     if err:
         return False, err
@@ -185,13 +204,18 @@ def resolve_alert(alert_id, resuelto_por, gestor=True) -> tuple:
         if str(r.get("ID", "")) == str(alert_id):
             if not puede_resolver(r, resuelto_por, gestor):
                 return False, _d("Only the office can resolve that alert.")
+            if es_seguridad(r) and not nota:
+                return False, _d(NOTA_SEGURIDAD)
             row = i + 2
-            w.batch_update([
+            lote = [
                 {"range": f"{_col_letter(_COL['Status'])}{row}", "values": [["resuelta"]]},
                 {"range": f"{_col_letter(_COL['ResolvedBy'])}{row}", "values": [[str(resuelto_por)]]},
                 {"range": f"{_col_letter(_COL['ResolvedDate'])}{row}",
                  "values": [[clock.now().strftime("%Y-%m-%d %H:%M")]]},
-            ], value_input_option="RAW")
+            ]
+            if nota:
+                lote.append({"range": f"{_col_letter(_COL['Resolution'])}{row}", "values": [[nota[:1000]]]})
+            w.batch_update(lote, value_input_option="RAW")
             _invalidate()
             return True, _d("Alert resolved.")
     return False, _d("Alert not found.")

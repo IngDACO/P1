@@ -255,6 +255,27 @@ def _projects_for(rol, usuario, grupo):
     return P.list_projects_for_field(usuario, grupo=grupo, incluir_internos=True)
 
 
+def _resumen_para_firmar(info: dict):
+    """Lo que se respondió en la charla, ENCIMA del lienzo (v665).
+
+    Firmar es decir «recibí esta charla»: hay que poder leer qué se dijo. Ciclo 1: se firmaba un
+    Pre-Start ajeno viendo solo quién lo hizo y el lienzo, sin el near miss ni los controles en NO.
+    """
+    _checks = info.get("checks") or []
+    _no = [c.get("label", "") for c in _checks if str(c.get("estado", "")).upper() == "NO"]
+    if info.get("near_miss"):
+        st.error(t(":material/warning: **Near miss / hazard reported:** {x}",
+                   x=literal_md(info.get("near_miss_desc", "") or t("(no description)"))))
+    if _no:
+        st.warning(t(":material/cancel: **Answered NO:** {l}", l=" · ".join(literal_md(x) for x in _no)))
+    elif _checks:
+        st.caption(t(":material/check_circle: All {n} controls answered YES or N/A.", n=len(_checks)))
+    for _clave, _tit in (("act_notes", t("Planned work notes")), ("gen_notes", t("General notes"))):
+        _x = str(info.get(_clave, "") or "").strip()
+        if _x:
+            st.markdown(f"**{_tit}:** {literal_md(_x)}")
+
+
 def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
     """«La charla ya está hecha: firma tú» — para quien llega después (v403).
 
@@ -277,6 +298,7 @@ def _bloque_firmar(info: dict, grupo: str, nombre: str, usuario: str):
             st.warning(t(":material/info: Today there are **{n} talks** recorded on this site. The "
                          "most recent one is offered; if you signed a different one, tell whoever "
                          "recorded it.", n=_otras + 1))
+        _resumen_para_firmar(info)
         c1, c2 = st.columns([1, 2])
         _pid = str(info.get("pid", ""))
         ini = c1.text_input(t("Initial"), value=_initials(nombre), key=f"ps_tarde_ini_{_pid}")

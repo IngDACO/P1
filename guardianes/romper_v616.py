@@ -82,8 +82,9 @@ ROTURAS = [
      [('    return str((st.session_state.get("auth") or {}).get("rol", "")) in ("administrator", "owner")\n',
        '    return True\n')]),
     ("resolver no le dice al módulo quién es", PU,
-     [('alerts.resolve_alert(_pet.get("id"), usuario, gestor=gestor)',
-       'alerts.resolve_alert(_pet.get("id"), usuario)')]),
+     # ⚠️ v665 · re-anclada: la llamada lleva también la nota de una alarma de seguridad
+     [('alerts.resolve_alert(_pet.get("id"), usuario, gestor=gestor, nota=',
+       'alerts.resolve_alert(_pet.get("id"), usuario, nota=')]),
     ("una petición de OTRA obra se aplica", PU,
      [('    if _pet and _pet.get("pid") == str(pid):\n', '    if _pet:\n')]),
     ("⚠️ la caja de la alarma no se vacía (un 2º toque manda otra)", PU,

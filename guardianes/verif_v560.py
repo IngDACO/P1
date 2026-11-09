@@ -159,6 +159,9 @@ chk("⚠️ recibo: sin importe, proveedor y descripción SIGUEN escritos",
     and any("value of the receipt" in e.value for e in at.error))
 chk("…y no se guardó nada", "_ADD" not in at.session_state)
 at.number_input(key="ex_val").set_value(5.0)
+# ⚠️ v665 · CADUCADO a propósito: sin foto ni PDF hay que marcar «I have no receipt for this»
+# (ciclo 1: un recibo sin comprobante se guardaba sin decir nada). La prueba no sube archivo.
+at.checkbox(key="ex_sinrec").check()
 at.session_state["_R"] = (True, "Guardado")
 [b for b in at.button if "Save receipt" in str(b.label)][0].click()
 at.run()

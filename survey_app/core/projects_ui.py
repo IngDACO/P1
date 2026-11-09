@@ -157,8 +157,17 @@ def _es_gestor() -> bool:
     return str((st.session_state.get("auth") or {}).get("rol", "")) in ("administrator", "owner")
 
 
-def _pedir_resolver(pid, aid) -> None:
-    st.session_state[_ALR_PET] = {"pid": str(pid), "id": str(aid)}
+def _pedir_resolver(pid, aid, clave_nota=None) -> None:
+    # v665 · con la NOTA de lo que se hizo (la caja de una alarma de seguridad)
+    st.session_state[_ALR_PET] = {"pid": str(pid), "id": str(aid),
+                                  "nota": str(st.session_state.get(clave_nota, "") or "") if clave_nota else ""}
+
+
+_ALR_NOTA = "_alr_nota_abierta"     # v665 · la alarma de seguridad cuya caja de nota está abierta
+
+
+def _abrir_nota(aid) -> None:
+    st.session_state[_ALR_NOTA] = None if st.session_state.get(_ALR_NOTA) == str(aid) else str(aid)
 
 
 def _fecha_hora(iso) -> str:
@@ -179,8 +188,10 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
     _pet = st.session_state.pop(_ALR_PET, None)
     if _pet and _pet.get("pid") == str(pid):
         with st.spinner(t("Saving…")):
-            ok, msg = alerts.resolve_alert(_pet.get("id"), usuario, gestor=gestor)
+            ok, msg = alerts.resolve_alert(_pet.get("id"), usuario, gestor=gestor, nota=_pet.get("nota", ""))
         (flash.exito if ok else flash.error)(msg)
+        if ok:
+            st.session_state.pop(_ALR_NOTA, None)
         st.rerun()
     abiertas = alerts.list_alerts(pid, "abierta")
     st.markdown(f"**{':red[:material/notifications:] ' + str(len(abiertas)) if abiertas else ':material/notifications:'} Alerts**")
@@ -193,13 +204,37 @@ def _alerts_section(pid, grupo, project_name="", allow_report=False):
             _quien = _nombres_de([al.get("CreatedBy")], grupo)[0]
             c[0].markdown(f"{emo} _{_fecha_hora(al.get('Date'))}_ · **{maps.literal_md(_quien)}**: "
                           f"{maps.literal_md(al.get('Message'))}")
+            _aid = str(al.get("ID"))
+            _seg = alerts.es_seguridad(al)
             # v616 · el campo, solo lo suyo (decisión del usuario): `alerts.puede_resolver`
             if alerts.puede_resolver(al, usuario, gestor):
-                c[1].button(":material/check_circle:", key=f"resolv_{al.get('ID')}",
-                            help=t("Mark as resolved"), on_click=_pedir_resolver,
-                            args=(pid, al.get("ID")))
+                # ⚠️ v665 · una de SEGURIDAD no se cierra con un clic: abre la caja de la nota
+                # (ciclo 1: un near miss quedó «resuelto» sin decir qué se hizo ni quién lo comprobó)
+                if _seg:
+                    c[1].button(":material/check_circle:", key=f"resolv_{_aid}",
+                                help=t("Resolve — say what was done"), on_click=_abrir_nota, args=(_aid,))
+                else:
+                    c[1].button(":material/check_circle:", key=f"resolv_{_aid}",
+                                help=t("Mark as resolved"), on_click=_pedir_resolver,
+                                args=(pid, _aid))
+                if _seg and st.session_state.get(_ALR_NOTA) == _aid:
+                    with st.container(border=True):
+                        st.text_area(t("What was done, and who checked it? (required for a safety alert)"),
+                                     key=f"alr_nota_{_aid}", max_chars=1000)
+                        st.button(t(":material/check_circle: Resolve with this note"), key=f"alr_ok_{_aid}",
+                                  type="primary", on_click=_pedir_resolver, args=(pid, _aid, f"alr_nota_{_aid}"))
     else:
         st.caption(t("No open alerts."))
+    # ⚠️ v665 · las de SEGURIDAD resueltas, con lo que se hizo: el rastro que pedía el ciclo 1
+    _res = [a for a in alerts.list_alerts(pid, "resuelta") if alerts.es_seguridad(a)]
+    if _res:
+        with st.expander(t(":material/history: Resolved safety alerts ({n})", n=len(_res)), key=f"exp_alr_res_{pid}"):
+            for a in sorted(_res, key=lambda x: str(x.get("ResolvedDate", "")), reverse=True)[:20]:
+                _por = _nombres_de([a.get("ResolvedBy")], grupo)[0]
+                _nota = str(a.get("Resolution", "") or "").strip()
+                st.markdown(f"_{_fecha_hora(a.get('ResolvedDate'))}_ · **{maps.literal_md(_por)}**: "
+                            + (maps.literal_md(_nota) if _nota else t("_(no note: closed before notes were asked for)_")))
+                st.caption(maps.literal_md(a.get("Message")))
     if allow_report:
         with st.expander(t(":material/report: Report a problem to the administrator"), key=f"exp_rep_{pid}"):
             # ⚠️ v616 · GENERACIÓN: tras enviar, la caja conservaba el texto y un 2º toque mandaba
@@ -2515,7 +2550,9 @@ def _diagnostico(ps: dict) -> dict:
             en_curso.append({"nombre": a["nombre"], "avance": pct, "owner": _ow,
                              "orden": _or,
                              "tarde": hoy > fin})     # arrastrada: ya paso su ventana
-        if proximo is None and a["inicio"] > hoy:
+        # ⚠️ v665 · el hito es lo que QUEDA por hacer: una actividad ya al 100 % no lo es (ciclo 1:
+        # una obra completada seguía diciendo «Next milestone: Prepping starts tomorrow»)
+        if proximo is None and a["inicio"] > hoy and pct < 100:
             proximo = {"nombre": a["nombre"], "fecha": f_i,
                        "faltan": a["inicio"] - hoy}
 
@@ -2615,9 +2652,78 @@ def _historial_section(pid: str):
                     unsafe_allow_html=True)
 
 
+def _completada(prj) -> bool:
+    """¿La obra está al 100 % (o marcada «Completed»)? (v665)"""
+    return P._num((prj or {}).get("Progress")) >= 99.95 or str((prj or {}).get("Status", "")) == "Completed"
+
+
+def lista_cierre(pid: str, grupo: str, prj: dict) -> list:
+    """Lo que sigue ABIERTO en una obra terminada, como frases (v665).
+
+    Ciclo 1: PRJ-0039 pasó a «Completed» con una alarma del false car con X, tareas de To-do sin
+    hacer, un activo en la obra y parte del precio sin facturar, y nada lo dijo. Cada fuente va en su
+    `try`: una que falle no se lleva a las demás (y no se dice «nada abierto» de lo que no se miró).
+    """
+    from core import theme as _T
+    out = []
+    try:
+        if alerts.is_configured():
+            _n = len(alerts.list_alerts(pid, "abierta"))
+            if _n:
+                out.append(t("**{n}** open alert(s): resolve them in «Alerts» (a safety one needs a note).", n=_n))
+    except Exception as e:
+        logger.warning("lista_cierre alertas %s: %s", pid, e)
+        out.append(t("The alerts could not be checked."))
+    try:
+        from core import tareas as _TA
+        if _TA.is_configured():
+            _n = len(_TA.pendientes(pid))
+            if _n:
+                out.append(t("**{n}** To-do item(s) still pending.", n=_n))
+    except Exception as e:
+        logger.warning("lista_cierre tareas %s: %s", pid, e)
+        out.append(t("The To-do list could not be checked."))
+    try:
+        from core import inventory as _INV
+        if _INV.is_configured():
+            _a = [a for a in _INV.list_activos(grupo)
+                  if str(a.get("LocationType", "")).strip().lower() == "project"
+                  and str(a.get("LocationRef", "")).strip() == str(pid)]
+            if _a:
+                out.append(t("**{n}** asset(s) still on site: {l}.", n=len(_a),
+                             l=", ".join(maps.literal_md(a.get("Name", "")) for a in _a[:5])))
+    except Exception as e:
+        logger.warning("lista_cierre activos %s: %s", pid, e)
+        out.append(t("The assets on site could not be checked."))
+    try:
+        from core import invoices as _I
+        if _I.is_configured():
+            _p = _I.pendiente_de_facturar(pid, grupo, prj)
+            if _p > 0.5:
+                out.append(t("**{x}** of the price still to invoice.", x=_T.dinero(_p)))
+    except Exception as e:
+        logger.warning("lista_cierre facturas %s: %s", pid, e)
+        out.append(t("What is left to invoice could not be checked."))
+    return out
+
+
+def _cierre_section(pid: str, grupo: str, prj: dict):
+    """La lista de cierre de una obra al 100 % (v665)."""
+    if not _completada(prj):
+        return
+    _l = lista_cierre(pid, grupo, prj)
+    if _l:
+        st.warning(t(":material/flag: **The job is complete — before closing it:**") + "\n\n"
+                   + "\n".join(f"- {x}" for x in _l))
+    else:
+        st.success(t(":material/task_alt: **The job is complete and nothing is left open** (alerts, To-do, "
+                     "assets on site, invoicing). You can archive it in «Data»."))
+
+
 def _estado_section(pid: str, grupo: str, prj: dict):
     """Pestaña :material/bar_chart: Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
     ritmo, el desglose y el cronograma van a ancho completo abajo)."""
+    _cierre_section(pid, grupo, prj)                 # v665 · lo que queda abierto al terminar
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
@@ -5003,9 +5109,16 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
             desc = c2.text_input(t("Description"), key=f"{key_prefix}_desc{_sf}")
             f = st.file_uploader(t("Photo / PDF of the receipt"), type=["pdf", "png", "jpg", "jpeg"],
                                  key=f"{key_prefix}_file{_sf}")
+            # ⚠️ v665 · el comprobante es la prueba para las cuentas: sin foto ni PDF hay que decirlo a
+            # propósito (ciclo 1: «Receipt added (37.80)» sin nada, y la oficina no lo distinguía)
+            _sin = st.checkbox(t("I have no receipt for this (the office will see it as «no receipt»)"),
+                               key=f"{key_prefix}_sinrec{_sf}")
             if st.form_submit_button(t("Save receipt")):
                 if val <= 0:
                     st.error(t("Enter the value of the receipt."))
+                elif f is None and not _sin:
+                    st.error(t("Add the photo or PDF of the receipt: it is the proof for the accounts. "
+                               "If there is none, tick «I have no receipt for this»."))
                 else:
                     did, fn = "", ""
                     if f is not None:
@@ -5015,6 +5128,10 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                     ok, msg = E.add(pid, grupo, val, cat, prov, desc, did, fn,
                                     st.session_state.get("auth", {}).get("usuario", ""))
                     (flash.exito if ok else st.error)(msg)
+                    # v665 · la foto que no se pudo subir se dice (el recibo queda «no receipt»)
+                    if ok and f is not None and not did:
+                        flash.aviso(t(":material/warning: The photo could not be uploaded: the receipt "
+                                      "was saved without it, marked «no receipt»."))
                     if ok:
                         st.session_state[f"_rec_gen_{key_prefix}_{pid}"] = _rg + 1
                         st.rerun()
@@ -5058,7 +5175,8 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                         st.session_state[f"{key_prefix}_rcb"] = None if _cur == _rid else _rid
                         st.rerun()
                 else:
-                    cc[0].caption(_lbl + " · " + t("no file"))
+                    # v665 · «no receipt», que se vea (era «no file» en gris)
+                    cc[0].caption(f"{_lbl} · :orange[**{t('no receipt')}**]")
                 if can_delete and cc[1].button(":material/delete:", key=f"{key_prefix}_del_{_rid}"):
                     ok, msg = E.delete(r.get("ID"))
                     (flash.exito if ok else st.error)(msg)

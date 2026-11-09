@@ -304,7 +304,8 @@ chk("⚠️ la bandeja ya dice cuál está sustituida", _tf["COR-3"]["superseded
 sec("5. Cerrar un aviso: solo los abiertos de SU grupo")
 x, m, a = preparar("prepare_close_alert", {"alert_id": "ALR-1"})
 chk("la tarjeta: qué obra, quién, cuándo y qué", not m and a["titulo"] == "Close alert · Bondi" and "02/11/2026 · Helper One" in a["detalle"] and "Door jammed" in a["detalle"], a)
-chk("lo que se hará", a["datos"] == {"alert_id": "ALR-1"}, a["datos"])
+# ⚠️ v665 · CADUCADO a propósito: la tarjeta lleva también la nota (vacía en una alarma que no es de seguridad)
+chk("lo que se hará", a["datos"] == {"alert_id": "ALR-1", "note": ""}, a["datos"])
 x, m, a = preparar("prepare_close_alert", {"alert_id": "ALR-2"})
 chk("⚠️ uno ya resuelto, no", m and "not one of this company's open alerts" in x, x)
 x, m, a = preparar("prepare_close_alert", {"alert_id": "ALR-3"})
@@ -421,7 +422,8 @@ chk("⚠️ una tarjeta tocada no hace otra cosa", not ok and ESC == [], (msg, E
 
 ESC.clear()
 ok, msg = CT.confirmar(carta("prepare_close_alert", {"alert_id": "ALR-1"}), octx())
-chk("cerrar: como oficina, con la sesión", ok and ESC == [("AL.resolve_alert", ("ALR-1", "Admin2"), {"gestor": True})], ESC)
+# ⚠️ v665 · CADUCADO a propósito: Confirm pasa también la nota (vacía en una alarma que no es de seguridad)
+chk("cerrar: como oficina, con la sesión", ok and ESC == [("AL.resolve_alert", ("ALR-1", "Admin2"), {"gestor": True, "nota": ""})], ESC)
 _q = carta("prepare_close_alert", {"alert_id": "ALR-1"})
 ALS[0]["Status"] = "resuelta"
 ESC.clear()
