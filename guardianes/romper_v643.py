@@ -95,16 +95,19 @@ ROTURAS = [
     ("una fila por reloj", T,
      [("""            e = fichados.setdefault(u, {"who":""", """            e = fichados.setdefault(u + _ci if False else _ci, {"who":""")]),
     ("⚠️ el tablero sale de hoy aunque pidan otro día", T,
-     [("""        for a in R.asignaciones_dia(g, _us, dia) or []:\n""", """        for a in R.asignaciones_dia(g, _us, hoy) or []:\n""")]),
+     # ⚠️ v666 · re-anclada: el tablero se recorre por cada día del rango (`d`)
+     [("""            for a in R.asignaciones_dia(g, _us, d) or []:\n""", """            for a in R.asignaciones_dia(g, _us, hoy) or []:\n""")]),
     ("⚠️ ausentes de hoy aunque pidan otro día", T,
-     [("""                       for r in AU.ausentes_en(g, dia)],\n""", """                       for r in AU.ausentes_en(g, hoy)],\n""")]),
+     # ⚠️ v666 · re-anclada: las ausencias del rango, una vez por ID
+     [("""for r in AU.ausentes_en(g, d)}""", """for r in AU.ausentes_en(g, hoy)}""")]),
     ("⚠️ también la oficina en el tablero", T,
      [("""    _campo = [u for u in auth.list_users(g) if str(u.get("Role", "")).lower() == "field"]\n""",
        """    _campo = list(auth.list_users(g))\n""")]),
     ("⚠️ las listas sin tope", T,
      [("""                                     for c in CR.expiring(g)[:MAX_LISTA]]}\n""", """                                     for c in CR.expiring(g)]}\n""")]),
     ("⚠️ las correcciones sin decir si ya se pagaron", T,
-     [("""                                  "already_on_payslip": r.get("PayslipCovers", ""),\n""", "")]),
+     # ⚠️ v666 · re-anclada: la nómina se mira AHORA (`correcciones.nomina_de`)
+     [("""                                  "already_on_payslip": CO.nomina_de(r, g),\n""", "")]),
     ("la bandeja sin días sin registro", T,
      [("""    _dias = FC.dias_sin_registro(g)\n""", """    _dias = []\n""")]),
     ("⚠️ el periodo no es este mes", T,
@@ -163,7 +166,8 @@ ROTURAS = [
     ("⚠️ el recordatorio sin citar la pregunta", A,
      [("""                           "acciones": acciones, "pregunta": user_message})\n""", """                           "acciones": acciones})\n""")]),
     ("⚠️ la pregunta se cuela entera", A,
-     [("""«{str(pregunta)[:200]}»""", """«{str(pregunta)}»""")]),
+     # ⚠️ v666 · re-anclada: la pregunta se recorta UNA vez (`_q`) para las dos formas del recordatorio
+     [("""    _q = str(pregunta)[:200]""", """    _q = str(pregunta)""")]),
     ("⚠️ se disculpa por el idioma", A,
      [("""the first word, not in the language of your notes or of this data. Do not comment on the language.)")""", """the first word, not in the language of your notes or of this data.)")""")]),
     ("⚠️ la obra sin sus días de retraso", T,

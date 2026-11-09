@@ -1659,7 +1659,10 @@ def _autoagenda(grupo, pid, nuevos, quitados, fecha_ini, fecha_fin, al_flash=Fal
                 msgs.append(f":material/calendar_month: Planner: {r['llenadas']} day(s) assigned to "
                             f"{len(nuevos)} person(s) in {r['semanas']} week(s){_oc}.")
             elif r["ocupadas"]:
-                msgs.append(":material/calendar_month: Planner: the days in the range were already taken; nothing was overwritten.")
+                # v666 · y lo que eso deja: la obra sin nadie (ciclo 1, PRJ-0040), con dónde arreglarlo
+                msgs.append(t(":material/calendar_month: Planner: the days in the range were already taken; nothing was "
+                              "overwritten, so **nobody is planned on this job yet**. Use «Plan it» in its Status tab "
+                              "(or Planning → Panel → Radar)."))
             elif r.get("pasado"):           # v644 · el tablero solo se llena desde hoy
                 msgs.append(t(":material/calendar_month: The project's end date has already passed, so nothing was "
                               "auto-planned. Plan by hand in :material/calendar_month: Planning if needed."))
@@ -2720,10 +2723,46 @@ def _cierre_section(pid: str, grupo: str, prj: dict):
                      "assets on site, invoicing). You can archive it in «Data»."))
 
 
+def _planificar_obra(pid) -> None:
+    """v666 · A Planning → Panel con «Assign» abierto y esta obra elegida (callback: sin `st.rerun`)."""
+    st.session_state["ai_prj"] = str(pid)
+    st.session_state["_panel_tool"] = "asignar"
+    st.session_state["_admin_nav_pending"] = ("planificacion", "🎛 Panel")
+
+
+def _plan_semana_section(pid: str, grupo: str, prj: dict):
+    """v666 · Si nadie está planificado en esta obra esta semana, se dice aquí, con el botón para hacerlo.
+
+    Ciclo 1: PRJ-0040 nació sin nadie en el tablero («nothing was overwritten») y nada lo señalaba
+    después, ni en la ficha ni en Planning. Solo la oficina (el propietario no tiene Planning)."""
+    if str((st.session_state.get("auth") or {}).get("rol", "")) != "administrator":
+        return
+    try:
+        from core import roster as R
+        if str(prj.get("Status", "")) not in R.ACTIVAS_PLAN:
+            return
+        sp = R.sin_planificar(grupo, R.lunes_de(clock.today(grupo)))
+    except Exception as e:
+        logger.warning("_plan_semana_section %s: %s", pid, e)
+        return
+    if str(pid) in sp["obras"]:
+        c1, c2 = st.columns([4, 1])
+        c1.warning(t(":material/event_busy: **Nobody is planned on this job this week.** The Radar in Planning "
+                     "lists it too."))
+        c2.button(t(":material/bolt: Plan it"), key=f"plan_sp_{pid}", width="stretch",
+                  on_click=_planificar_obra, args=(str(pid),))
+        return
+    _jf = [u for u, p in sp["jefes"] if p == str(pid)]
+    if _jf:
+        st.caption(t(":material/engineering: Head installer {x}: no day on this job this week.",
+                     x=", ".join(_nombres_de(_jf, grupo))))
+
+
 def _estado_section(pid: str, grupo: str, prj: dict):
     """Pestaña :material/bar_chart: Estado (v211: doble columna arriba — cómo va | alarmas + equipo; el
     ritmo, el desglose y el cronograma van a ancho completo abajo)."""
     _cierre_section(pid, grupo, prj)                 # v665 · lo que queda abierto al terminar
+    _plan_semana_section(pid, grupo, prj)            # v666 · nadie planificado esta semana
     ps = P.project_schedule(pid)
     if not (ps and ps["sched"].get("activities")):
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)

@@ -661,8 +661,12 @@ def _tarjeta_pendiente(grupo, r, quien):
                 _obras.setdefault(c["etiqueta"], []).append(c["fecha"])
             st.warning(t(":material/warning: They are already assigned on those days to") + " **"
                        + "**, **".join(_obras) + t("**. If you approve, those days are freed on the board."))
-            with st.expander(t("Who could cover it ({n} day(s))").replace("{n}", str(len(ch))),
-                             icon=":material/group:"):
+            # ⚠️ v666 · `ch` es una fila por (día, obra): 1 día con 2 obras decía «(2 day(s))» (ciclo 1)
+            _nd = len({c["fecha"] for c in ch})
+            _tit_c = (t("Who could cover it ({n} day(s))").replace("{n}", str(_nd)) if _nd == len(ch)
+                      else t("Who could cover it ({d} day(s) · {n} assignments)").replace("{d}", str(_nd))
+                      .replace("{n}", str(len(ch))))
+            with st.expander(_tit_c, icon=":material/group:"):
                 for c in ch:
                     subs = AU.sustitutos(grupo, c["fecha"], c.get("proyecto_id"),
                                          excluir=usuario)

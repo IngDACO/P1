@@ -187,6 +187,17 @@ def nomina_que_cubre(grupo, usuario, fecha) -> str:
     return ""
 
 
+def nomina_de(r, grupo) -> str:
+    """La nómina que cubre el día de esa corrección, AHORA (v666): la anotada al crearla o, si no había
+    ninguna entonces, la que lo cubra hoy. ⚠️ `PayslipCovers` solo se calcula al registrar: una nómina
+    generada DESPUÉS no constaba, y el Management assistant concluyó «that week doesn't look paid» con la
+    nómina pagada (ciclo 1). La pantalla y el asistente preguntan aquí."""
+    _x = str((r or {}).get("PayslipCovers", "") or "").strip()
+    if _x:
+        return _x
+    return nomina_que_cubre(grupo, str((r or {}).get("User", "")), str((r or {}).get("NewValue", "")))
+
+
 # ── Escritura ────────────────────────────────────────────────────
 def registrar(grupo, usuario, nombre, tipo, proyecto, campo,
               valor_anterior, valor_nuevo, motivo="") -> tuple:

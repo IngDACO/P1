@@ -137,10 +137,16 @@ def _mi_dia(entrada, ctx) -> dict:
         ids.append(str(fichada["proyecto_id"]))
     ids += [str(a.get("proyecto_id")) for a in asig if a.get("proyecto_id")]
     pendientes = []
+    # ⚠️ v666 · por qué está cada obra en la lista: dijo «planned for you today: PRJ-0039» porque había FICHADO
+    # allí, con el tablero mandándole a otras dos (ciclo 1)
+    _plan = {str(a.get("proyecto_id")) for a in asig if a.get("proyecto_id")}
+    _fich = str((fichada or {}).get("proyecto_id") or "")
     for pid in dict.fromkeys(ids):
         # La de su fichaje o su tablero es suya aunque ya no esté en su lista de asignadas.
         prj = obras.get(pid) or P.get_project(pid) or {}
-        pendientes.append({"project_id": pid, "job": prj.get("Name", ""), **_estado_del_dia(prj, pid, ctx)})
+        pendientes.append({"project_id": pid, "job": prj.get("Name", ""),
+                           "planned_for_you_today": pid in _plan, "you_are_clocked_in_here": pid == _fich,
+                           **_estado_del_dia(prj, pid, ctx)})
     _vence = []
     for c in CR.list_for(u) or []:
         _d = CR.dias_para(c.get("ExpiryDate", ""))
@@ -521,20 +527,43 @@ def _equipo(entrada, ctx) -> dict:
                 e["since"] = _ci[11:16]
             if _ci[:10] != hoy.isoformat():
                 e["left_open_from_a_previous_day"] = True
+    # ⚠️ v666 · un RANGO de hasta 7 días (`to`): solo veía un día y dijo «solo puedo ver el tablero de hoy» a una
+    # pregunta de la semana (ciclo 1, justo la que destapaba H14)
+    from datetime import timedelta as _td
+    hasta = _parse_date(entrada.get("to")) if entrada.get("to") else dia
+    if not hasta or hasta < dia or (hasta - dia).days > 6:
+        raise _Negado("«to» has to be YYYY-MM-DD, on or after «date» and at most 6 days after it.")
+    dias = [dia + _td(days=i) for i in range((hasta - dia).days + 1)]
     planificado = []
     _campo = [u for u in auth.list_users(g) if str(u.get("Role", "")).lower() == "field"]
-    for u in _campo:
-        _us = str(u.get("User", ""))
-        for a in R.asignaciones_dia(g, _us, dia) or []:
-            planificado.append({"who": nom.get(_us, _us), "what": a.get("etiqueta", ""),
-                                "project_id": a.get("proyecto_id", ""), "note": a.get("nota", "")})
+    for d in dias:
+        for u in _campo:
+            _us = str(u.get("User", ""))
+            for a in R.asignaciones_dia(g, _us, d) or []:
+                planificado.append({"date": dmy(d), "who": nom.get(_us, _us), "what": a.get("etiqueta", ""),
+                                    "project_id": a.get("proyecto_id", ""), "note": a.get("nota", "")})
+    # una ausencia de varios días, UNA vez (por su ID; un dict y no un set, que `verif_v643` toma `.add` por escritura)
+    _por_id = {str(r.get("ID", "")): r for d in dias for r in AU.ausentes_en(g, d)}
+    _aus = [{"who": nom.get(str(r.get("User", "")), r.get("Name", "")), "type": AU.nombre_tipo(str(r.get("Type", ""))),
+             "from": dmy(r.get("From", "")), "to": dmy(r.get("To", "")), "status": r.get("Status", "")}
+            for r in _por_id.values()]
+    # v666 · lo que a ESA semana le falta (lo mismo que el Radar de Planning)
+    try:
+        _sp = R.sin_planificar(g, R.lunes_de(dia))
+        _obras = {str(o.get("ID", "")): o.get("Name", "") for o in _mis_obras(ctx)}
+        _hueco = {"week_of": dmy(R.lunes_de(dia)),
+                  "running_jobs_with_nobody_planned": [{"project_id": p, "job": _obras.get(p, p)} for p in _sp["obras"]],
+                  "head_installers_with_no_day_on_their_job": [{"who": nom.get(u, u), "project_id": p, "job": _obras.get(p, p)}
+                                                               for u, p in _sp["jefes"]]}
+    except Exception as e:
+        logger.warning("chat_tools: sin_planificar: %s", e)
+        _hueco = {}
     # ⚠️ v644 · Toda la gente de campo, por su nombre: sin ella, «put installer on PRJ-0034» no se preparó (examen
     # real), porque el modelo no sabía quién era «installer». Con el login detrás solo si el nombre se repite.
-    return {"date": dmy(dia), "field_staff": sorted(auth.etiqueta_usuarios(_campo).values(), key=str.lower)[:MAX_LISTA * 2],
+    return {"date": dmy(dia), **({"to": dmy(hasta)} if hasta != dia else {}),
+            "field_staff": sorted(auth.etiqueta_usuarios(_campo).values(), key=str.lower)[:MAX_LISTA * 2],
             "clocked_in_now": list(fichados.values()), "planned": planificado,
-            "absent": [{"who": nom.get(str(r.get("User", "")), r.get("Name", "")), "type": AU.nombre_tipo(str(r.get("Type", ""))),
-                        "from": dmy(r.get("From", "")), "to": dmy(r.get("To", "")), "status": r.get("Status", "")}
-                       for r in AU.ausentes_en(g, dia)],
+            "absent": _aus, "the_week_on_the_board": _hueco,
             "credentials_expiring": [{"who": nom.get(str(c.get("usuario", "")), c.get("usuario", "")), "credential": c.get("tipo", ""),
                                       "expires": dmy(c.get("vencimiento", "")), "days_left": c.get("dias")}
                                      for c in CR.expiring(g)[:MAX_LISTA]]}
@@ -557,9 +586,14 @@ def _bandejas(entrada, ctx) -> dict:
                                  "reason": _corto(r.get("Reason", ""))} for r in AU.pendientes(g)[:MAX_LISTA]],
         "time_fixes_to_review": [{"id": r.get("ID", ""), "who": _quien(r), "job": r.get("Project", ""), "field": r.get("Field", ""),
                                   "was": r.get("OldValue", ""), "now": r.get("NewValue", ""), "reason": _corto(r.get("Reason", "")),
-                                  "already_on_payslip": r.get("PayslipCovers", ""),
+                                  # v666 · la que lo cubre AHORA (también una generada después)
+                                  "already_on_payslip": CO.nomina_de(r, g),
                                   # v644 · otra posterior volvió a cambiar ese fichaje: se revisa aquella
                                   "superseded_by": CO.sustituida_por(r, _cors)} for r in CO.pendientes(g)[:MAX_LISTA]],
+        # ⚠️ v666 · lo que NO ve: concluyó «that week doesn't look paid» con la nómina pagada (ciclo 1)
+        "payslips": "You cannot see payslips. already_on_payslip is the payslip that covers that day NOW (empty = none "
+                    "covers it today). For anything else about whether someone was paid, say you cannot see payroll: "
+                    "it is in Finance → Payroll.",
         "sick_days_over_balance": [{"id": x["id"], "who": x["nombre"], "days": len(x["dias"])} for x in AU.excesos_por_decidir(g)[:MAX_LISTA]],
         "open_alerts": [{"id": r.get("ID", ""), "job": _obras.get(str(r.get("ProjectID", "")), r.get("ProjectID", "")),
                          "project_id": r.get("ProjectID", ""), "message": _corto(r.get("Message", "")),
@@ -744,8 +778,9 @@ def _preparar_decision_fichaje(entrada, ctx) -> dict:
     if str(r.get("Reason", "")).strip():
         lineas.append(t("Reason: {x}", x=_corto(r.get("Reason"))))
     avisos = []
-    if str(r.get("PayslipCovers", "")).strip():
-        avisos.append(t("That day was already paid in {x}: check whether it needs regularising.", x=r.get("PayslipCovers")))
+    _nom = CO.nomina_de(r, ctx["grupo"])                 # v666 · también la generada después
+    if _nom:
+        avisos.append(t("That day was already paid in {x}: check whether it needs regularising.", x=_nom))
     if nota:
         lineas.append(t("Note: {x}", x=nota))
     lineas += ["⚠️ " + a for a in avisos]
@@ -921,8 +956,9 @@ LECTURA = [
     {"name": "get_my_day", "input_schema": _SIN_ENTRADA, "fn": _mi_dia,
      "description": "What this person has today: date and time, whether they are clocked in and where, what is planned "
                     "for them, and for each of today's jobs whether the Pre-Start and the false car check are done or "
-                    "need their signature, plus credentials expiring soon. Call it first for anything about today, "
-                    "such as «what do I have to do?», «what's missing?» or «where am I working?»."},
+                    "need their signature, plus credentials expiring soon. Each job says whether it is planned for them "
+                    "or they are only clocked in there: never call a job planned just because they clocked in. Call it "
+                    "first for anything about today, such as «what do I have to do?», «what's missing?» or «where am I working?»."},
     {"name": "get_my_jobs", "input_schema": _SIN_ENTRADA, "fn": _mis_trabajos,
      "description": "The jobs this person is assigned to, with ID, location, status, progress and instructions. Call it "
                     "when they ask about their jobs or name one, to find its project_id."},
@@ -986,10 +1022,13 @@ LECTURA_OFICINA = [
     _DETALLE,
     {"name": "get_team", "fn": _equipo,
      "input_schema": {"type": "object", "additionalProperties": False,
-                      "properties": {"date": {"type": "string", "description": "YYYY-MM-DD. Defaults to today."}}},
-     "description": "The team on a day: the whole field staff by name, who is clocked in now and where (today only), who is "
-                    "planned on what, who is absent, and credentials expiring. Call it for anything about people: who is "
-                    "working, who is off, who is free."},
+                      "properties": {"date": {"type": "string", "description": "YYYY-MM-DD. Defaults to today."},
+                                     "to": {"type": "string", "description": "YYYY-MM-DD, optional: up to 6 days after date, "
+                                            "for a stretch of days or a whole week (Monday to Sunday)."}}},
+     "description": "The team on a day or up to a week: the whole field staff by name, who is clocked in now and where (today "
+                    "only), who is planned on what each day, who is absent, the running jobs with nobody planned that week "
+                    "and the head installers with no day on their job, and credentials expiring. Call it for anything about "
+                    "people or the board: who is working, who is off, who is free, what is planned this week."},
     {"name": "get_inbox", "fn": _bandejas, "input_schema": _SIN_ENTRADA,
      "description": "What is waiting for the office: absences to approve, time fixes to review, sick days over balance to decide, open "
                     "alerts, daily logs their author has not reviewed in 2 days, and days worked with no Pre-Start or false car check. Call it for anything about what is pending."},

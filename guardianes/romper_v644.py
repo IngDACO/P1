@@ -88,7 +88,8 @@ ROTURAS = [
     ("⚠️ no dice que se avisa a la persona", T,
      [("""    lineas += ["⚠️ " + a for a in avisos] + [t("{who} is told.", who=quien)]\n""", """    lineas += ["⚠️ " + a for a in avisos]\n""")]),
     ("⚠️ sin decir que ese día ya se pagó", T,
-     [("""    if str(r.get("PayslipCovers", "")).strip():\n        avisos.append(""", """    if False:\n        avisos.append(""")]),
+     # ⚠️ v666 · re-anclada: la nómina se mira AHORA (`correcciones.nomina_de`)
+     [("""    if _nom:\n        avisos.append(""", """    if False:\n        avisos.append(""")]),
     ("⚠️ revertir sin decir qué hora vuelve", T,
      [("""    lineas.append(t("The time goes back to {a} and {who} is told.", a=_antes, who=quien) if accion == "revertir"\n                  else t("The time stays as it is. Nobody is told."))\n""",
        """    lineas.append(t("The time stays as it is. Nobody is told."))\n""")]),

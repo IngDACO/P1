@@ -717,11 +717,41 @@ def _texto_de(r) -> str:
     return txt or "⚠️ I could not get an answer this time. Try again."
 
 
+_ACENTOS_ES = "¿¡ñáéíóú"
+_PAL_ES = {"que", "qué", "de", "la", "el", "los", "las", "para", "por", "con", "una", "está", "están", "hay", "cómo",
+           "cuándo", "quién", "dónde", "esta", "este", "semana", "obra", "obras", "nadie", "tiene", "hoy", "mañana", "y",
+           "en", "del", "se", "lo", "me", "mi", "cuál", "cuáles", "quien", "donde", "cuando", "como"}
+_PAL_EN = {"the", "is", "are", "what", "which", "who", "how", "when", "do", "does", "have", "has", "on", "for", "this",
+           "week", "any", "there", "nobody", "jobs", "job", "today", "tomorrow", "and", "of", "to", "my", "me", "planned",
+           "anyone", "where", "can", "you", "it", "with", "board"}
+
+
+def idioma_de(texto) -> str:
+    """«English», «Spanish» o "" si no se puede decir (v666). Ciclo 1: respondió en español a 1 de 10 preguntas en
+    inglés con la regla repetida; decirle el idioma con su NOMBRE no le deja adivinar."""
+    s = str(texto or "").lower()
+    import re as _re
+    pal = _re.findall(r"[a-záéíóúñü]+", s)
+    es = sum(p in _PAL_ES for p in pal) + (3 if any(c in s for c in _ACENTOS_ES) else 0)
+    en = sum(p in _PAL_EN for p in pal)
+    if es >= 2 and es > en:
+        return "Spanish"
+    if en >= 2 and en > es:
+        return "English"
+    return ""
+
+
 def _idioma_tras_datos(pregunta) -> str:
     """⚠️ v643 · Justo antes de responder. Fallaba con los datos delante: en los exámenes, la regla no bastó ni repetida
     al final de la guía, y dos respuestas empezaron en español y se disculparon a media frase. Por eso cita la pregunta:
-    lo último que lee es la propia frase de la persona, y no hay que adivinar en qué idioma está."""
-    return (f"(The person asked: «{str(pregunta)[:200]}». Write your whole answer in the language of that question, from "
+    lo último que lee es la propia frase de la persona, y no hay que adivinar en qué idioma está.
+    ⚠️ v666 · y el idioma con su NOMBRE cuando se sabe (`idioma_de`): aun así falló 1 de 10 en el ciclo 1."""
+    _l = idioma_de(pregunta)
+    _q = str(pregunta)[:200]                     # la pregunta, recortada UNA vez para las dos formas
+    if _l:
+        return (f"(The person asked, in {_l}: «{_q}». Write your whole answer in {_l}, from the first "
+                "word, not in the language of your notes or of this data. Do not comment on the language.)")
+    return (f"(The person asked: «{_q}». Write your whole answer in the language of that question, from "
             "the first word, not in the language of your notes or of this data. Do not comment on the language.)")
 
 

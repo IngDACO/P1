@@ -337,7 +337,8 @@ def _crear_gasto(r, valor, creado_por="") -> tuple:
     ok, msg = E.add(str(r.get("ProjectID", "")), str(r.get("Group", "")), valor,
                     categoria=str(r.get("Category", "")) or E.CATEGORIAS[0],   # v487: canonico
                     proveedor=str(r.get("Supplier", "")),
-                    descripcion=f"Orden {r.get('ID','')} · {r.get('Description','')}".strip(" ·"),
+                    # ⚠️ v666 · «Order», no «Orden»: el dato va en inglés, la lengua base (v453); salía «Orden ORD-00001»
+                    descripcion=f"Order {r.get('ID','')} · {r.get('Description','')}".strip(" ·"),
                     creado_por=creado_por)
     if not ok:
         return False, msg

@@ -134,7 +134,7 @@ def _tarjeta(grupo, r, quien, etq, por=""):
 
         # ⚠️ El aviso que pidió el usuario: si ese día ya se pagó, se dice CUÁL nómina,
         # para que se pueda ir a mirar en vez de un «ojo» que no lleva a ningún sitio.
-        _nom_id = str(r.get("PayslipCovers", "")).strip()
+        _nom_id = C.nomina_de(r, grupo)      # v666 · también la generada después
         if _nom_id:
             st.warning(t(":material/warning: That day was already paid in **{x}** — "
                          "check whether it needs regularising.", x=_nom_id))

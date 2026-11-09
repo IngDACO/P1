@@ -5,7 +5,7 @@ Sección 📅 Planificación en 🛠 Mi grupo: la rejilla persona×día coloread
 el board del usuario), edición de la semana persona a persona, "copiar la semana
 anterior" y el catálogo de trabajos.
 """
-from datetime import timedelta, time as _time
+from datetime import date, timedelta, time as _time  # `date`: lo que devuelve `_semana_activa` (v666)
 
 from core.i18n import t
 
@@ -18,6 +18,9 @@ from core import ui_common as ui
 from core import auth
 from core import projects as P
 from core import clock
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _to_time(hhmm, default="07:00") -> _time:
@@ -79,7 +82,7 @@ def _texto_sobre(hex_color) -> str:
         return "#1f2937"
 
 
-def _semana_activa() -> "date":
+def _semana_activa() -> date:
     """Lunes de la semana que se está viendo (en session_state)."""
     k = "ros_lunes"
     if k not in st.session_state:
@@ -669,14 +672,53 @@ def _radar_scan(grupo, lunes, staff, tidx):
     return choques, sin_cumplir, marcas, quien
 
 
-def _radar_personal(grupo, lunes, staff, tidx, scan=None):
+def _ir_a_asignar(pid) -> None:
+    """v666 · Abre «Assign» con esa obra ya elegida (la clave del selector, antes de pintarlo)."""
+    st.session_state["ai_prj"] = str(pid)
+    st.session_state["_panel_tool"] = "asignar"
+
+
+def _radar_sin_gente(grupo, sp):
+    """v666 · Las obras en marcha sin nadie esta semana y los jefes sin un día en la suya. Cada línea abre
+    «Assign» con la obra elegida (nada pasivo)."""
+    if not (sp.get("obras") or sp.get("jefes")):
+        return
+    _nprj = {str(p.get("ID", "")): str(p.get("Name", "") or p.get("ID", "")) for p in P.list_projects(grupo=grupo)}
+    _nom = {str(u.get("User", "")): str(u.get("Name") or u.get("User", "")) for u in auth.list_users(grupo)}
+    _jefes_de = {}
+    for u, pid in sp.get("jefes", []):
+        _jefes_de.setdefault(pid, []).append(_nom.get(u, u))
+    if sp.get("obras"):
+        st.markdown(t("**:blue[:material/event_busy:] Running jobs with nobody planned this week:**"))
+        for _i, pid in enumerate(sp["obras"]):
+            _txt = f"{_nprj.get(pid, pid)} ({pid})"
+            if _jefes_de.get(pid):
+                _txt += " · " + t("head installer: {x}", x=", ".join(_jefes_de[pid]))
+            st.button(_esc(_txt), key=f"radar_sp_{_i}", width="stretch", help=t("Open Assign with this job"),
+                      on_click=_ir_a_asignar, args=(pid,))
+    _solo = [(u, pid) for u, pid in sp.get("jefes", []) if pid not in set(sp.get("obras", []))]
+    if _solo:
+        st.markdown(t("**:blue[:material/engineering:] Head installers with no day on their job this week:**"))
+        for _i, (u, pid) in enumerate(_solo):
+            st.button(_esc(f"{_nom.get(u, u)} → {_nprj.get(pid, pid)} ({pid})"), key=f"radar_jf_{_i}",
+                      width="stretch", help=t("Open Assign with this job"), on_click=_ir_a_asignar, args=(pid,))
+
+
+def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
     """Radar de personal: choques de turno + certificados que bloquean (v280).
-    v287: se abre desde la fila de herramientas del Panel (ya no es un expander)."""
+    v287: se abre desde la fila de herramientas del Panel (ya no es un expander).
+    v666: y lo que a la semana le falta (`sp`, de `roster.sin_planificar`)."""
     # ⚠️ `_radar_scan` devuelve 3 elementos desde v292 (el 3º son las marcas del
     # tablero). Se indexa en vez de desempaquetar para no romper al añadir más.
     _sc = scan if scan is not None else _radar_scan(grupo, lunes, staff, tidx)
     choques, sin_cumplir = _sc[0], _sc[1]
-    n = len(choques) + len(sin_cumplir)
+    if sp is None:
+        try:
+            sp = R.sin_planificar(grupo, lunes)
+        except Exception:
+            logger.warning("roster_ui.sin_planificar", exc_info=True)
+            sp = {"obras": [], "jefes": []}
+    n = len(choques) + len(sin_cumplir) + len(sp.get("obras", [])) + len(sp.get("jefes", []))
     # ⚠️ v552 · La ficha que se abrió desde una línea se pinta DEBAJO de esa línea, no
     # arriba del Panel: desde la altura del Radar quedaba 373 px por encima de la vista y
     # el clic parecía no hacer nada (medido en producción). `_panel_ficha_en` = la key
@@ -728,6 +770,7 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None):
                     _pintada = True
         if _fic and _en.startswith("radar_") and not _pintada:
             _ficha_rapida(grupo, _fic)         # su línea se movió o desapareció: al final
+        _radar_sin_gente(grupo, sp)            # v666
 
 
 def _ficha_rapida(grupo, usuario):
@@ -925,6 +968,12 @@ def render_planificacion(grupo):
     # ── KPIs + estado en vivo (un solo escaneo del radar, reusado en los KPIs) ──
     _scan = _radar_scan(grupo, lunes, staff, tidx)
     _panel_kpis(grupo, lunes, staff, datos, _scan[0], _scan[1], dias=dias)
+    # v666 · obras en marcha sin nadie y jefes sin días en la suya (aparte: `_radar_scan` no cambia)
+    try:
+        _sp = R.sin_planificar(grupo, lunes)
+    except Exception:
+        logger.warning("roster_ui.sin_planificar", exc_info=True)
+        _sp = {"obras": [], "jefes": []}
 
     # ── Ficha rápida (aparece al tocar un nombre en el tablero) ──
     # ⚠️ v552 · La abierta desde una línea del Radar se pinta DENTRO del Radar, bajo su
@@ -1037,7 +1086,7 @@ def render_planificacion(grupo):
     # Antes eran 5 bloques APILADOS (asignación, radar, en vivo, plan-vs-real, catálogo)
     # y el Panel se leía como una lista. Ahora es una fila de accesos y solo se abre
     # el elegido — la pantalla queda: KPIs → vista → tablero → una herramienta.
-    _n_rad = len(_scan[0]) + len(_scan[1])
+    _n_rad = len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])
     # v293: «En vivo» y «Plan vs real» eran la misma pregunta a distinta resolución
     # de tiempo → una sola herramienta «Cumplimiento» (lo vivo va en cada fila).
     # v551 · «Asignar» salía en español y sin `t()`
@@ -1057,7 +1106,7 @@ def render_planificacion(grupo):
             if _cur == "asignar":
                 _asignacion_inteligente(grupo, lunes, staff, tidx, dias=dias)
             elif _cur == "radar":
-                _radar_personal(grupo, lunes, staff, tidx, scan=_scan)
+                _radar_personal(grupo, lunes, staff, tidx, scan=_scan, sp=_sp)
             elif _cur == "cumpl":
                 _cumplimiento(grupo, lunes, staff, tidx, dias=dias)
             else:

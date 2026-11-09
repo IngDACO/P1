@@ -592,6 +592,51 @@ def guardar_persona(grupo, lunes, usuario, dias: dict) -> tuple:
     return True, t("Saved.")
 
 
+ACTIVAS_PLAN = ("In progress", "Planned")
+
+
+def sin_planificar(grupo, lunes) -> dict:
+    """v666 · Lo que a la semana le FALTA: obras en marcha sin nadie en el tablero y jefes de obra sin
+    un solo día en la suya. `{"obras": [pid], "jefes": [(usuario, pid)]}`.
+
+    Ciclo 1: campo000 era jefe de PRJ-0039 y PRJ-0040 sin un día en ninguna, y PRJ-0040 nació sin
+    nadie («nothing was overwritten»); el Radar solo miraba choques y certificados. Una obra cuenta si
+    está «In progress» o «Planned», empezó (o empieza) esta semana y no acabó antes del lunes.
+    """
+    from core import projects as P
+    lunes = _a_date(lunes)
+    if not lunes:
+        return {"obras": [], "jefes": []}
+    lunes = lunes_de(lunes)                       # cualquier día → el lunes de su semana (la clave del tablero)
+    dom = lunes + timedelta(days=6)
+    datos = get_semana(grupo, lunes) or {}
+    tidx = trabajos_idx(grupo)
+    hay = set()                                   # (usuario, pid) con algún día esta semana
+    for usr in datos:
+        for d in DIAS_TODOS:
+            for it in celda_items(datos, usr, d):
+                if it["asig"] in ESTADOS:
+                    continue
+                pid = proyecto_de(it["asig"], tidx)
+                if pid:
+                    hay.add((str(usr), pid))
+    con_gente = {p for _, p in hay}
+    obras, jefes = [], []
+    for p in P.list_projects(grupo=grupo):
+        pid = str(p.get("ID", "")).strip()
+        if not pid or str(p.get("Status", "")) not in ACTIVAS_PLAN:
+            continue
+        ini, fin = _a_date(p.get("StartDate")), _a_date(p.get("EndDateEst"))
+        if not ini or ini > dom or (fin and fin < lunes):
+            continue
+        if pid not in con_gente:
+            obras.append(pid)
+        for u in P.head_installers(p):
+            if (u, pid) not in hay:
+                jefes.append((u, pid))
+    return {"obras": obras, "jefes": jefes}
+
+
 def asignaciones_dia(grupo, usuario, fecha=None) -> list:
     """TODAS las asignaciones de una persona un día (varias posibles, v274). Cada una:
     {asig, nota, proyecto_id, etiqueta, color, es_estado}. [] si no hay nada ese día.
