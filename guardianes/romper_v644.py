@@ -186,10 +186,11 @@ ROTURAS = [
      [("""        "- **To-do:** apuntas y marcas tareas de una obra directamente cuando te lo pida, sin pedir confirmación, y le "
         "dices qué hiciste.\\n"
 """, "")]),
+    # v679 · re-anclada: detrás va ahora la regla de responder solo a lo que se pide (visto verificando v678). La misma rotura
     ("⚠️ la oficina olvida que la conversación puede ser vieja", A,
      [("""        "- La conversación puede venir de otros días, y lo que se dijo entonces puede estar viejo: para los datos de "
         "hoy vuelve a mirar, no repitas lo de antes.\\n"
-        "- Las nóminas de cada persona""", """        "- Las nóminas de cada persona""")]),
+        # v679 · visto verificando v678""", """        # v679 · visto verificando v678""")]),
     ("⚠️ vuelve la frase de que no actúa", A,
      [("""        "- **To-do:** apuntas y marcas tareas de una obra""", """        "- Todavía no puedes hacer nada en la app, solo mirar.\\n"
         "- **To-do:** apuntas y marcas tareas de una obra""")]),

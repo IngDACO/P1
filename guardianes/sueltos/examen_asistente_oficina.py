@@ -186,7 +186,38 @@ CONFIRMADO = [
         {"role": "assistant", "content": "The alert to the office is ready. Nothing is sent until you press **Confirm**."},
         {"role": "assistant", "content": "✅ Sent to the office (ALR-EX1).", "app": "confirm", "card": "Alert to the office · Bondi Junction Tower — Lift 2"}]},
 ]
-PREGUNTAS = IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
+# `revisar` (v679, visto verificando v678): en la conversación hay una respuesta de OTRO día que los datos de hoy ya
+# contradicen —la cambió otra persona después—. No debe «corregirla» por su cuenta («One thing from my last answer needs
+# correcting…», en producción). Es la conversación REAL del ciclo 3 (15/11), y el tablero, el de la prueba de v678.
+_C3_RESP = (
+    "I've prepared the approval of AUS-0008 (hjg,ujgjg, annual leave 25–26/11) with the note «C3 TEST — approved». Nothing is "
+    "approved until you press Confirm on the card.\n\nThe card warns that hjg,ujgjg is already planned on those days on PRJ-0038 "
+    "(Darling Park — Lift 4, false car) and PRJ-0037 (false car lololol). Approving frees those days on the board.\n\nWho could "
+    "cover on 25 and 26/11 Nobody is on leave those days except hjg,ujgjg, whose request is still pending. These people have no "
+    "day on the board on 25 or 26/11:\n\nfieldvic\ndriver 1\nhelper leader CI 1\napprentice 1\n\nThe other five are planned on "
+    "PRJ-0039 or PRJ-0044 on both days.\n\nI can prepare an assignment of one of them to PRJ-0038 or PRJ-0037 if you want.")
+_HIST_C3 = [
+    {"role": "user", "content": "Prepare the approval of the pending leave AUS-0008 (hjg,ujgjg, 25-26/11) with the note «C3 TEST — "
+                                "approved». Who could cover their two days?"},
+    {"role": "assistant", "content": _C3_RESP},
+    {"role": "assistant", "content": "✅ Absence approved. 2 day(s) marked in the planner.", "app": "confirm",
+     "card": "Approve · Annual leave · hjg,ujgjg"}]
+REVISAR = ([{"rol": "administrator", "hist": _HIST_C3, "q": "Please free helper leader CI 1's board on PRJ-0044 from 23/11/2026 to "
+                                                            "27/11/2026: take those days off the board."}] * 3
+           + [{"rol": "administrator", "hist": _HIST_C3, "q": "add a to-do on PRJ-0044: check the rails delivery"}] * 2)
+if sys.argv[4:] == ["revisar"]:
+    from core import auth as _auth                                 # noqa: E402
+    _hl = next(str(u.get("User", "")) for u in _auth.list_users("cliente1") if str(u.get("Name", "")) == "helper leader CI 1")
+    _gs = R.get_semana
+
+    def _semana(g, lunes):
+        s = dict(_gs(g, lunes))
+        if str(lunes)[:10] == "2026-11-23":
+            s[_hl] = {d: {"items": [{"a": "PRJ-0044", "i": "07:00", "f": "15:30"}], "nota": ""}
+                      for d in ("lun", "mar", "mie", "jue", "vie")}
+        return s
+    R.get_semana = _semana
+PREGUNTAS = REVISAR if sys.argv[4:] == ["revisar"] else IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
     "how are my jobs going? which ones should I worry about?",
     "quién está fichado ahora mismo y en qué obra?",
     "who is planned to work tomorrow and who is away?",
