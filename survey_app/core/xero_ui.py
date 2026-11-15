@@ -168,8 +168,17 @@ def render_conexion(grupo, desde=None, hasta=None):
 
     # ⚠️ El nombre de la organización lo escribe el cliente en Xero: dos «$» en él
     # harían que Streamlit pintara LaTeX (v309).
-    st.markdown(t(":material/check_circle: Connected to **{o}** · since {d} · by {u}",
-                  o=_md(est["tenant"]), d=est["desde"] or "—", u=_md(est["por"])))
+    # v672 · la fecha DD/MM/YYYY HH:MM y el NOMBRE de quien conectó (H16 del ciclo 2: «since 2026-09-15 17:56:50 · by Admin2»)
+    from core.num import dmy as _dmy
+    _desde = str(est["desde"] or "")
+    _desde = (_dmy(_desde[:10]) + (" " + _desde[11:16] if len(_desde) >= 16 else "")) if _desde else "—"
+    try:
+        from core import auth as _AU
+        _por = str((_AU.get_user(str(est["por"] or "")) or {}).get("Name") or est["por"] or "")
+    except Exception:
+        _por = str(est["por"] or "")
+    st.markdown(t(":material/check_circle: Connected to **{o}** since {d} by {u}",
+                  o=_md(est["tenant"]), d=_desde, u=_md(_por)))
 
     cfg = contable.mapa(grupo)
     actual = X.estado_envio(grupo)

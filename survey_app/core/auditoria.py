@@ -152,6 +152,21 @@ def _usuario() -> str:
         return ""
 
 
+def _igual(par) -> bool:
+    """¿Un `[antes, después]` es el MISMO valor? Como texto, sin espacios, y 40 == 40.0 (v672). Lo que no es un par
+    se apunta tal cual."""
+    if not isinstance(par, (list, tuple)) or len(par) != 2:
+        return False
+    a = str("" if par[0] is None else par[0]).strip()
+    b = str("" if par[1] is None else par[1]).strip()
+    if a == b:
+        return True
+    try:
+        return a != "" and b != "" and abs(float(a) - float(b)) < 1e-9
+    except ValueError:
+        return False
+
+
 def diff(antes: dict, despues: dict) -> dict:
     """{campo: [antes, despues]} solo de los CAMPOS_CLAVE que de verdad cambiaron.
 
@@ -181,6 +196,10 @@ def diff(antes: dict, despues: dict) -> dict:
 def registrar(entidad: str, entidad_id: str, cambios: dict,
               grupo: str = "", accion: str = "editar") -> bool:
     """Anota un cambio. Devuelve True si se escribió (False si no había nada)."""
+    # ⚠️ v672 · un campo cuyo valor NO cambia no se apunta, venga de `diff` o armado a mano (H30 del ciclo 2:
+    # convertir una cotización ya aceptada apuntaba «Status: accepted → accepted»). Mismo criterio que `diff`:
+    # texto, y 40 == 40.0.
+    cambios = {k: v for k, v in (cambios or {}).items() if not _igual(v)}
     if not cambios:
         return False                             # nada cambió → no se ensucia el histórico
     w = _ws()

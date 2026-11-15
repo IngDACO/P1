@@ -109,8 +109,9 @@ print("\n== 4. Las 3 celdas que SÍ son display, traducidas ==")
 # `_est_celda` → `_est_txt`, que traduce con `etiqueta` salvo la VENCIDA, que en una
 # cotización es «expired» (`etiqueta` la daba como «overdue», el de las facturas). El
 # principio sigue: la celda NO pinta el estado crudo de la hoja.
-for fn, frag in [("invoices_ui.py", "_etq(I.estado_cobro(f))"),
-                 ("quotes_ui.py", "_etq(str(est))")]:
+# v672 · con `_estado_txt` (`i18n.estado`, que envuelve a `etiqueta` con la primera en mayúscula, H5): mismo principio
+for fn, frag in [("invoices_ui.py", "_estado_txt(I.estado_cobro(f))"),
+                 ("quotes_ui.py", "_estado_txt(str(est))")]:
     chk(frag in (CORE / fn).read_text(encoding="utf-8"), f"{fn}: {frag}")
 _qcel = (CORE / "quotes_ui.py").read_text(encoding="utf-8")
 chk('"Estado":  _est_celda(c),' in _qcel and "_est_txt(_e)" in _qcel,
@@ -137,6 +138,14 @@ for f in sorted(CORE.glob("*.py")):
     propio = any(isinstance(n, ast.FunctionDef) and n.name == "_etq"
                  for n in ast.walk(arb))
     chk(imp or propio, f"{f.name} usa `_etq` y lo tiene a nivel de módulo")
+# v672 · y lo mismo con `_estado_txt` (`i18n.estado`), el nombre nuevo de los estados con mayúscula (H5)
+for f in sorted(CORE.glob("*.py")):
+    src = f.read_text(encoding="utf-8")
+    if "_estado_txt(" not in src:
+        continue
+    arb = ast.parse(src)
+    imp = any(isinstance(n, ast.ImportFrom) and any(al.asname == "_estado_txt" for al in n.names) for n in arb.body)
+    chk(imp, f"{f.name} usa `_estado_txt` y lo tiene a nivel de módulo")
 
 # ======================================================================
 # La OCTAVA red, ENSANCHADA: el ternario ASIMETRICO.

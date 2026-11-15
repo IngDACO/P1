@@ -1,16 +1,15 @@
 """PDF de factura (tax invoice) para enviar al cliente.
 
-Una página A4: marca del grupo + «TAX INVOICE», datos (nº/fecha/vencimiento/estado),
-«Bill to» (cliente + contacto de su ficha), tabla de líneas, y totales (subtotal ·
-impuesto · total · cobrado · por cobrar).
+Una página A4: emisor (nombre legal, ABN y contacto) + «TAX INVOICE», datos (nº/fecha/
+vencimiento), «Bill to» (cliente + contacto de su ficha), tabla de líneas, totales
+(subtotal · impuesto · total · cobrado · por cobrar) y, si queda algo por pagar, «How to
+pay» con la referencia (v672).
 Mismo lenguaje visual que `tool_pdf` (reportlab platypus).
 
 ⚠️ El texto va en INGLÉS y pasa por `i18n.d()`, que ignora el idioma de la interfaz
 (v436): este documento sale de la empresa y su idioma no puede depender de cómo tenga
 la pantalla quien pulsa el botón.
-⚠️ El ESTADO se muestra con `i18n.etiqueta()`: en la hoja sigue siendo `"cobrada"` /
-`"vencida"` —así lo compara `estado_cobro` y medio módulo de finanzas— y solo cambia
-cómo se lee.
+⚠️ v672 · sin el ESTADO interno («partial», «overdue»): es un documento para el cliente.
 """
 import io as _io
 import logging
@@ -22,7 +21,6 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import invoices as I
-from core import i18n
 from core.i18n import d
 from core.num import num as _num
 
@@ -48,6 +46,39 @@ def _dmy(iso) -> str:
         return f"{int(dd):02d}/{int(m):02d}/{y}"
     except Exception:
         return s or "—"
+
+
+def emisor_parrafos(ident: dict, marca: str, mk, sm) -> list:
+    """El bloque del EMISOR, el mismo en la factura, la certificación y la cotización: nombre legal, ABN y, desde
+    v672, su dirección y su email · teléfono (H24 del ciclo 2: el cliente no tenía cómo contactar a quien cobra)."""
+    from core import contable
+    ident = ident or {}
+    out = [Paragraph(esc_pdf(marca), mk)]
+    if str(ident.get("abn") or "").strip():
+        out.append(Paragraph(f"{d('ABN')} {esc_pdf(ident['abn'])}", sm))
+    for _l in contable.contacto_emisor(ident):
+        out.append(Paragraph(esc_pdf(_l), sm))
+    return out
+
+
+def bloque_pago(ident: dict, referencia: str, marca: str, Hb, H) -> list:
+    """«How to pay» (v672, H24): titular, BSB, cuenta y la REFERENCIA que hay que poner (el nº del documento), para que
+    el cobro se pueda casar. Sin BSB y cuenta, `[]`: mejor nada que medio dato (y la pantalla ya avisa)."""
+    from core import contable
+    ident = ident or {}
+    if not contable.tiene_datos_pago(ident):
+        return []
+    _tit = str(ident.get("titular") or "").strip() or marca
+    filas = [[Paragraph(f"<b>{d('How to pay')}</b>", Hb), ""],
+             [Paragraph(d("Bank transfer to"), H), Paragraph(esc_pdf(_tit), Hb)],
+             [Paragraph(d("BSB"), H), Paragraph(esc_pdf(ident.get("bsb")), Hb)],
+             [Paragraph(d("Account"), H), Paragraph(esc_pdf(ident.get("cuenta")), Hb)],
+             [Paragraph(d("Reference"), H), Paragraph(esc_pdf(referencia), Hb)]]
+    tb = Table(filas, colWidths=[40 * mm, 80 * mm], hAlign="LEFT")
+    tb.setStyle(TableStyle([("SPAN", (0, 0), (-1, 0)), ("BOX", (0, 0), (-1, -1), 0.6, C_BRAND),
+                            ("BACKGROUND", (0, 0), (-1, 0), C_LIGHT),
+                            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    return [tb, Spacer(1, 10)]
 
 
 def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str = "") -> bytes:
@@ -79,20 +110,19 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
     except Exception as e:
         logger.warning("invoice_pdf: no se pudo leer la identidad fiscal de %s: %s", _grp, e)
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(esc_pdf(marca), mk)]
-    if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
+    _emisor = emisor_parrafos(_ident, marca, mk, sm)
     head = Table([[_emisor, Paragraph(d("TAX INVOICE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]
 
     est = I.estado_cobro(factura)
+    # ⚠️ v672 · sin «Status» (H11 del ciclo 2: «Status | partial», un estado INTERNO, en minúscula, en un documento
+    # para el cliente). Lo que le importa ya lo dicen «Paid» y «Balance due», y una anulada lleva su sello «VOID».
     meta = Table([
         [Paragraph(d("Invoice no."), sm), Paragraph(esc_pdf(factura.get("Number", "")), Hb)],
         [Paragraph(d("Date"), sm), Paragraph(_dmy(factura.get("Date", "")), H)],
         [Paragraph(d("Due"), sm), Paragraph(_dmy(factura.get("ExpiryDate", "")), H)],
-        [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(est), H)],
     ], colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1), ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
 
@@ -145,6 +175,9 @@ def generate_invoice_pdf(factura: dict, cliente: dict = None, grupo_nombre: str 
         ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"), ("TEXTCOLOR", (0, 2), (-1, 2), C_BRAND),
         ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
     story += [tot, Spacer(1, 10)]
+    # v672 · cómo pagar, con el nº de factura como referencia (H24). Solo si queda algo que pagar.
+    if por_cobrar > 0.005:
+        story += bloque_pago(_ident, str(factura.get("Number", "") or factura.get("ID", "")), marca, Hb, H)
 
     if str(factura.get("Note", "")).strip():
         story += [Paragraph(f"<b>{d('Note:')}</b> {esc_pdf(factura.get('Note'))}", sm)]

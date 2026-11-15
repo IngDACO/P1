@@ -202,7 +202,8 @@ ck("⚠️ la liberacion no mueve la base de trabajo ejecutado", _base, 100000.0
 print("\n[3] quien puede liberar")
 _con([R1, R2])
 ck("con la obra al 100% se puede", CL.puede_liberar("P", {"Progress": "100"})[0], True)
-ck("...y aun asi se dice cuanto hay", "5000" in CL.puede_liberar("P", {"Progress": "100"})[1], True)
+# v672 · el importe con $ y miles («$5,000.00 of retention…», H14 del ciclo 2): antes «5000.00»
+ck("...y aun asi se dice cuanto hay", "$5,000.00" in CL.puede_liberar("P", {"Progress": "100"})[1], True)
 ck("con la obra al 90% NO", CL.puede_liberar("P", {"Progress": "90"})[0], False)
 ck("...y el motivo dice el avance", "90" in CL.puede_liberar("P", {"Progress": "90"})[1], True)
 _con([R1, R2, dict(L1, ThisClaim="5000")])
@@ -259,7 +260,8 @@ ck("...y guarda lo pedido, no el total", _num_txt(_campo(_fila, "ThisClaim")), 1
 _ok_w, _msg_w, _fila = _escribe([R1, R2], {"Progress": "100"}, importe=99999)
 ck("⚠️ NO se puede liberar mas de lo retenido", _ok_w, False)
 ck("...y no se escribe nada", _fila, None)
-ck("...y el mensaje dice cuanto hay", "5000" in str(_msg_w), True)
+# v672 · con miles y escapado: dos importes en el mismo aviso («\$99,999.00 … \$5,000.00», H14)
+ck("...y el mensaje dice cuanto hay", "\\$5,000.00" in str(_msg_w), True)
 
 _ok_w, _msg_w, _fila = _escribe([R1, R2], {"Progress": "40"})
 ck("⚠️ con la obra a medias no se escribe nada", _fila, None)

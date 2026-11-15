@@ -15,14 +15,19 @@ CASOS = [
      "core/invoice_pdf.py", 'Paragraph(d("TAX INVOICE"), ti)', 'Paragraph(t("TAX INVOICE"), ti)'),
     ("d() deja de ignorar el idioma de la interfaz",
      "core/i18n.py", "def d(texto: str, **kw) -> str:", "def d(texto: str, **kw) -> str:\n    return t(texto, **kw)\n\n\ndef _d_viejo(texto: str, **kw) -> str:"),
-    ("el estado de la factura deja de traducirse",
-     "core/invoice_pdf.py", "Paragraph(i18n.etiqueta(est), H)", "Paragraph(est, H)"),
+    # v672 · re-anclada: la factura ya no imprime el estado (H11). La rotura equivalente: vuelve, en CRUDO.
+    ("el estado interno vuelve a la factura, en crudo",
+     "core/invoice_pdf.py",
+     '        [Paragraph(d("Due"), sm), Paragraph(_dmy(factura.get("ExpiryDate", "")), H)],\n    ], colWidths',
+     '        [Paragraph(d("Due"), sm), Paragraph(_dmy(factura.get("ExpiryDate", "")), H)],\n'
+     '        [Paragraph(d("Status"), sm), Paragraph(est, H)],\n    ], colWidths'),
     ("se traduce una CLAVE del Pre-Start (rompería todo el histórico)",
      "core/prestart.py", '("permisos",        "Permits', '("permits",        "Permits'),
     ("un texto del pre-start vuelve al español",
      "core/prestart.py", '"Shaft penetrations adequately covered"', '"Penetraciones del hueco cubiertas"'),
     ("la colilla vuelve a mostrar el tipo interno",
-     "core/payslip_pdf.py", 'Paragraph(i18n.etiqueta(c.get("tipo", "")), H)', 'Paragraph(str(c.get("tipo", "")), H)'),
+     # v672 · re-anclada: el tipo va con `i18n.estado` (con mayúscula, H5) y escapado. La misma rotura.
+     "core/payslip_pdf.py", 'Paragraph(esc_pdf(i18n.estado(c.get("tipo", ""))), H)', 'Paragraph(esc_pdf(str(c.get("tipo", ""))), H)'),
 ]
 
 def correr():

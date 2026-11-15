@@ -3114,8 +3114,10 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         _vistas = set()
         for x in d["paradas"]:
             _vistas.add(x["nombre"])
-            st.markdown(f":red[:material/cancel:] **{x['nombre']}** — not started, "
-                        f"it was due on {x['desde'].strftime('%d/%m')} ({x['dur']:.0f} d)"
+            # ⚠️ v672 · «(2 d)» pegado a «it was due on» se leía como 2 días de RETRASO, y era la duración de la
+            # actividad (H28 del ciclo 2); y la frase iba sin `t()`.
+            st.markdown(t(":red[:material/cancel:] **{n}** — not started, should have started on {f} · {d}-day activity",
+                          n=x["nombre"], f=x["desde"].strftime("%d/%m"), d=f"{x['dur']:.0f}")
                         + _dueno(x) + _espera(x))
         for x in d["tocaban"]:
             if x["nombre"] in _vistas or x["avance"] <= 0:
@@ -3533,7 +3535,11 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                         "Location": ubic, "Model": modelo,
                         "HeadInstallers": ";".join(ing), "StartDate": f_ini, "EndDateEst": f_fin,
                         "FieldAssigned": ";".join(asignados),
-                        "GroupingID": ag_id, "WeightInGrouping": peso,
+                        # ⚠️ v672 · sin grupo, el peso guardado se queda como está: la caja enseña 1.0 cuando vale 0 (para
+                        # que un grupo no promedie a 0) y al guardar escribía 1.0 sin que nadie lo tocara (H30: el rastro
+                        # apuntaba «WeightInGrouping: 0 → 1.0» al cancelar una obra)
+                        "GroupingID": ag_id,
+                        "WeightInGrouping": peso if ag_id else prj.get("WeightInGrouping", ""),
                         # ⚠️ v422: el tipo que se está GUARDANDO, no el que tenía. Si en
                         # esta misma edición pasa a ser una localización interna, su
                         # estado tiene que salir «Abierta» en la misma escritura — con

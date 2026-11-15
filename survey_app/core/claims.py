@@ -55,6 +55,13 @@ from core.num import num as _num
 from core.i18n import t
 logger = logging.getLogger(__name__)
 
+
+def _dinero(v, escapado: bool = False) -> str:
+    """«$5,657.73» con miles (v672, H14 del ciclo 2: el aviso decía «net payable 5657.73»). Con DOS importes en el
+    mismo mensaje, `escapado=True` (barra + «$»): dos «$» en el mismo markdown abren una fórmula (v309)."""
+    return ("\\$" if escapado else "$") + "{:,.2f}".format(round(_num(v), 2))
+
+
 VARIACIONES = "Variations"
 V_HEADERS = ["ID", "Group", "ProjectID", "Number", "Date", "Description", "Amount",
              "Status", "DecidedBy", "DecidedDate", "Note", "CreatedBy", "Created"]
@@ -343,7 +350,7 @@ def crear_reclamacion(pid, grupo, pct=None, periodo_hasta="", nota="",
     except Exception as e:
         return False, f"{t('Error saving the claim')}: {e}"
     _invalidate()
-    return True, "%s %d: %s %.2f" % (t("Claim"), n, t("net payable"), d["neto"])
+    return True, "%s %d: %s %s" % (t("Claim"), n, t("net payable"), _dinero(d["neto"]))   # v672 · H14: $ y miles
 
 
 def puede_liberar(pid, prj=None) -> tuple:
@@ -375,7 +382,7 @@ def puede_liberar(pid, prj=None) -> tuple:
     if _av < 100:
         return False, t("Retention is released once the job is complete; this one is "
                         "at {pct}%.", pct=round(_av, 1))
-    return True, t("{amount} of retention is still held.", amount="%.2f" % _p)
+    return True, t("{amount} of retention is still held.", amount=_dinero(_p))          # v672 · H14
 
 
 def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None) -> tuple:
@@ -400,7 +407,7 @@ def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None)
     # liberación, es una factura — otro documento, con otro impuesto y otras consecuencias.
     if _imp > _pend:
         return False, t("You cannot release {amount} when only {held} is being held.",
-                        amount="%.2f" % _imp, held="%.2f" % _pend)
+                        amount=_dinero(_imp, escapado=True), held=_dinero(_pend, escapado=True))   # v672 · H14
     # El último documento manda sus cifras de obra: una liberación NO añade trabajo
     # ejecutado, así que repite las de la última reclamación en vez de inventar un 0
     # que luego se leería como si la obra hubiese retrocedido.
@@ -423,7 +430,7 @@ def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None)
     except Exception as e:
         return False, f"{t('Error saving the release')}: {e}"
     _invalidate()
-    return True, "%s %d: %s %.2f" % (t("Retention release"), n, t("net payable"), _imp)
+    return True, "%s %d: %s %s" % (t("Retention release"), n, t("net payable"), _dinero(_imp))   # v672 · H14
 
 
 def _fila(w, hoja, oid):

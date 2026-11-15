@@ -35,9 +35,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from core import i18n
 from core.i18n import d
-from core.num import num as _num
+from core.num import num as _num, dmy
 
 C_BRAND = colors.HexColor("#1a3a5c")
 C_LIGHT = colors.HexColor("#e8f1fb")
@@ -51,6 +50,11 @@ from core.pdf_texto import esc_pdf       # v653 · el texto de la hoja, escapado
 
 def _money(v) -> str:
     return f"${_num(v):,.2f}"
+
+
+def _menos(v) -> str:
+    """Un importe que se RESTA: «-$1,500.00»; y uno a cero, «$0.00» (H14 del ciclo 2: salía «-$0.00»)."""
+    return ("-" + _money(v)) if round(_num(v), 2) > 0 else _money(0)
 
 
 def _es_liberacion(rec: dict) -> bool:
@@ -106,24 +110,23 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
     except Exception as e:
         logger.warning("claim_pdf: no se pudo leer la identidad fiscal de %s: %s", _grp, e)
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(esc_pdf(marca), mk)]
-    if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
+    from core.invoice_pdf import emisor_parrafos, bloque_pago      # v672 · contacto y cómo pagar (H24)
+    _emisor = emisor_parrafos(_ident, marca, mk, sm)
     head = Table([[_emisor, Paragraph(_titulo, ti)]], colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
                               ("VALIGN", (0, 0), (-1, -1), "TOP")]))
     story += [head, Spacer(1, 10)]
 
     # ── cabecera: de quién es la obra y qué documento es ─────────────────────
+    # ⚠️ v672 · fechas DD/MM/YYYY (H14: iban en ISO) y sin «Status» (H11: «issued» es un estado INTERNO; una
+    # anulada lleva su sello «VOID» más abajo)
     _filas_meta = [
         [Paragraph(d("Claim no."), sm), Paragraph(esc_pdf(rec.get("Number", "")), Hb)],
-        [Paragraph(d("Date"), sm), Paragraph(esc_pdf(rec.get("Date", "")), H)],
+        [Paragraph(d("Date"), sm), Paragraph(esc_pdf(dmy(rec.get("Date", ""))), H)],
     ]
     if str(rec.get("PeriodTo", "")).strip():
         _filas_meta.append([Paragraph(d("Period to"), sm),
-                            Paragraph(esc_pdf(rec.get("PeriodTo")), H)])
-    _filas_meta.append([Paragraph(d("Status"), sm),
-                        Paragraph(esc_pdf(i18n.etiqueta(str(rec.get("Status", "")))), H)])
+                            Paragraph(esc_pdf(dmy(rec.get("PeriodTo"))), H)])
     meta = Table(_filas_meta, colWidths=[24 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
@@ -189,9 +192,9 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
         calc = Table([
             [d("This claim"), d("Amount")],
             [d("Work completed to date ({pct}%)", pct=f"{_pct:g}"), _money(_hecho)],
-            [d("Less previously claimed"), "-" + _money(_antes)],
+            [d("Less previously claimed"), _menos(_antes)],
             [d("Value of this claim"), _money(_bruto)],
-            [d("Less retention ({pct}%)", pct=f"{_ret_pct:g}"), "-" + _money(_ret)],
+            [d("Less retention ({pct}%)", pct=f"{_ret_pct:g}"), _menos(_ret)],
             [d("NET AMOUNT PAYABLE"), _money(_bruto - _ret)],
         ], colWidths=[133 * mm, 45 * mm])
         calc.setStyle(_est_tab)
@@ -210,7 +213,7 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
         # Lo ya devuelto ANTES de este documento: el acumulado incluye este mismo.
         _antes_lib = round(_num(_r.get("liberado")) - _imp, 2)
         if _antes_lib > 0:
-            filas.append([d("Less previously released"), "-" + _money(_antes_lib)])
+            filas.append([d("Less previously released"), _menos(_antes_lib)])
         filas += [[d("Released in this claim"), _money(_imp)],
                   [d("NET AMOUNT PAYABLE"), _money(_imp)]]
         t2 = Table(filas, colWidths=[133 * mm, 45 * mm])
@@ -226,6 +229,22 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
         _queda = _num(_r.get("pendiente"))
         story += [Paragraph(d("Retention still held after this release: {amount}",
                               amount=_money(_queda)), sm), Spacer(1, 6)]
+
+    # v672 · una ANULADA no pide nada: el sello, como la factura (v569), en vez de «Status | cancelled» (H11);
+    # y si pide dinero, cómo pagarlo, con su número como referencia (H24)
+    try:
+        from core import claims as _CL
+        _anulada = str(rec.get("Status", "")) == _CL.ANULADA
+        _pagada = str(rec.get("Status", "")) == _CL.PAGADA
+    except Exception:
+        _anulada = _pagada = False
+    if _anulada:
+        story += [Paragraph(d("VOID — this claim has been cancelled and is not payable."),
+                            ParagraphStyle("vd", parent=ss["Normal"], fontSize=16, leading=20,
+                                           fontName="Helvetica-Bold", textColor=colors.HexColor("#c0392b"))),
+                  Spacer(1, 8)]
+    elif not _pagada:
+        story += bloque_pago(_ident, str(rec.get("ID", "") or rec.get("Number", "")), marca, Hb, H)
 
     if str(rec.get("Note", "")).strip():
         story += [Paragraph(f"<b>{d('Note:')}</b> {esc_pdf(rec.get('Note'))}", sm)]

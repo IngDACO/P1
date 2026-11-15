@@ -228,6 +228,15 @@ def etiqueta(valor, defecto=None) -> str:
     return v                      # en español el dato ya está en español
 
 
+def estado(valor, defecto=None) -> str:
+    """Un ESTADO que se lee suelto —una cabecera, una celda, el pie de un resultado—: `etiqueta` con la primera
+    en mayúscula (v672, H5 del ciclo 2: facturas, cotizaciones, colillas y certificaciones decían «accepted»,
+    «issued», «collected» junto a «In progress» de las obras). Dentro de una frase va `etiqueta`, en minúscula.
+    El dato guardado no cambia."""
+    s = etiqueta(valor, defecto)
+    return s[:1].upper() + s[1:] if s else s
+
+
 def selector(label="Language", key="i18n_sel"):
     """Selector de idioma. ⚠️ Aún NO se pinta en ninguna pantalla: el diccionario
     español está vacío a propósito (decisión del usuario), así que ofrecerlo hoy sería

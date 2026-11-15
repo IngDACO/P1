@@ -73,7 +73,8 @@ ROTURAS = [
        """            {"range": f"{_col_letter(_NCOL['PaymentDate'])}{row}", "values": [["2026-10-13"]]},""")]),
     # ── el detalle ──
     ("⚠️ el estado vuelve CRUDO en la línea del periodo («emitida»)", PU,
-     [("e=f\"{_EST_ICONO.get(est, '')} {_etq(est)}\".strip()))", "e=est))")]),
+    # v672 · re-anclada: el estado va con `_estado_txt` (i18n.estado, con mayúscula, H5). La misma rotura
+     [("e=f\"{_EST_ICONO.get(est, '')} {_estado_txt(est)}\".strip()))", "e=est))")]),
     ("⚠️ el editor vuelve a enseñar el tipo interno («deduccion»)", PU,
      [('             "Type": _TL.get(str(c.get("tipo", "deduccion")), str(c.get("tipo", ""))),',
        '             "Type": str(c.get("tipo", "")),')]),
@@ -85,8 +86,9 @@ ROTURAS = [
      [('    marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp\n',
        "    marca = grupo_nombre or _grp\n")]),
     ("⚠️ la colilla vuelve a «pagada (2026-…)»", PP,
-     [("        _est_txt += f\" ({dmy(nomina.get('PaymentDate'))})\"\n",
-       "        _est_txt = f\"pagada ({nomina.get('PaymentDate')})\"\n")]),
+    # v672 · re-anclada: la colilla ya no dice un estado sino «Paid on <fecha>» (H11). La misma rotura: vuelve «pagada (…)»
+     [("        _pago_txt = dmy(nomina.get(\"PaymentDate\")) if str(nomina.get(\"PaymentDate\", \"\")).strip() else d(\"Paid\")\n",
+       "        _pago_txt = f\"pagada ({nomina.get('PaymentDate')})\"\n")]),
     ("el archivo vuelve a «Colilla_…»", PU,
      [("file_name=f\"Payslip_{f.get('Name', '')}_{f.get('PeriodTo', '')}.pdf\",",
        "file_name=f\"Colilla_{f.get('Name', '')}_{f.get('PeriodTo', '')}.pdf\",")]),

@@ -343,7 +343,8 @@ at = AppTest.from_string(CLM, default_timeout=90)
 at.session_state["_EST1"] = "cancelled"
 at.run()
 _md = " ".join(m.value for m in at.markdown)
-chk("H21 · una anulada sigue en la lista, TACHADA y «cancelled»", "~~**#1**" in _md and "· cancelled" in _md, _md[:600])
+# v672 · «Cancelled», con mayúscula (H5)
+chk("H21 · una anulada sigue en la lista, TACHADA y «Cancelled»", "~~**#1**" in _md and "· Cancelled" in _md, _md[:600])
 at = AppTest.from_string(CLM, default_timeout=90)
 at.session_state["_PST"] = "Cancelled"
 at.run()

@@ -66,8 +66,9 @@ ROTURAS = [
     ("⚠️ H15 · «Generate» vuelve a proponer el periodo ya generado", PI,
      [("        _d0 = _ult + timedelta(days=1)\n", "        _d0 = _d0\n")]),
     ("H15 · la vista previa deja de decir «already on»", PI,
-     [("                     if k in _ya else _nota_tarifa(rates.get(k, 0))),",
-       "                     if False else _nota_tarifa(rates.get(k, 0))),")]),
+    # v672 · re-anclada: detrás de «already on» va «Left out» de quien deja fuera una jornada larga (v672). La misma rotura
+     [("                     if k in _ya else t(\"Left out: fix the workday of more than 16 h first\") if k in _fuera\n",
+       "                     if False else t(\"Left out: fix the workday of more than 16 h first\") if k in _fuera\n")]),
     ("H15 · la lista de nóminas deja de avisar de las horas sin pagar", PI,
      [('    horas_sin_pagar_section(grupo, "nom_lst")\n', "")]),
     ("H15 · «Settle» no hace nada", PI,

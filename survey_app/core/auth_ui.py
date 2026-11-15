@@ -611,6 +611,14 @@ def render_user_bar():
 # ════════════════════════════════════════════════════════════
 # PANEL DEL PROPIETARIO — grupos + todos los usuarios
 # ════════════════════════════════════════════════════════════
+def _etq_fisc(col: str) -> str:
+    """Cómo se dice cada campo de la identidad del grupo en el aviso de lo guardado (v672: lo que cambia, no «Saved.»)."""
+    return {"LegalName": t("legal name"), "ABN": t("ABN"), "PaymentTermsDays": t("payment terms"),
+            "Address": t("address"), "ContactEmail": t("email"), "ContactPhone": t("phone"),
+            "BankAccountName": t("account name"), "BankBSB": t("BSB"),
+            "BankAccountNumber": t("account number")}.get(col, col)
+
+
 def _owner_grupos():
     grupos = auth.list_groups()
     if grupos:
@@ -818,16 +826,56 @@ def _owner_grupos():
                                          key="fisc_plazo",
                                          help=t("The due date of a new invoice is the date "
                                                 "of issue plus these days."))
+                # ⚠️ v672 · contacto del emisor y datos de pago (H24 del ciclo 2: la factura no decía DÓNDE pagar, y el
+                # emisor salía sin dirección, email ni teléfono). Van a los PDF de la factura, la certificación y la cotización.
+                from core import contable as _CB
+                st.markdown(t("**Contact shown on invoices, claims and quotes**"))
+                _ca1, _ca2, _ca3 = st.columns([2, 1.3, 1])
+                _dir = _ca1.text_input(t("Address"), value=str(_gf.get("Address", "") or ""), key="fisc_dir")
+                _mail = _ca2.text_input(t("Email"), value=str(_gf.get("ContactEmail", "") or ""), key="fisc_mail")
+                _tel = _ca3.text_input(t("Phone"), value=str(_gf.get("ContactPhone", "") or ""), key="fisc_tel")
+                st.markdown(t("**Bank details (printed on invoices as «How to pay»)**"))
+                if not _CB.tiene_datos_pago({"bsb": _gf.get("BankBSB"), "cuenta": _gf.get("BankAccountNumber")}):
+                    st.warning(t(":material/warning: No bank details yet: the invoices don't say how to pay."))
+                _cb1, _cb2, _cb3 = st.columns([2, 1, 1.3])
+                _titb = _cb1.text_input(t("Account name"), value=str(_gf.get("BankAccountName", "") or ""),
+                                        key="fisc_titular", help=t("If empty, the legal name is used."))
+                _bsb = _cb2.text_input(t("BSB"), value=str(_gf.get("BankBSB", "") or ""), key="fisc_bsb",
+                                       placeholder="062-000")
+                _cta = _cb3.text_input(t("Account number"), value=str(_gf.get("BankAccountNumber", "") or ""),
+                                       key="fisc_cuenta")
                 if st.button(t(":material/save: Save tax identity"), key="fisc_save"):
-                    _r = [auth.set_group_setting(gfsel, "LegalName", _legal.strip()),
-                          auth.set_group_setting(gfsel, "ABN", _abn.strip()),
-                          auth.set_group_setting(gfsel, "PaymentTermsDays", int(_plazo))]
-                    _malo = next((m for ok, m in _r if not ok), "")
-                    if _malo:
-                        st.error(_malo)
+                    _bsb_n = _CB.bsb_normal(_bsb) if _bsb.strip() else ""
+                    _problema = ""
+                    if _bsb.strip() and not _bsb_n:
+                        _problema = t("The BSB has 6 digits (e.g. 062-000).")
+                    elif _cta.strip() and not _CB.cuenta_ok(_cta):
+                        _problema = t("The account number has 5 to 10 digits.")
+                    elif bool(_bsb.strip()) != bool(_cta.strip()):
+                        _problema = t("The bank details need both the BSB and the account number.")
+                    elif not auth.revisar_email(_mail)["ok"]:
+                        _problema = auth.revisar_email(_mail)["motivo"]
+                    if _problema:
+                        st.error(_problema)
                     else:
-                        flash.exito(t("Tax identity updated."))
-                        st.rerun()
+                        _nuevos = {"LegalName": _legal.strip(), "ABN": _abn.strip(), "PaymentTermsDays": str(int(_plazo)),
+                                   "Address": _dir.strip(), "ContactEmail": _mail.strip(), "ContactPhone": _tel.strip(),
+                                   "BankAccountName": _titb.strip(), "BankBSB": _bsb_n,
+                                   "BankAccountNumber": _cta.replace(" ", "").replace("-", "").strip()}
+                        # solo lo que cambia: cada campo es una escritura y dos lecturas (techo de 60/min)
+                        _ahora = {c: str(_gf.get(c, "") or "").strip() for c in _nuevos}
+                        _ahora["PaymentTermsDays"] = str(int(_num(_gf.get("PaymentTermsDays")) or 14))   # el que se ve
+                        _cambian = [c for c, v in _nuevos.items() if _ahora[c] != v]
+                        _r = [auth.set_group_setting(gfsel, c, _nuevos[c]) for c in _cambian]
+                        _malo = next((m for ok, m in _r if not ok), "")
+                        if _malo:
+                            st.error(_malo)
+                        elif not _cambian:
+                            flash.info(t("Nothing changed."))
+                            st.rerun()
+                        else:
+                            flash.exito(t("Tax identity updated: {c}.", c=", ".join(_etq_fisc(c) for c in _cambian)))
+                            st.rerun()
 
     if grupos:
         gsel = ui.elegir(t("Delete company"), [g["Group"] for g in grupos],
@@ -1427,9 +1475,12 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             st.caption("")
             if st.button(t("Save payroll ID"), key=f"{k}_savepid", width="stretch"):
                 ok, msg = auth.set_login_setting(sel, "PayrollID", _pid)
-                (flash.exito if ok else st.error)(msg)
-                if ok:
+                if ok:      # v672 · lo que quedó, no «Saved.»
+                    flash.exito(t("Payroll ID saved: {p}.", p=_lit(_pid.strip())) if _pid.strip()
+                                else t("Payroll ID removed."))
                     st.rerun()
+                else:
+                    st.error(msg)
         # v671 · el fondo de super, que va en su colilla (H25 del ciclo 2)
         _s1, _s2 = st.columns(2)
         with _s1:
@@ -1441,9 +1492,13 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
             st.caption("")
             if st.button(t("Save super fund"), key=f"{k}_savesf", width="stretch"):
                 ok, msg = auth.set_login_setting(sel, "SuperFund", _sf)
-                (flash.exito if ok else st.error)(msg)
+                # v672 · lo que quedó, no «Saved.» (visto verificando v671)
                 if ok:
+                    flash.exito(t("Super fund saved: {f}.", f=_lit(_sf.strip())) if _sf.strip()
+                                else t("Super fund removed."))
                     st.rerun()
+                else:
+                    st.error(msg)
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Group"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)

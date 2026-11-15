@@ -9,7 +9,8 @@ import streamlit as st
 
 from core import claims as CL
 from core import flash
-from core.i18n import t
+from core.i18n import t, estado as _estado_txt
+from core.num import dmy as _dmy
 from core.num import num as _num
 
 
@@ -206,15 +207,16 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                 # avance del mismo importe: no lleva % ni retención, y el porqué del
                 # dinero es otro.
                 if CL.es_liberacion(r):
-                    _txt = "**#%s** %s · %s — %s" % (r.get("Number", "?"), r.get("Date", ""),
+                    _txt = "**#%s** %s · %s — %s" % (r.get("Number", "?"), _dmy(r.get("Date", "")),
                                                      t("retention release"), _dinero(r.get("ThisClaim")))
                     _ic = ":violet[:material/lock_open:]" if _est != CL.ANULADA else _ic
                 else:
+                    # v672 · H14: la fecha DD/MM/YYYY y el % sin «.0» («10%», no «10.0%»)
                     _txt = "**#%s** %s · %s%% · %s %s — %s %s" % (
-                        r.get("Number", "?"), r.get("Date", ""), r.get("PctComplete", "0"), t("net"),
+                        r.get("Number", "?"), _dmy(r.get("Date", "")), "%g" % _num(r.get("PctComplete", 0)), t("net"),
                         _dinero(_neto), t("retention"), _dinero(r.get("Retention")))
                 if _est == CL.ANULADA:
-                    st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, t("cancelled")))
+                    st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, _estado_txt(CL.ANULADA)))   # v672 · «Cancelled» (H5)
                     continue
                 st.markdown("%s %s" % (_ic, _txt))
                 _descarga(pid, grupo, r, vars_, prj, d, key_prefix)
@@ -256,7 +258,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                    CL.RECHAZADA: ":red[:material/cancel:]"}.get(_e, ":orange[:material/pending:]")
             st.markdown("%s **#%s** %s — %s  \n&nbsp;&nbsp;&nbsp;:gray[%s]"
                         % (_ic, v.get("Number", "?"), _dinero(v.get("Amount")),
-                           v.get("Description", ""), _e),
+                           v.get("Description", ""), _estado_txt(_e)),          # v672 · «Approved», no «approved» (H5)
                         unsafe_allow_html=True)
             if editable and _e == CL.PROPUESTA:
                 a1, a2 = st.columns(2)

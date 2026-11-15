@@ -10,7 +10,7 @@ un pago, conceptos legibles y a la vista, y la colilla con el nombre legal y el 
 """
 from datetime import timedelta
 
-from core.i18n import t, etiqueta as _etq
+from core.i18n import t, estado as _estado_txt
 
 import pandas as pd
 import streamlit as st
@@ -51,7 +51,7 @@ def _estado(x) -> str:
 def _est_celda(x) -> str:
     """El estado en una CELDA: punto + la etiqueta traducida (fuera del dict de la fila:
     verif_v452 no deja llamar en crudo a un DATO dentro de una celda)."""
-    return f"{_EST_PUNTO.get(_estado(x), '')} " + _etq(_estado(x))
+    return f"{_EST_PUNTO.get(_estado(x), '')} " + _estado_txt(_estado(x))     # v672 · con mayúscula (H5)
 
 
 _MAX_COLILLAS = 10         # las nóminas que se ven de entrada; el resto, con un botón
@@ -368,14 +368,19 @@ def _generar(grupo):
             if st.button(t(":material/badge: Set rates in Users"), key="nom_gen_ir_users"):
                 from core import home_ui
                 home_ui.navegar("planificacion", "👷 Usuarios")
+        # ⚠️ v672 · quien deja fuera una jornada de más de 16 h NO lleva base en la tabla: la vista previa lo
+        # enseñaba con sus 180.65 h y su base mientras el aviso de arriba decía que se quedaba fuera (visto
+        # verificando v671). Misma clave que `payroll.generar` (`usuario`).
+        _fuera = {str(j.get("usuario", "")) for j in _lg}
         # ⚠️ v574 · `$%,d` TRUNCA (trampa 20): una tarifa de $30.55 salía «$30». Céntimos.
         st.dataframe(pd.DataFrame([{
             "Usuario": v["nombre"], "Horas": round(v["horas"], 2),            # v663: 2 decimales
             "Rate/h": round(_num(rates.get(k, 0)), 2),
-            "Base": round(v["horas"] * _num(rates.get(k, 0)), 2),
+            "Base": (None if (k in _fuera and k not in _ya) else round(v["horas"] * _num(rates.get(k, 0)), 2)),
             # v671 · H15: ya tiene colilla de ESE periodo (no se duplica: «already exists»)
             "Nota": (t("already on {n} ({h} h)", n=_ya[k].get("ID", ""), h=f"{_num(_ya[k].get('Hours')):.2f}")
-                     if k in _ya else _nota_tarifa(rates.get(k, 0))),
+                     if k in _ya else t("Left out: fix the workday of more than 16 h first") if k in _fuera
+                     else _nota_tarifa(rates.get(k, 0))),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
             column_config=tabla.cfg(None, {"Usuario": st.column_config.TextColumn(t("Employee")),
                            "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),
@@ -477,7 +482,7 @@ def _detalle(grupo, nid):
     # ⚠️ v574 · fechas DD/MM/YYYY y el estado TRADUCIDO (decía «status: **emitida**»)
     st.markdown(t("Period **{p}** · {h} h × {r} = base pay **{b}** · {e}",
                   p=_periodo(f), h=f"{_num(f.get('Hours')):.2f}", r=_T.dinero(f.get("HourlyRate")),   # v663
-                  b=_T.dinero(base), e=f"{_EST_ICONO.get(est, '')} {_etq(est)}".strip()))
+                  b=_T.dinero(base), e=f"{_EST_ICONO.get(est, '')} {_estado_txt(est)}".strip()))   # v672 · H5
 
     # ⚠️ v574 · arriba lo que se decide (neto, PDF, pagar/deshacer/anular) y los conceptos
     # a TODO el ancho: en la columna de 3/5 la tabla medía 601 px en 376 y el importe y el
@@ -504,7 +509,19 @@ def _detalle(grupo, nid):
             except Exception:
                 pass
             if not payslip_pdf.fondo_super(f):
-                _faltan.append(t("{n}'s super fund (Planning → Users → their record)", n=literal_md(str(f.get("Name", "")))))
+                # ⚠️ v672 · la ficha de un ADMINISTRADOR no está en Planning → Users (esa lista es la del campo): la
+                # gestiona el propietario (visto verificando v671 con la colilla de Bobo)
+                try:
+                    from core import auth as _AU
+                    _rol_de = str((_AU.get_user(str(f.get("User", ""))) or {}).get("Role", "")).strip().lower()
+                except Exception:
+                    _rol_de = ""
+                if _rol_de in ("administrator", "owner"):
+                    _faltan.append(t("{n}'s super fund (the account owner sets it in Administration → Users → their "
+                                     "record)", n=literal_md(str(f.get("Name", "")))))
+                else:
+                    _faltan.append(t("{n}'s super fund (Planning → Users → their record)",
+                                     n=literal_md(str(f.get("Name", "")))))
             if _faltan:
                 st.caption(t(":material/warning: This payslip is missing {x}.", x="; ".join(_faltan)))
         except Exception as e:
@@ -625,7 +642,7 @@ def render_mis_colillas(usuario, grupo):
             _est = _estado(f)
             _pago = str(f.get("PaymentDate", "")).strip()
             st.caption(f"{_EST_ICONO.get(_est, '')} " + (
-                t("paid on {d}", d=_dmy(_pago)) if _est == "pagada" and _pago else _etq(_est)))
+                t("Paid on {d}", d=_dmy(_pago)) if _est == "pagada" and _pago else _estado_txt(_est)))   # v672 · H5
             # ⚠️ v627 · DIFERIDA (`data` es una función, v623): con los bytes se generaban TODAS en
             # cada pasada. 411 ms cada una (medido): un año de nómina semanal, 21 s por cada toque.
             st.download_button(t(":material/download: Download payslip"),

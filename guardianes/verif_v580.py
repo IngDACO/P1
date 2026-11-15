@@ -355,7 +355,8 @@ chk("el número FIJADO", (_c.get("Nº") or {}).get("pinned") is True)
 chk("⚠️ fechas DD/MM/YYYY (salían en ISO)", _v is not None and list(_v["Fecha"])[0] == "02/10/2026"
     and list(_v["Vence"])[2] == "01/01/2026", (list(_v["Fecha"])[:1], list(_v["Vence"])[:3]) if _v is not None else None)
 chk("⚠️ el estado con su color y «expired» (no «overdue», el de las facturas)",
-    _v is not None and list(_v["Estado"])[:3] == ["⚪ draft", "⚫ rejected", "🔴 expired"],
+    # v672 · con mayúscula (H5)
+    _v is not None and list(_v["Estado"])[:3] == ["⚪ Draft", "⚫ Rejected", "🔴 Expired"],
     list(_v["Estado"]) if _v is not None else None)
 chk("el total con céntimos y el signo delante («dollar»)", (_c.get("Total") or {}).get("type_config", {}).get("format") == "dollar")
 _rc = _func("core/quotes_ui.py", "render_cotizaciones")

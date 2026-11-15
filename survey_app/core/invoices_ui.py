@@ -7,7 +7,7 @@ emitir. Impuesto (GST/IVA) con el default del grupo, editable.
 """
 import pandas as pd
 
-from core.i18n import t, d, etiqueta as _etq
+from core.i18n import t, d, estado as _estado_txt
 from datetime import timedelta as _timedelta
 
 import streamlit as st
@@ -57,16 +57,17 @@ _FILTROS = {"Todas": (None, "All"),
 
 
 def _est_fmt(est: str) -> str:
-    """El estado de cobro, con su icono, en el idioma de la PANTALLA."""
+    """El estado de cobro, con su icono, en el idioma de la PANTALLA. v672 · con mayúscula (H5: «collected»)."""
     _ic, _tx = _EST_FMT.get(str(est), ("", str(est)))
-    return f"{_ic} {t(_tx)}".strip()
+    _txt = t(_tx)
+    return f"{_ic} {_txt[:1].upper() + _txt[1:]}".strip()
 
 
 def _est_celda(f) -> str:
     """El estado en una CELDA de tabla: punto de color + la etiqueta traducida (v569).
     ⚠️ Fuera del dict de la fila: verif_v452 mira que ninguna celda llame en crudo a lo
-    que devuelve un DATO de la hoja."""
-    return f"{_EST_PUNTO.get(I.estado_cobro(f), '')} " + _etq(I.estado_cobro(f))
+    que devuelve un DATO de la hoja. v672 · con mayúscula (H5)."""
+    return f"{_EST_PUNTO.get(I.estado_cobro(f), '')} " + _estado_txt(I.estado_cobro(f))
 
 
 def _dmy(iso) -> str:
@@ -310,8 +311,12 @@ def _detalle_factura(grupo, fid):
         # ⚠️ v664 · y al lado del PDF, si la empresa no tiene ABN (ver `_nueva_factura`)
         try:
             from core import contable as _CB
-            if not str(_CB.identidad(grupo).get("abn") or "").strip():
+            _idn = _CB.identidad(grupo)
+            if not str(_idn.get("abn") or "").strip():
                 st.caption(t(":material/warning: This PDF says «TAX INVOICE» but the company has no ABN yet."))
+            # v672 · y sin datos de pago no dice cómo pagar (H24). Solo si queda algo por cobrar.
+            if (not _CB.tiene_datos_pago(_idn) and est not in ("cobrada", "anulada")):
+                st.caption(t(":material/warning: This PDF doesn't say how to pay: the company has no bank details yet."))
         except Exception:
             pass
         # v488: la factura en Xero (o el botón para mandarla).
@@ -718,13 +723,17 @@ def _nueva_factura(grupo):
     # ⚠️ v664 · sin ABN, aquí y no solo en Accounting: el PDF dice «TAX INVOICE» (ciclo 1)
     try:
         from core import contable as _CB
-        _sin_abn = not str(_CB.identidad(grupo).get("abn") or "").strip()
+        _idn = _CB.identidad(grupo)
+        _sin_abn = not str(_idn.get("abn") or "").strip()
+        _sin_pago = not _CB.tiene_datos_pago(_idn)            # v672 · H24
     except Exception:
-        _sin_abn = False
+        _sin_abn = _sin_pago = False
     if _sin_abn:
         st.warning(t(":material/warning: This company has no ABN: this invoice will say «TAX INVOICE» "
                      "without one, and Australia requires it above $82.50. The account owner sets it in "
                      "Administration → Groups → «Tax identity and payment terms»."))
+    if _sin_pago:
+        st.warning(_CB.aviso_sin_pago(icono=True))
     if st.button(t(":material/receipt_long: Issue invoice"), type="primary", key="fac_emit"):
         if not _lineas:
             st.error(t("Add at least one line with an amount."))

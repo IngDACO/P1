@@ -56,7 +56,10 @@ GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin",
                   # de pago (la UI ponía vencimiento = HOY, o sea vencida al nacer);
                   # `AccountingJSON` es el mapa a cuentas/impuestos del contable.
                   # Van AL FINAL → migran solas, como las 30 columnas anteriores.
-                  "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"]
+                  "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON",
+                  # v672 · cómo se le paga y cómo se le contacta (H24 del ciclo 2: la factura no decía dónde
+                  # pagar, y el emisor salía sin dirección, email ni teléfono). OPCIONALES, al final → migran solas.
+                  "Address", "ContactEmail", "ContactPhone", "BankAccountName", "BankBSB", "BankAccountNumber"]
 ROLES         = ["owner", "administrator", "field"]
 _ACTIVE_OK    = ("", "SI", "SÍ", "YES", "Y", "TRUE", "1", "X")
 

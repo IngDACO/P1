@@ -256,7 +256,9 @@ try:
     contable.clientes.list_clientes = lambda grupo, incluir_inactivos=False: list(CLI)
     contable._etiquetas = lambda g: dict(ETQ)
     for (perfil, seg), (huella, filas, docs, navisos) in ORACULO.items():
-        _txt = {"AccountingJSON": json.dumps({"seguimiento": seg}), "ABN": ""}
+        # v672 · con datos de pago: sin ellos, Accounting suma un aviso (H24) y el oráculo cuenta los de antes
+        _txt = {"AccountingJSON": json.dumps({"seguimiento": seg}), "ABN": "",
+                "BankBSB": "062-000", "BankAccountNumber": "12345678"}
         contable.auth.group_text_setting = (lambda g, field, default="", _t=_txt:
                                             _t.get(field, default) or default)
         r = contable.csv_ventas("g", perfil)

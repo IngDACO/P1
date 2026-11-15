@@ -96,8 +96,8 @@ ROTURAS = [
      [('key=lambda m: (str(m.get("Date", "")), str(m.get("ID", ""))), reverse=True):',
        'key=lambda m: (str(m.get("Date", "")), str(m.get("ID", "")))):')]),
     ("la factura del buscador vuelve a la fecha ISO", H,
-     [('                                                          _dmy(f.get("Date", ""))] if x), "id": fid})',
-       '                                                          str(f.get("Date", ""))[:10]] if x), "id": fid})')]),
+    # v672 · re-anclada: detrás de la fecha van el estado y el importe (H26). La misma rotura
+     [('_dmy(f.get("Date", "")), _estado_txt(_est),', 'str(f.get("Date", ""))[:10], _estado_txt(_est),')]),
     # ── H3 ──
     ("⚠️ el icono vuelve a la etiqueta de una fecha", UC,
      [('    label = _re.sub(r":material/[a-z0-9_]+:\\s*", "", str(label or "")).strip()', '    label = str(label or "")')]),

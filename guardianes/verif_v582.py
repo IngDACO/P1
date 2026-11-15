@@ -392,8 +392,9 @@ _rg = [s for s in at.selectbox if s.label == "Quantity from the drawing"]
 chk("su regla de cantidad, con la guardada", _rg and _rg[0].value == "per_stop", _rg[0].value if _rg else None)
 chk("⚠️ dónde se usa: «Used in 1 quote»", "Used in 1 quote" in _textos(at), "")
 _u = _kb(at).get("cat_uso_COT-1", "")
-chk("…con un botón por cotización («No. 0001 · Cli · sent · $300»)",
-    "No. 0001 · Cli · sent · \\$300" in _u or "No. 0001 · Cli · sent · $300" in _u, _u)
+# v672 · «Sent», con mayúscula (H5)
+chk("…con un botón por cotización («No. 0001 · Cli · Sent · $300»)",
+    "No. 0001 · Cli · Sent · \\$300" in _u or "No. 0001 · Cli · Sent · $300" in _u, _u)
 at.button(key="cat_uso_COT-1").click()
 at.run()
 chk("…que la ABRE en Quotes", _ss(at, "_cot_open") == "COT-1"

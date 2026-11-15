@@ -66,8 +66,9 @@ ROTURAS = [
     ("vuelve el «-100%» sin nada gastado", QU,
      [('        if not _num(d["real"]):\n', "        if False:\n")]),
     ("⚠️ la vencida vuelve a «overdue» (el de las facturas)", QU,
-     [("    return t(\"expired\") if str(est) == Q.VENCIDA else _etq(str(est))\n",
-       "    return _etq(str(est))\n")]),
+    # v672 · re-anclada: «Expired» con mayúscula y el resto por `_estado_txt` (H5). La misma rotura
+     [("    return t(\"Expired\") if str(est) == Q.VENCIDA else _estado_txt(str(est))\n",
+       "    return _estado_txt(str(est))\n")]),
     ("⚠️ el pie de la calle vuelve a no contar las vencidas", QU,
      [('           (t("{n} sent · {v} expired", n=_env + _ven, v=_ven) if _ven\n',
        '           (t("{n} sent · {v} expired", n=_env, v=_ven) if _ven\n')]),

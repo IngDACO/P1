@@ -30,9 +30,11 @@ ROTURAS = [
     ("vuelve «inactivo»", H,
      [('else t("inactive")] if x)', 'else "inactivo"] if x)')]),
     ("⚠️ el estado del activo vuelve en crudo", H,
-     [('_mayus(_etq(str(a.get("Status", "")).strip()))] if x)   # v668', 'str(a.get("Status", "")).strip()] if x)   # v668')]),
+    # v672 · re-anclada: la mayúscula es la de `i18n.estado` (H5; `_mayus` ya no existe). La misma rotura
+     [('_estado_txt(str(a.get("Status", "")).strip())] if x)   # v668 · v672', 'str(a.get("Status", "")).strip()] if x)   # v668')]),
     ("el estado de la cotización vuelve en crudo", H,
-     [('_mayus(_etq(str(c.get("Status", "")).strip()))] if x),', 'str(c.get("Status", "")).strip()] if x),')]),
+    # v672 · re-anclada: la mayúscula es la de `i18n.estado` (H5). La misma rotura
+     [('_estado_txt(str(c.get("Status", "")).strip())] if x),', 'str(c.get("Status", "")).strip()] if x),')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", SC,

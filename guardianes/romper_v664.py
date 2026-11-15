@@ -76,9 +76,11 @@ ROTURAS = [
     ("⚠️ sin ABN ya no avisa antes de emitir", IU,
      [("    if _sin_abn:\n        st.warning(", "    if False:\n        st.warning(")]),
     ("el aviso de ABN no mira el ABN", IU,
-     [('_sin_abn = not str(_CB.identidad(grupo).get("abn") or "").strip()', "_sin_abn = False")]),
+    # v672 · re-anclada: la identidad se lee una vez (`_idn`), para el ABN y los datos de pago (H24). La misma rotura
+     [('_sin_abn = not str(_idn.get("abn") or "").strip()', "_sin_abn = False")]),
     ("el detalle de la factura deja de avisar junto al PDF", IU,
-     [('            if not str(_CB.identidad(grupo).get("abn") or "").strip():\n                st.caption(',
+    # v672 · re-anclada: la identidad se lee una vez (`_idn`). La misma rotura
+     [('            if not str(_idn.get("abn") or "").strip():\n                st.caption(',
        "            if False:\n                st.caption(")]),
     ("⚠️ lo recibido vuelve a ser lo pedido", O,
      [('return _num(g.get("Amount"))', 'return _num(o.get("Amount"))')]),

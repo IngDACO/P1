@@ -4,7 +4,7 @@
 """
 import pandas as pd
 
-from core.i18n import t, etiqueta as _etq
+from core.i18n import t, etiqueta as _etq, estado as _estado_txt
 import streamlit as st
 
 from core import flash
@@ -46,8 +46,9 @@ _FILTROS = {"Todas": (None, "All"),
 
 def _est_txt(est) -> str:
     """El nombre del estado. ⚠️ v580 · una cotización VENCIDA es «expired»: `etiqueta` la da
-    como «overdue» (el de las facturas) y la misma pantalla decía las dos cosas."""
-    return t("expired") if str(est) == Q.VENCIDA else _etq(str(est))
+    como «overdue» (el de las facturas) y la misma pantalla decía las dos cosas.
+    v672 · con mayúscula (H5 del ciclo 2: la cabecera decía «accepted», «draft», «sent»)."""
+    return t("Expired") if str(est) == Q.VENCIDA else _estado_txt(str(est))
 
 
 def _est_fmt(est) -> str:

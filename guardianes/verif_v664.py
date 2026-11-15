@@ -220,12 +220,14 @@ chk("el IMPORTE va de segunda columna (datos y tabla)",
     and _nf.find('"Importe":  st.column_config.NumberColumn') < _nf.find('"Project": st.column_config.SelectboxColumn'))
 _ia = _nf.find("    if _sin_abn:\n        st.warning(t(\":material/warning: This company has no ABN")
 chk("sin ABN se avisa ANTES de emitir", 0 <= _ia < _nf.find("Issue invoice")
-    and '_sin_abn = not str(_CB.identidad(grupo).get("abn") or "").strip()' in _nf, _ia)
+    # v672 · la identidad se lee una vez: de ella salen el aviso del ABN y el de los datos de pago (H24)
+    and '_sin_abn = not str(_idn.get("abn") or "").strip()' in _nf and "_idn = _CB.identidad(grupo)" in _nf, _ia)
 _n, _df_ = funcion("core/invoices_ui.py", "_detalle_factura")
 chk("…y al lado del PDF de una factura emitida",
-    'if not str(_CB.identidad(grupo).get("abn") or "").strip():\n'
+    # v672 · la identidad se lee una vez (`_idn`): de ella sale también el aviso de los datos de pago (H24)
+    'if not str(_idn.get("abn") or "").strip():\n'
     '                st.caption(t(":material/warning: This PDF says «TAX INVOICE» but the company has no ABN yet."))'
-    in _df_)
+    in _df_ and "_idn = _CB.identidad(grupo)" in _df_)
 
 # ═════════════════════════════════════════════════════════════════════════════
 sec("5. Orden recibida por otro importe")

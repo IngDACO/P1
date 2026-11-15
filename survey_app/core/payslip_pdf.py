@@ -79,16 +79,22 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
 
     # ⚠️ v574 · el estado TRADUCIDO también cuando está pagada: se armaba «pagada (fecha)» y
     # `etiqueta` no reconoce esa cadena compuesta, así que el PDF decía «pagada (2026-10-13)».
-    est = str(nomina.get("Status", "emitida"))
-    _est_txt = i18n.etiqueta(est)
-    if est == "pagada" and str(nomina.get("PaymentDate", "")).strip():
-        _est_txt += f" ({dmy(nomina.get('PaymentDate'))})"
+    # ⚠️ v672 · en PALABRAS para la persona (H11 del ciclo 2: «Status | issued» es un estado interno): pagada →
+    # «Paid on 13/10/2026»; anulada → «Void, not payable»; emitida → «Not paid yet».
+    est = str(nomina.get("Status", "emitida") or "emitida").lower()
+    if est == "pagada":
+        _pago_lbl = d("Paid on")
+        _pago_txt = dmy(nomina.get("PaymentDate")) if str(nomina.get("PaymentDate", "")).strip() else d("Paid")
+    elif est == "anulada":
+        _pago_lbl, _pago_txt = d("Payment"), d("Void, not payable")
+    else:
+        _pago_lbl, _pago_txt = d("Payment"), d("Not paid yet")
     emp = Table([
         [Paragraph(d("Employee"), sm), Paragraph(esc_pdf(nomina.get("Name", "")), Hb),
          Paragraph(d("Period"), sm),
          Paragraph(f"{dmy(nomina.get('PeriodFrom'))} → {dmy(nomina.get('PeriodTo'))}", H)],
         [Paragraph(d("Hours"), sm), Paragraph(f"{_num(nomina.get('Hours')):.2f} h", H),
-         Paragraph(d("Status"), sm), Paragraph(esc_pdf(_est_txt), H)],
+         Paragraph(_pago_lbl, sm), Paragraph(esc_pdf(_pago_txt), H)],
     ], colWidths=[22 * mm, 67 * mm, 22 * mm, 67 * mm])
     emp.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                              ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
@@ -101,10 +107,10 @@ def generate_payslip_pdf(nomina: dict, grupo_nombre: str = "") -> bytes:
              Paragraph(f"<b>{d('Amount')}</b>", ParagraphStyle("hr", parent=Hb, textColor=colors.white))]]
     data.append([Paragraph(d("Labour ({h} h × {r})", h=f"{_num(nomina.get('Hours')):.2f}",
                           r=_money(nomina.get("HourlyRate"))), H),
-                 Paragraph(d("earning"), H), Paragraph(_money(base), H)])
-    for c in conceptos:
+                 Paragraph(d("Earning"), H), Paragraph(_money(base), H)])
+    for c in conceptos:   # v672 · el tipo con mayúscula en su celda (H5): «Deduction», «Contribution»
         data.append([Paragraph(esc_pdf(c.get("concepto", "")), H),
-                     Paragraph(i18n.etiqueta(c.get("tipo", "")), H), Paragraph(_money(c.get("monto")), H)])
+                     Paragraph(esc_pdf(i18n.estado(c.get("tipo", ""))), H), Paragraph(_money(c.get("monto")), H)])
     t = Table(data, colWidths=[110 * mm, 30 * mm, 38 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), C_BRAND),

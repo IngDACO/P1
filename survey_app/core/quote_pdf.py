@@ -17,7 +17,6 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import quotes as Q
-from core import i18n
 from core.i18n import d
 from core.num import num as _num, dmy
 
@@ -58,9 +57,8 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
     except Exception:
         _ident = {}
     marca = str(_ident.get("legal") or "").strip() or grupo_nombre or _grp
-    _emisor = [Paragraph(esc_pdf(marca), mk)]
-    if str(_ident.get("abn") or "").strip():
-        _emisor.append(Paragraph(f"{d('ABN')} {esc_pdf(_ident['abn'])}", sm))
+    from core.invoice_pdf import emisor_parrafos       # v672 · con su contacto (H24)
+    _emisor = emisor_parrafos(_ident, marca, mk, sm)
     head = Table([[_emisor, Paragraph(d("QUOTE"), ti)]],
                  colWidths=[90 * mm, 88 * mm])
     head.setStyle(TableStyle([("ALIGN", (1, 0), (1, 0), "RIGHT"),
@@ -73,7 +71,7 @@ def generate_quote_pdf(cot: dict, cliente: dict = None, grupo_nombre: str = "") 
         # v575 · DD/MM/YYYY (iban en ISO)
         [Paragraph(d("Date"), sm), Paragraph(dmy(cot.get("Date")), H)],
         [Paragraph(d("Valid until"), sm), Paragraph(dmy(cot.get("ValidUntil")), Hb)],
-        [Paragraph(d("Status"), sm), Paragraph(i18n.etiqueta(Q.estado_de(cot)), H)],
+        # ⚠️ v672 · sin «Status» (H11): «draft» o «sent» es un estado INTERNO, no algo que el cliente deba leer
     ], colWidths=[26 * mm, 34 * mm])
     meta.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))

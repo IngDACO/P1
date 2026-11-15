@@ -71,8 +71,11 @@ for c in ("ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"):
     ck(f"la columna {c} existe", c in _H, True)
 # ⚠️ Al final: una columna insertada en medio DESPLAZA todas las siguientes, y las
 # filas se escriben por POSICIÓN (el fallo que mató `create_project` 3 versiones, v363).
+# v672 · detrás van las 6 de contacto y banco (H24 del ciclo 2), también al final: las de v483, en su sitio
 ck("las nuevas van AL FINAL (migran solas)",
-   _H[-4:], ["ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"])
+   _H[-10:-6], ["ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"])
+ck("…y las de v672 detrás de ellas", _H[-6:],
+   ["Address", "ContactEmail", "ContactPhone", "BankAccountName", "BankBSB", "BankAccountNumber"])
 ck("sin duplicados en la cabecera", len(_H), len(set(_H)))
 
 # ⚠️ Una sola definición del setter: `set_group_num_setting` nunca fue numérica, y
@@ -88,7 +91,9 @@ ck("ningún llamador usa el nombre viejo", _viejos, [])
 # ═════ 2 · identidad: se EJECUTA (importar no ejecuta, v378) ════════════════
 print("\n[2] identidad() contra la hoja real")
 _id = contable.identidad("cliente1")
-ck("devuelve las tres claves", sorted(_id), ["abn", "legal", "plazo"])
+# v672 · y las seis de contacto y banco (H24)
+ck("devuelve las tres claves", sorted(_id), ["abn", "bsb", "cuenta", "direccion", "email", "legal", "plazo",
+                                            "telefono", "titular"])
 # ⚠️ Sin razón social cae al nombre del grupo: un grupo sin migrar se comporta como
 # antes en vez de sacar una factura sin emisor.
 ck("la razón social cae al nombre del grupo", bool(_id["legal"]), True)

@@ -16,7 +16,7 @@ import logging
 import re
 import zlib
 
-from core.i18n import t, etiqueta as _etq
+from core.i18n import t, etiqueta as _etq, estado as _estado_txt
 import streamlit as st
 from core import incrustar
 import pandas as pd
@@ -867,10 +867,26 @@ def _norm_busq(s) -> str:
     return "".join(c for c in _s if unicodedata.category(c) != "Mn")
 
 
-def _mayus(s) -> str:
-    """La primera letra en mayúscula (v668): un código canónico («available», «accepted») en un pie."""
-    s = str(s or "")
-    return s[:1].upper() + s[1:] if s else s
+def _num_documento(qn: str):
+    """`(clase, número)` si lo buscado es el número de un documento: «invoice 0004» → ("factura", 4), «quote no. 6» →
+    ("cotizacion", 6), «#4», «nº 4» o «0004» → (None, 4) (las dos clases). `None` si no lo es (v672, H26)."""
+    import re
+    m = re.match(r"^(?:(invoice|inv|factura|quote|cotizacion|presupuesto)\.?\s*)?"
+                 r"(?:(?:no|n[º°o]|number|num)\.?\s*)?#?\s*(\d{1,8})$", str(qn or "").strip())
+    if not m:
+        return None
+    _cl = m.group(1) or ""
+    _cl = ("factura" if _cl in ("invoice", "inv", "factura")
+           else "cotizacion" if _cl in ("quote", "cotizacion", "presupuesto") else None)
+    return _cl, int(m.group(2))
+
+
+def _es_ese_documento(doc, clase: str, numero) -> bool:
+    """¿El `numero` guardado («0004») es el que se busca? Ignora los ceros a la izquierda y otras letras."""
+    if not doc or (doc[0] and doc[0] != clase):
+        return False
+    _d = "".join(c for c in str(numero or "") if c.isdigit())
+    return bool(_d) and int(_d) == doc[1]
 
 
 def buscar(q: str, grupo) -> list:
@@ -887,12 +903,17 @@ def buscar(q: str, grupo) -> list:
     término, luego lo que lo contiene. Dentro de cada grupo, por tipo.
     """
     qn = _norm_busq(q)
-    if len(qn) < 2:                      # con 1 letra todo coincide: no es útil
+    # v672 · «Invoice 0004», «no. 4», «#4» o «4» → el documento nº 4 (H26 del ciclo 2: «Invoice 0004», lo que se ve en
+    # el resultado, daba «0 result(s)»). Con UN carácter solo se buscan números de documento: lo demás coincidiría todo.
+    _doc = _num_documento(qn)
+    if len(qn) < 2 and _doc is None:     # con 1 letra todo coincide: no es útil
         return []
     out = []
 
     def _rank(*campos) -> int:
         """0 = ID exacto · 1 = empieza por · 2 = contiene · None = no coincide."""
+        if len(qn) < 2:
+            return None
         mejor = None
         for c in campos:
             cn = _norm_busq(c)
@@ -996,7 +1017,7 @@ def buscar(q: str, grupo) -> list:
                 if r is None:
                     continue
                 _pie = " · ".join(x for x in [aid, _etq(str(a.get("Category", "")).strip()),
-                                              _mayus(_etq(str(a.get("Status", "")).strip()))] if x)   # v668
+                                              _estado_txt(str(a.get("Status", "")).strip())] if x)   # v668 · v672
                 out.append({"tipo": "activo", "icono": ":material/inventory_2:", "orden": r,
                             "titulo": str(a.get("Name", "")) or aid, "pie": _pie, "id": aid})
         except Exception as e:
@@ -1004,29 +1025,36 @@ def buscar(q: str, grupo) -> list:
         try:
             from core import invoices as INVC
             from core.num import dmy as _dmy
+            from core import theme as _TH
+            from core.num import num as _cifra     # ⚠️ `_num` ya es una variable LOCAL de esta función (el nº de un trabajo)
             for f in INVC.list_facturas(grupo):
                 fid, num = str(f.get("ID", "")), str(f.get("Number", "")).strip()
-                r = _rank(num, fid, f.get("ClientName"))
+                r = 0 if _es_ese_documento(_doc, "factura", num) else _rank(num, fid, f.get("ClientName"))
                 if r is None:
                     continue
+                # v672 · y su estado con el importe («Overdue · $250.00»), como el de una cotización (H26)
+                _est = INVC.estado_cobro(f)
+                _imp = (_cifra(f.get("Total")) - _cifra(f.get("Collected"))) if _est not in ("cobrada", "anulada") \
+                    else _cifra(f.get("Total"))
                 out.append({"tipo": "factura", "icono": ":material/receipt_long:", "orden": r,
                             "titulo": t("Invoice No. {n}", n=num or fid),
                             "pie": " · ".join(x for x in [str(f.get("ClientName", "")).strip(),
-                                                          _dmy(f.get("Date", ""))] if x), "id": fid})
+                                                          _dmy(f.get("Date", "")), _estado_txt(_est),
+                                                          _TH.dinero(_imp)] if x), "id": fid})
         except Exception as e:
             logger.warning("buscar: facturas falló: %s", e)
         try:
             from core import quotes as QT
             for c in QT.list_cotizaciones(grupo):
                 cid, num = str(c.get("ID", "")), str(c.get("Number", "")).strip()
-                r = _rank(num, cid, c.get("ClientName"))
+                r = 0 if _es_ese_documento(_doc, "cotizacion", num) else _rank(num, cid, c.get("ClientName"))
                 if r is None:
                     continue
                 _v = str(c.get("Version", "") or "").strip()
                 out.append({"tipo": "cotizacion", "icono": ":material/request_quote:", "orden": r,
                             "titulo": t("Quote No. {n}", n=num or cid) + (f" v{_v}" if _v and _v != "1" else ""),
                             "pie": " · ".join(x for x in [str(c.get("ClientName", "")).strip(),
-                                                          _mayus(_etq(str(c.get("Status", "")).strip()))] if x),
+                                                          _estado_txt(str(c.get("Status", "")).strip())] if x),
                             "id": cid})   # v668 · el estado con su etiqueta («Accepted», no «accepted»)
         except Exception as e:
             logger.warning("buscar: cotizaciones falló: %s", e)

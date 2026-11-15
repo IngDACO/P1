@@ -14,7 +14,8 @@ ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 ROTURAS = [
     # v569 · la celda lleva ahora un punto de color delante: la rotura es la misma (el
     # estado vuelve a salir en crudo), anclada a la forma nueva.
-    ("invoices_ui.py", "'')} \" + _etq(I.estado_cobro(f))",
+    # v672 · re-anclada: la palabra pasa por `_estado_txt` (`i18n.estado`, H5). La misma rotura.
+    ("invoices_ui.py", "'')} \" + _estado_txt(I.estado_cobro(f))",
      "'')} \" + I.estado_cobro(f)",
      "la celda de Facturas vuelve a mostrar el estado en crudo"),
     # v564 · al día con la columna de AHORA («Status»; desde la migración al inglés el
@@ -28,9 +29,10 @@ ROTURAS = [
     # v570 · re-anclada: `clientes_ui` ya no usa `_etq` (su tabla de facturas es la de
     # Invoices) y quitarle el import no rompería nada. La misma rotura, en un módulo que
     # SÍ lo usa (dos veces).
-    ("payroll_ui.py", "from core.i18n import t, etiqueta as _etq",
+    # v672 · re-anclada: payroll_ui ya no usa `_etq` sino `_estado_txt` (H5). La misma rotura: lo usa sin importarlo.
+    ("payroll_ui.py", "from core.i18n import t, estado as _estado_txt",
      "from core.i18n import t",
-     "un modulo usa _etq sin importarlo (NameError al abrir la pantalla)"),
+     "un modulo usa _estado_txt sin importarlo (NameError al abrir la pantalla)"),
     # v564 · el ternario de la cabecera de la localización ya NO es un ternario (pasó a
     # `_loc_estado_lbl`, con tres estados e `if`): la red de los ternarios no tiene nada
     # que vigilar ahí, y la rotura «se escapaba». Se ancla al ternario que SÍ queda en

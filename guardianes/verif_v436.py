@@ -166,11 +166,18 @@ chk("`_LABELS` sigue resolviendo clave → texto",
 sec("5. Un valor de negocio se muestra con etiqueta(), no traducido a mano")
 # ⚠️ Por AST: la subcadena "i18n.etiqueta" aparecía también en MI PROPIO docstring
 # del módulo, así que el chequeo pasaba con la llamada borrada (trampa nº2).
-for m in ("invoice_pdf.py", "quote_pdf.py", "payslip_pdf.py"):
+# ⚠️ v672 · CADUCADA para la factura y la cotización: ya no imprimen el estado (H11 del ciclo 2: «Status | partial»
+# era un estado INTERNO en un documento para el cliente). Lo que no debe pasar es que vuelva en crudo: sin
+# ninguna etiqueta «Status». La colilla sí pinta un dato de negocio (el tipo), con `i18n.estado` (envuelve a etiqueta).
+for m in ("invoice_pdf.py", "quote_pdf.py"):
+    _tr = ast.parse((RAIZ / "core" / m).read_text(encoding="utf-8"))
+    _st = [x for x in ast.walk(_tr) if isinstance(x, ast.Constant) and x.value == "Status"]
+    chk(f"{m:22} no imprime el estado interno (v672, H11)", not _st)
+for m in ("payslip_pdf.py",):
     _tr = ast.parse((RAIZ / "core" / m).read_text(encoding="utf-8"))
     _lla = any(isinstance(x, ast.Call) and isinstance(x.func, ast.Attribute)
-               and x.func.attr == "etiqueta" for x in ast.walk(_tr))
-    chk(f"{m:22} LLAMA a i18n.etiqueta para el estado", _lla)
+               and x.func.attr in ("etiqueta", "estado") for x in ast.walk(_tr))
+    chk(f"{m:22} LLAMA a i18n.etiqueta (o i18n.estado) para el tipo", _lla)
 chk("`devengo`/`deduccion`/`aporte` están mapeados",
     all(k in i18n.VALORES for k in ("devengo", "deduccion", "aporte")))
 chk("...y siguen comparándose en español en payslip_pdf",

@@ -62,12 +62,17 @@ chk("etiqueta('') no revienta", i18n.etiqueta("") == "")
 
 # ── 2 · `_etq` es la FUNCIÓN en cada módulo que la usa ────────────
 import importlib                                                  # noqa: E402
-for m in ("projects_ui", "home_ui", "auth_ui", "payroll_ui",
+# v672 · payroll_ui ya NO usa `etiqueta` suelta: sus estados van con `i18n.estado` (la envuelve con la primera en
+# mayúscula, H5 del ciclo 2), así que se mira que su `_estado_txt` sea esa función, abajo.
+for m in ("projects_ui", "home_ui", "auth_ui",
           "catalogo_ui", "inventory_ui"):
     mod = importlib.import_module("core." + m)
     f = getattr(mod, "_etq", None)
     chk(f"{m:14} `_etq` es la función de i18n", callable(f) and f("En pausa") == "On hold",
         repr(f))
+_pui_v672 = importlib.import_module("core.payroll_ui")
+chk("payroll_ui     `_estado_txt` es i18n.estado (v672)", getattr(_pui_v672, "_estado_txt", None) is i18n.estado
+    and i18n.estado("pagada") == "Paid", repr(getattr(_pui_v672, "_estado_txt", None)))
 
 # ── 3 · la pantalla que habría reventado, EJECUTADA ───────────────
 # ⚠️ Se sustituyen las lecturas de Sheets: el smoke prueba el CÓDIGO, no la hoja.

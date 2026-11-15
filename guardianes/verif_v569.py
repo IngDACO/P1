@@ -117,8 +117,9 @@ chk("⚠️ lo importante delante: Nº, cliente, estado, saldo, vence",
     list(_v.columns)[:5] == ["Nº", "Cliente", "Estado", "Outstanding", "Vence"], list(_v.columns))
 chk("⚠️ fechas DD/MM/YYYY (salían «2026-09-19»)",
     "03/10/2026" in list(_v["Vence"]) and "19/09/2026" in list(_v["Fecha"]), list(_v["Vence"]))
-chk("⚠️ el estado con punto y la palabra COMPARTIDA («🔴 overdue», «⚪ pending», «🟢 collected»)",
-    {"🔴 overdue", "⚪ pending", "🟢 collected", "⚫ voided", "🟠 partial"} == set(_v["Estado"]), set(_v["Estado"]))
+# v672 · con mayúscula (H5 del ciclo 2): la palabra sigue siendo la COMPARTIDA (i18n.estado envuelve a etiqueta)
+chk("⚠️ el estado con punto y la palabra COMPARTIDA («🔴 Overdue», «⚪ Pending», «🟢 Collected»)",
+    {"🔴 Overdue", "⚪ Pending", "🟢 Collected", "⚫ Voided", "🟠 Partial"} == set(_v["Estado"]), set(_v["Estado"]))
 _cfg = _df.proto.columns.replace(" ", "")
 # ⚠️ Por JSON, no por texto: el JSON escapa «Nº» como º y la 1ª versión de la
 # sonda buscaba el carácter literal (rojo con la tabla bien).

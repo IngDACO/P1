@@ -72,9 +72,10 @@ ROTURAS = [
      "    gastos = [g for g in (expenses._records() or [])"),
 
     ("invoice_pdf.py", "el PDF deja de llevar el ABN",
-     _NL.join(['    if str(_ident.get("abn") or "").strip():',
+     # v672 · re-anclada: el emisor lo arma `emisor_parrafos` (el mismo en factura, certificación y cotización, H24)
+     _NL.join(['    if str(ident.get("abn") or "").strip():',
                # v653 · re-anclada: el ABN va ahora escapado (`esc_pdf`); la rotura es la misma
-               "        _emisor.append(Paragraph(f\"{d('ABN')} {esc_pdf(_ident['abn'])}\", sm))"]),
+               "        out.append(Paragraph(f\"{d('ABN')} {esc_pdf(ident['abn'])}\", sm))"]),
      '    if False:' + _NL + "        pass"),
 
     # v569 · la llamada lleva ahora `format="DD/MM/YYYY"`: la rotura es la misma
@@ -96,8 +97,9 @@ ROTURAS = [
      ""),
 
     ("auth.py", "una columna nueva se mete en MEDIO de la cabecera",
-     '                  "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON"]',
-     '                  "ABN", "LegalName", "AccountingJSON", "PaymentTermsDays"]'),
+     # v672 · re-anclada: detrás van las 6 columnas de contacto y banco (H24), la línea ya no cierra la lista
+     '                  "ABN", "LegalName", "PaymentTermsDays", "AccountingJSON",',
+     '                  "ABN", "LegalName", "AccountingJSON", "PaymentTermsDays",'),
 
     # ── CONTROL: un cambio inocuo que DEBE seguir pasando ──
     ("contable.py", "CONTROL: solo un comentario nuevo",

@@ -326,7 +326,8 @@ chk("⚠️ las columnas de Invoices, sin la del cliente (es SU ficha)",
     list(_v.columns) == ["Nº", "Estado", "Outstanding", "Vence", "Total", "Cobrado", "Fecha"], list(_v.columns))
 chk("⚠️ fechas DD/MM/YYYY (salía «2026-09-23»)",
     "23/09/2026" in list(_v["Fecha"]) and "07/10/2026" in list(_v["Vence"]), list(_v["Fecha"]))
-chk("estado con punto («🔴 overdue», «⚫ voided»)", {"🔴 overdue", "⚫ voided", "🟠 partial"} == set(_v["Estado"]),
+# v672 · con mayúscula (H5)
+chk("estado con punto («🔴 Overdue», «⚫ Voided»)", {"🔴 Overdue", "⚫ Voided", "🟠 Partial"} == set(_v["Estado"]),
     set(_v["Estado"]))
 _cj = json.loads(_df.proto.columns)
 chk("⚠️ «No.» fijado y dinero con céntimos (era «Nº» y `$%,d`, que TRUNCA)",

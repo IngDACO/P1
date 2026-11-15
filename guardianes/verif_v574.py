@@ -142,7 +142,8 @@ chk("lo importante delante: persona, estado, neto, periodo",
 chk("⚠️ sin homónimo FALSO: «Ana» con dos colillas sale «Ana» (salía «Ana (u1)»)",
     set(_v["Usuario"]) == {"Ana", "Beto"}, set(_v["Usuario"]))
 chk("⚠️ periodo DD/MM/YYYY", "01/09/2026 → 07/09/2026" in list(_v["Periodo"]), list(_v["Periodo"]))
-chk("estado con punto y TRADUCIDO", set(_v["Estado"]) == {"🟠 issued", "🟢 paid", "⚫ voided"}, set(_v["Estado"]))
+# v672 · con mayúscula (H5)
+chk("estado con punto y TRADUCIDO", set(_v["Estado"]) == {"🟠 Issued", "🟢 Paid", "⚫ Voided"}, set(_v["Estado"]))
 chk("⚠️ el neto con céntimos (288.7, no 289)", 288.7 in list(_v["Neto"]), list(_v["Neto"]))
 _cj = json.loads(_df.proto.columns)
 _enum = _df.proto.DESCRIPTOR.fields_by_name["selection_mode"].enum_type
@@ -181,7 +182,8 @@ at = _app(_nom_open="N1")
 chk("el detalle se pinta sin excepción", not at.exception, [e.value for e in at.exception][:1])
 _tx = " ¦ ".join(m.value for m in at.markdown)
 chk("⚠️ título y línea por `t()`, DD/MM/YYYY y el estado TRADUCIDO (decía «status: emitida»)",
-    "Payslip — Ana" in _tx and "Period **01/09/2026 → 07/09/2026**" in _tx and "issued" in _tx
+    # v672 · «Issued», con mayúscula (H5)
+    "Payslip — Ana" in _tx and "Period **01/09/2026 → 07/09/2026**" in _tx and "Issued" in _tx
     and "emitida" not in _tx, re.findall(r"Period[^¦]*", _tx))
 _edv = at.dataframe[0]
 _ecj = json.loads(_edv.proto.columns)
@@ -293,8 +295,10 @@ try:
     _txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(_P.generate_payslip_pdf(_nom, "cliente1"))).pages)
     chk("⚠️ el EMPLEADOR con su nombre legal y su ABN (decía «cliente1»)",
         "Acme Lifts Pty Ltd" in _txt and "ABN 12 345 678 901" in _txt and "cliente1" not in _txt, _txt[:200])
-    chk("⚠️ periodo DD/MM/YYYY y el estado TRADUCIDO con su fecha («paid (13/10/2026)»)",
-        "08/09/2026 → 14/09/2026" in _txt and "paid (13/10/2026)" in _txt and "pagada" not in _txt, _txt[:400])
+    # v672 · en PALABRAS para la persona: «Paid on 13/10/2026», no un «Status» (H11 del ciclo 2)
+    chk("⚠️ periodo DD/MM/YYYY y el pago con su fecha («Paid on 13/10/2026»)",
+        "08/09/2026 → 14/09/2026" in _txt and "Paid on\n13/10/2026" in _txt and "pagada" not in _txt
+        and "Status" not in _txt, _txt[:400])
 finally:
     _CT.identidad = _ct0
 from core.num import dmy                                                    # noqa: E402

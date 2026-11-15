@@ -150,9 +150,11 @@ ROTURAS = [
      [('''    """⚠️ Sin título propio (v627): `_sub_header` ya pinta «Self-service · My payslips»."""\n''',
        '''    st.markdown(t("## :material/payments: My payslips"))\n''')]),
     ("⚠️ se pierde la fecha de pago", PY,
-     [('''t("paid on {d}", d=_dmy(_pago)) if _est == "pagada" and _pago else _etq(_est)''', '''_etq(_est)''')]),
+    # v672 · re-anclada: «Paid on» y el estado por `_estado_txt` (H5). La misma rotura
+     [('''t("Paid on {d}", d=_dmy(_pago)) if _est == "pagada" and _pago else _estado_txt(_est)''', '''_estado_txt(_est)''')]),
     ("la fecha de pago, en ISO", PY,
-     [('''t("paid on {d}", d=_dmy(_pago))''', '''t("paid on {d}", d=_pago)''')]),
+    # v672 · re-anclada: «Paid on», con mayúscula (H5). La misma rotura
+     [('''t("Paid on {d}", d=_dmy(_pago))''', '''t("Paid on {d}", d=_pago)''')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", M,

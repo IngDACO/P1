@@ -111,7 +111,51 @@ def identidad(grupo: str) -> dict:
         "abn": auth.group_text_setting(grupo, "ABN", ""),
         "legal": auth.group_text_setting(grupo, "LegalName", "") or str(grupo or ""),
         "plazo": int(_num(auth.group_text_setting(grupo, "PaymentTermsDays", "")) or 14),
+        # v672 · contacto del emisor y datos de pago (H24 del ciclo 2), para los PDF que piden dinero
+        "direccion": auth.group_text_setting(grupo, "Address", ""),
+        "email": auth.group_text_setting(grupo, "ContactEmail", ""),
+        "telefono": auth.group_text_setting(grupo, "ContactPhone", ""),
+        "titular": auth.group_text_setting(grupo, "BankAccountName", ""),
+        "bsb": auth.group_text_setting(grupo, "BankBSB", ""),
+        "cuenta": auth.group_text_setting(grupo, "BankAccountNumber", ""),
     }
+
+
+def contacto_emisor(ident: dict) -> list:
+    """Las líneas de contacto del emisor bajo su nombre y su ABN (v672): la dirección, y el email y el teléfono
+    juntos. Sin nada puesto, `[]` (el PDF sale como antes)."""
+    ident = ident or {}
+    _dir = str(ident.get("direccion") or "").strip()
+    _con = " · ".join(x for x in (str(ident.get("email") or "").strip(), str(ident.get("telefono") or "").strip()) if x)
+    return [x for x in (_dir, _con) if x]
+
+
+def tiene_datos_pago(ident: dict) -> bool:
+    """¿Dice la factura dónde pagar? Hace falta el BSB y el número de cuenta (el titular cae al nombre legal)."""
+    ident = ident or {}
+    return bool(str(ident.get("bsb") or "").strip() and str(ident.get("cuenta") or "").strip())
+
+
+def bsb_normal(v) -> str:
+    """«062000», «062 000» o «062-000» → «062-000»; "" si no son 6 cifras (un BSB australiano)."""
+    _d = "".join(c for c in str(v or "") if c.isdigit())
+    return f"{_d[:3]}-{_d[3:]}" if len(_d) == 6 else ""
+
+
+def cuenta_ok(v) -> bool:
+    """Un número de cuenta australiano: de 5 a 10 cifras (se admiten espacios y guiones al escribirlo)."""
+    _s = str(v or "").replace(" ", "").replace("-", "")
+    return _s.isdigit() and 5 <= len(_s) <= 10
+
+
+def aviso_sin_pago(icono: bool = False) -> str:
+    """El aviso cuando faltan los datos de pago (v672), el mismo en la factura nueva y en Accounting (con o sin el
+    icono). Al llamarla, no al importar: `t()` a nivel de módulo se congela en el idioma de ese instante (v445)."""
+    if icono:
+        return t(":material/warning: This company has no bank details: its invoices don't say how to pay. The "
+                 "account owner sets them in Administration → Groups → «Tax identity and payment terms».")
+    return t("This company has no bank details: its invoices don't say how to pay. The account owner sets "
+             "them in Administration → Groups → «Tax identity and payment terms».")
 
 
 def mapa(grupo: str) -> dict:
@@ -412,6 +456,8 @@ def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
         avisos.append(t("This company has no ABN: its invoices say «TAX INVOICE» without one, "
                         "and Australia requires it above $82.50. The account owner sets it "
                         "in Administration → Groups → «Tax identity and payment terms»."))
+    if not tiene_datos_pago(ident):
+        avisos.append(aviso_sin_pago())           # v672 · H24
 
     facturas = [f for f in invoices.list_facturas(grupo)
                 if _rango(f.get("Date"), desde, hasta)]

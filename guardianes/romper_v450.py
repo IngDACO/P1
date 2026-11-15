@@ -29,7 +29,8 @@ ROTURAS = [
      '_PER = {"This month": "This month"',
      "se traduce la opción que se compara → rama MUERTA (v442)"),
     # v580 · re-anclada: la palabra del estado la pone `_est_txt` (que da «expired» a la vencida)
-    ("core/quotes_ui.py", 'return t("expired") if str(est) == Q.VENCIDA else _etq(str(est))',
+    # v672 · re-anclada: «Expired» con mayúscula y el resto por `_estado_txt` (i18n.estado, H5). La misma rotura
+    ("core/quotes_ui.py", 'return t("Expired") if str(est) == Q.VENCIDA else _estado_txt(str(est))',
      'return str(est)',
      "el chip de cotización vuelve a pintar el estado en crudo"),
     ("core/auth_ui.py", '_ico = {e: _etq(e) for e in ("vencido", "por_vencer", "vigente")}',

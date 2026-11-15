@@ -23,8 +23,11 @@ ROTURAS = [
     ("verif_v442.py", "core/projects_ui.py", '"Total cost": f["total"]',
      '"Costo total": f["total"]', "una cabecera de tabla vuelve al español"),
     # ── verif_v442 · los valores por etiqueta() ──
-    ("verif_v442.py", "core/payroll_ui.py",
-     "from core.i18n import t, etiqueta as _etq", "from core.i18n import t",
+    # v672 · re-anclada: payroll_ui ya no importa `etiqueta` (sus estados van con `i18n.estado`, H5). La misma
+    # rotura en home_ui, que la sigue usando.
+    ("verif_v442.py", "core/home_ui.py",
+     "from core.i18n import t, etiqueta as _etq, estado as _estado_txt",
+     "from core.i18n import t, estado as _estado_txt",
      "un módulo deja de importar `etiqueta`"),
     ("verif_v442.py", "core/payroll_ui.py",
      "            _etu = auth.etiqueta_usuarios", "            _etq = auth.etiqueta_usuarios",

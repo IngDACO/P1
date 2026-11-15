@@ -95,7 +95,8 @@ chk("...y deja pasar lo que no conoce (no inventa)",
 
 # los módulos que pintan un valor tienen que tener la FUNCIÓN a mano
 import importlib                                                  # noqa: E402
-CON_ETQ = ["projects_ui", "home_ui", "auth_ui", "payroll_ui", "catalogo_ui",
+# v672 · sin payroll_ui: sus estados van con `i18n.estado` (envuelve a `etiqueta`, H5); lo mira check_v442_smoke
+CON_ETQ = ["projects_ui", "home_ui", "auth_ui", "catalogo_ui",
            "inventory_ui"]
 for m in CON_ETQ:
     tr = ast.parse((RAIZ / f"core/{m}.py").read_text(encoding="utf-8"))
