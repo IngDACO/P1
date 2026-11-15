@@ -749,18 +749,30 @@ def idioma_de(texto) -> str:
     return ""
 
 
-def _idioma_tras_datos(pregunta) -> str:
+# v679 · Lo que la OFICINA lee justo antes de responder, detrás del idioma (visto verificando v678): la regla de la guía
+# no bastó. A «Who is planned on PRJ-0044 on Monday 23/11?» añadía, 3 de 3 en el examen y en producción, «helper leader
+# CI 1 is no longer on the list… you freed their days», y una vez «their leave starts on 25/11» con esa ausencia ya
+# cancelada: lo de turnos anteriores, sin pedirlo y a veces viejo.
+_SOLO_LO_PEDIDO = (" Answer only that question, with the data above. Do not bring up earlier turns of this conversation, "
+                   "what was done on a card, or what you said before: it may be out of date. If the question itself "
+                   "refers to something earlier, answer it with today's data.")
+
+
+def _idioma_tras_datos(pregunta, rol="") -> str:
     """⚠️ v643 · Justo antes de responder. Fallaba con los datos delante: en los exámenes, la regla no bastó ni repetida
     al final de la guía, y dos respuestas empezaron en español y se disculparon a media frase. Por eso cita la pregunta:
     lo último que lee es la propia frase de la persona, y no hay que adivinar en qué idioma está.
-    ⚠️ v666 · y el idioma con su NOMBRE cuando se sabe (`idioma_de`): aun así falló 1 de 10 en el ciclo 1."""
+    ⚠️ v666 · y el idioma con su NOMBRE cuando se sabe (`idioma_de`): aun así falló 1 de 10 en el ciclo 1.
+    v679 · y, para la oficina, que responda solo a eso (`_SOLO_LO_PEDIDO`)."""
     _l = idioma_de(pregunta)
     _q = str(pregunta)[:200]                     # la pregunta, recortada UNA vez para las dos formas
+    _mas = _SOLO_LO_PEDIDO if rol == "administrator" else ""
     if _l:
         return (f"(The person asked, in {_l}: «{_q}». Write your whole answer in {_l}, from the first "
-                "word, not in the language of your notes or of this data. Do not comment on the language.)")
+                "word, not in the language of your notes or of this data. Do not comment on the language." + _mas + ")")
     return (f"(The person asked: «{_q}». Write your whole answer in the language of that question, from "
-            "the first word, not in the language of your notes or of this data. Do not comment on the language.)")
+            "the first word, not in the language of your notes or of this data. Do not comment on the language."
+            + _mas + ")")
 
 
 def _conversar(client, system, messages, herramientas, ctx) -> str:
@@ -795,7 +807,7 @@ def _conversar(client, system, messages, herramientas, ctx) -> str:
                 _txt, _mal = chat_tools.ejecutar(b.name, b.input, ctx)
                 resultados.append({"type": "tool_result", "tool_use_id": b.id, "content": _txt,
                                    **({"is_error": True} if _mal else {})})
-        messages.append({"role": "user", "content": resultados + [{"type": "text", "text": _idioma_tras_datos(ctx.get("pregunta", ""))}]})
+        messages.append({"role": "user", "content": resultados + [{"type": "text", "text": _idioma_tras_datos(ctx.get("pregunta", ""), ctx.get("rol", ""))}]})
     return "⚠️ I could not get an answer this time. Try again."
 
 

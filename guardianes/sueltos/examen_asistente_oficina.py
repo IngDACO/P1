@@ -217,7 +217,18 @@ if sys.argv[4:] == ["revisar"]:
                       for d in ("lun", "mar", "mie", "jue", "vie")}
         return s
     R.get_semana = _semana
-PREGUNTAS = REVISAR if sys.argv[4:] == ["revisar"] else IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
+# `revisar2` (v679, en producción tras desplegarla): la conversación sigue con la tarjeta de liberar el tablero ya
+# confirmada, y a «Who is planned on PRJ-0044 on Monday 23/11?» añadió «helper leader CI 1 is no longer on the list. The
+# removal you confirmed took them off.». El tablero, el REAL de hoy (ya liberado).
+_HIST_V678 = _HIST_C3 + [
+    {"role": "user", "content": "Please free helper leader CI 1's board on PRJ-0044 from 23/11/2026 to 27/11/2026: take those "
+                                "days off the board."},
+    {"role": "assistant", "content": "I've prepared the removal of helper leader CI 1's days on PRJ-0044 from 23/11/2026 to "
+                                     "27/11/2026. Nothing changes on the board until you press Confirm on the card."},
+    {"role": "assistant", "content": "✅ helper leader CI 1: 5 day(s) freed on the board.", "app": "confirm",
+     "card": "Board · free helper leader CI 1 · C3 — Harbour Lifts — Lift 3 (manual)"}]
+REVISAR2 = [{"rol": "administrator", "hist": _HIST_V678, "q": "Who is planned on PRJ-0044 on Monday 23/11?"}] * 3
+PREGUNTAS = REVISAR2 if sys.argv[4:] == ["revisar2"] else REVISAR if sys.argv[4:] == ["revisar"] else IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
     "how are my jobs going? which ones should I worry about?",
     "quién está fichado ahora mismo y en qué obra?",
     "who is planned to work tomorrow and who is away?",

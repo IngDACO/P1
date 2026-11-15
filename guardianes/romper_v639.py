@@ -130,10 +130,11 @@ ROTURAS = [
      [("""            kw["tool_choice"] = {"type": "none"}      # la última vuelta contesta con lo que tenga\n""", """            pass\n""")]),
     ("⚠️ se fuerza una herramienta (400 en este modelo)", A,
      [("""        kw = {"tools": herramientas} if herramientas else {}\n""", """        kw = {"tools": herramientas, "tool_choice": {"type": "any"}} if herramientas else {}\n""")]),
+    # v680 · re-anclada: la llamada le pasa ahora el rol (`_SOLO_LO_PEDIDO`, solo la oficina). La misma rotura
     ("⚠️ cada resultado en su mensaje", A,
      [("""                resultados.append({"type": "tool_result", "tool_use_id": b.id, "content": _txt,
                                    **({"is_error": True} if _mal else {})})
-        messages.append({"role": "user", "content": resultados + [{"type": "text", "text": _idioma_tras_datos(ctx.get("pregunta", ""))}]})
+        messages.append({"role": "user", "content": resultados + [{"type": "text", "text": _idioma_tras_datos(ctx.get("pregunta", ""), ctx.get("rol", ""))}]})
 """, """                messages.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": b.id, "content": _txt}]})
 """)]),
     ("⚠️ el error no se marca", A,
