@@ -169,6 +169,37 @@ def _mi_dia(entrada, ctx) -> dict:
             "jobs_today": pendientes, "credentials_expiring_soon": _vence}
 
 
+MAX_DIAS_PLAN = 7          # v678 · lo que el campo puede mirar de su plan de una vez (una semana)
+
+
+def _mi_plan(entrada, ctx) -> dict:
+    """Su plan de OTRO día, o de unos días (v678, H14 del ciclo 3: «where am I planned on Monday?» → «I can't see Monday's
+    plan»; el de la oficina ya veía la semana, v666). Solo lectura y solo lo SUYO: la persona sale de la sesión."""
+    from datetime import timedelta
+    from core import roster as R
+    g, u = ctx["grupo"], ctx["usuario"]
+    d0 = _parse_date((entrada or {}).get("date")) or clock.today(g)
+    d1 = _parse_date((entrada or {}).get("to")) or d0
+    if d1 < d0:
+        d0, d1 = d1, d0
+    d1 = min(d1, d0 + timedelta(days=MAX_DIAS_PLAN - 1))
+    dias, d = [], d0
+    while d <= d1:
+        try:
+            asig = R.asignaciones_dia(g, u, d) or []
+        except Exception as e:
+            logger.warning("chat_tools._mi_plan: %s", e)
+            raise _Negado("Their board could not be read right now.")
+        dias.append({"date": dmy(d), "weekday": d.strftime("%A"),
+                     "planned": [{"what": a.get("etiqueta", ""), "project_id": a.get("proyecto_id", ""),
+                                  "from": a.get("ini", ""), "to": a.get("fin", ""), "note": a.get("nota", ""),
+                                  "absence_or_day_off": bool(a.get("es_estado"))} for a in asig]})
+        d += timedelta(days=1)
+    return {"today": dmy(clock.today(g)), "days": dias,
+            "how_to_read": "Only this person's board. An empty «planned» means nothing is on their board that day: it is "
+                           "not a day off unless it says so. Plans can still change."}
+
+
 def _fin_de_obra(p) -> dict:
     """v673 · H3 del ciclo 2: de una obra terminada, «finished_on» con la fecha REAL; si no, «estimated_finish». El
     asistente decía «the estimated finish shows 16/12/2026, even though the job is marked complete»."""
@@ -820,9 +851,11 @@ def _preparar_decision_ausencia(entrada, ctx) -> dict:
             lineas.append(t("Balance after this: {d} of {a} days.", d=f"{_tras:.0f}", a=f"{s['asignados']:.0f}"))
             if _tras < 0:
                 avisos.append(t("This goes over their balance."))
-        _ch = list(dict.fromkeys(str(c.get("etiqueta", "")) for c in AU.choques(g, usuario, r.get("From"), r.get("To"))))
+        _chq = AU.choques(g, usuario, r.get("From"), r.get("To"))
+        _ch = list(dict.fromkeys(str(c.get("etiqueta", "")) for c in _chq))
         if _ch:
             avisos.append(t("Already planned on those days: {x}. Those days are freed on the board.", x=", ".join(_ch)))
+            lineas += _quien_cubre(g, usuario, _chq)       # v678 · H16 del ciclo 3
     if nota:
         lineas.append(t("Note for them: {x}", x=nota))
     lineas += ["⚠️ " + a for a in avisos] + [t("{who} is told.", who=quien)]
@@ -830,6 +863,76 @@ def _preparar_decision_ausencia(entrada, ctx) -> dict:
     return _tarjeta(ctx, "ausencia_decidir",
                     t("Approve · {x} · {who}", x=_x, who=quien) if aprobar else t("Reject · {x} · {who}", x=_x, who=quien),
                     "\n".join(lineas), {"absence_id": str(r.get("ID", "")), "approve": aprobar, "note": nota}, avisos)
+
+
+MAX_CUBRIR = 5             # v678 · días de «quién puede cubrirlo» en la tarjeta
+
+
+def _quien_cubre(g, usuario, choques) -> list:
+    """Quién puede cubrir cada día que la ausencia deja libre, con sus CERTIFICADOS (v678, H16 del ciclo 3): la bandeja
+    lo enseñaba (`ausencias.sustitutos`) y el asistente decía «I can't see the credentials of those four». Las mismas
+    tres respuestas que la bandeja: libre y con los certificados, libre sin ellos, o nadie."""
+    from core import ausencias as AU
+    out = []
+    for c in choques[:MAX_CUBRIR]:
+        # ⚠️ Lo mejor posible: si no se puede leer quién está libre, la tarjeta sale igual (sin estas líneas)
+        try:
+            subs = AU.sustitutos(g, c["fecha"], c.get("proyecto_id"), excluir=usuario)
+        except Exception as e:
+            logger.warning("chat_tools._quien_cubre: %r", e)
+            return out
+        _ok = [x["nombre"] for x in subs if x["cumple"]][:4]
+        _no = [x["nombre"] for x in subs if not x["cumple"]][:3]
+        _q = (t("free and holding the certificates: {x}", x=", ".join(_ok)) if _ok else
+              t("free but WITHOUT the certificates the site requires: {x}", x=", ".join(_no)) if _no else
+              t("nobody free that day"))
+        out.append(t("Who could cover {d} · {j}: {q}", d=dmy(c["fecha"]), j=c.get("etiqueta", ""), q=_q))
+    if len(choques) > MAX_CUBRIR:
+        out.append(t("… and {n} more day(s): see Planning → Absences.", n=len(choques) - MAX_CUBRIR))
+    return out
+
+
+def _preparar_cambio_tablero(entrada, ctx) -> dict:
+    """Mover o quitar días del tablero de una persona (v678, H10 del ciclo 3), con la regla de la pantalla
+    (`roster.cambiar_dias`: desde hoy, sin tocar una ausencia). Prepara la tarjeta con cada día que cambia; no escribe."""
+    from core import credentials as CR, projects as P, roster as R
+    g = ctx["grupo"]
+    u, quien = _persona_de_campo(entrada, ctx)
+    pid = str((entrada or {}).get("project_id") or "").strip()
+    a_pid = str((entrada or {}).get("move_to_project_id") or "").strip()
+    prj = _obra({"project_id": pid}, ctx) if pid else {}
+    dest = _obra({"project_id": a_pid}, ctx) if a_pid else {}
+    if dest and (P.es_completada(dest) or str(dest.get("Status", "")) in ("Cancelled", "On hold", "Archived")):
+        raise _Negado(f"{dest.get('Name', a_pid)} is not running ({dest.get('Status', '')}): nobody can be planned on it.")
+    d0 = _parse_date((entrada or {}).get("from"))
+    if not d0:
+        raise _Negado("Say from which day (YYYY-MM-DD).")
+    ok, res = R.cambiar_dias(g, u, d0, _parse_date((entrada or {}).get("to")) or d0, pid, a_pid)
+    if not ok:
+        raise _Negado(str(res))
+    hechos = [x for x in res if not x["ausente"]]
+    if not hechos:
+        raise _Negado(f"Nothing on {quien}'s board matches that from {dmy(d0)}"
+                      + (f" on {prj.get('Name', pid)}" if pid else "") + ": there is nothing to change.")
+    tidx = R.trabajos_idx(g)
+    _et = lambda its: ", ".join(R.etiqueta_de(i["asig"], tidx) + (f" {i['ini']}–{i['fin']}" if i["ini"] else "")  # noqa: E731
+                                for i in its) or t("free")
+    lineas = [f"{x['fecha'].strftime('%a')} {dmy(x['fecha'])}: {_et(x['antes'])} → {_et(x['despues'])}" for x in hechos]
+    avisos = []
+    _aus = [dmy(x["fecha"]) for x in res if x["ausente"]]
+    if _aus:
+        lineas.append(t("Not touched (they are absent): {x}", x=", ".join(_aus)))
+    if dest:
+        _req = [x.strip() for x in str(dest.get("RequiredCerts", "")).split(";") if x.strip()]
+        if _req and not CR.compliance(u, _req).get("cumple"):
+            avisos.append(t("{who} does not hold the certificates {o} requires: {x}", who=quien, o=dest.get("Name", ""),
+                            x=", ".join(_req)))
+    lineas = ["⚠️ " + a for a in avisos] + lineas + [t("Their board changes from today on; what already happened stays.")]
+    _titulo = (t("Board · {who} → {o}", who=quien, o=dest.get("Name", a_pid)) if dest else
+               t("Board · free {who}", who=quien) + (f" · {prj.get('Name', pid)}" if pid else ""))
+    return _tarjeta(ctx, "tablero", _titulo, "\n".join(lineas),
+                    {"user": u, "from": d0.isoformat(), "to": hechos[-1]["fecha"].isoformat(), "project_id": pid,
+                     "move_to_project_id": a_pid}, avisos)
 
 
 def _preparar_decision_fichaje(entrada, ctx) -> dict:
@@ -1014,9 +1117,35 @@ def _confirmar_aviso_cuadrilla(d, ctx) -> tuple:
             if ok else (False, str(r)))
 
 
+def _confirmar_cambio_tablero(d, ctx) -> tuple:
+    """v678 · H10: se VUELVE a mirar todo (la persona, las obras y el tablero de ahora) y se escribe."""
+    from core import projects as P, roster as R
+    u, quien = _persona_de_campo({"person": d.get("user")}, ctx)
+    pid, a_pid = str(d.get("project_id") or ""), str(d.get("move_to_project_id") or "")
+    if pid:
+        _obra({"project_id": pid}, ctx)
+    dest = _obra({"project_id": a_pid}, ctx) if a_pid else {}
+    if dest and (P.es_completada(dest) or str(dest.get("Status", "")) in ("Cancelled", "On hold", "Archived")):
+        return False, t("{o} is not running any more: nothing was changed.", o=dest.get("Name", a_pid))
+    ok, res = R.cambiar_dias(ctx["grupo"], u, d.get("from"), d.get("to"), pid, a_pid, aplicar=True)
+    if not ok:
+        return False, str(res)
+    _n = len([x for x in res if not x["ausente"]])
+    if not _n:
+        return False, t("{who}'s board no longer has those days: nothing was changed.", who=quien)
+    if a_pid and u not in _logins(dest):
+        try:
+            P.add_field_user(a_pid, u)
+        except Exception as e:
+            logger.warning("chat_tools: asignar al mover el tablero: %r", e)
+    return True, (t("{who}: {n} day(s) moved to {o}.", who=quien, n=_n, o=dest.get("Name", a_pid)) if a_pid else
+                  t("{who}: {n} day(s) freed on the board.", who=quien, n=_n))
+
+
 _CONFIRMAR_OFICINA = {"ausencia_decidir": _confirmar_ausencia, "fichaje_decidir": _confirmar_fichaje,
                       "aviso_cerrar": _confirmar_cierre, "asignar": _confirmar_asignacion,
-                      "aviso_cuadrilla": _confirmar_aviso_cuadrilla}
+                      "aviso_cuadrilla": _confirmar_aviso_cuadrilla,
+                      "tablero": _confirmar_cambio_tablero}          # v678 · H10
 
 
 _SIN_ENTRADA = {"type": "object", "properties": {}, "additionalProperties": False}
@@ -1030,6 +1159,15 @@ LECTURA = [
                     "need their signature, plus credentials expiring soon. Each job says whether it is planned for them "
                     "or they are only clocked in there: never call a job planned just because they clocked in. Call it "
                     "first for anything about today, such as «what do I have to do?», «what's missing?» or «where am I working?»."},
+    # v678 · H14 del ciclo 3: su plan de otro día
+    {"name": "get_my_plan", "fn": _mi_plan,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["date"],
+                      "properties": {"date": {"type": "string", "description": "YYYY-MM-DD."},
+                                     "to": {"type": "string", "description": "YYYY-MM-DD, optional: up to 6 days after "
+                                            "date, for a stretch of days or a whole week."}}},
+     "description": "What is planned for this person on another day, or on a few days (up to a week): the jobs on their "
+                    "board with times and notes, and any absence or day off. Only their own board, read only. Call it for "
+                    "«where am I on Monday?», «what do I have next week?» or anything about a day that is not today."},
     {"name": "get_my_jobs", "input_schema": _SIN_ENTRADA, "fn": _mis_trabajos,
      "description": "The jobs this person is assigned to, with ID, location, status, progress and instructions. Call it "
                     "when they ask about their jobs or name one, to find its project_id."},
@@ -1147,6 +1285,22 @@ PREPARAR_OFICINA = [
                     "certificates, other jobs, contact details) and assigns nothing yet. On Confirm the person is told and the "
                     "planner fills their free weekdays from today to the job's end. Call it when they ask you to put someone on a "
                     "job, with the person as they said it: if it matches nobody, or more than one, it tells you who to choose from."},
+    # v678 · H10 del ciclo 3
+    {"name": "prepare_board_change", "fn": _preparar_cambio_tablero,
+     "input_schema": {"type": "object", "additionalProperties": False, "required": ["person", "from"],
+                      "properties": {"person": {"type": "string", "description": "A field person's name, as the app shows it."},
+                                     "from": {"type": "string", "description": "YYYY-MM-DD, today or later."},
+                                     "to": {"type": "string", "description": "YYYY-MM-DD, optional (up to a month after "
+                                            "from). Defaults to the same day."},
+                                     "project_id": {"type": "string", "description": "Optional: only their days on this job. "
+                                                    "Without it, every job they have on those days."},
+                                     "move_to_project_id": {"type": "string", "description": "Optional: put those days on "
+                                                            "this job instead, with the same times. Without it, they are "
+                                                            "removed from the board."}}},
+     "description": "Prepare removing days from one field person's board, or moving them to another running job, from today "
+                    "on. It shows them a card with every day that changes and changes nothing yet. Absences on the board are "
+                    "never touched, and the past stays as it was planned. Call it when they ask you to take someone off a "
+                    "job on some days, free someone's board, or move their days to another job."},
     {"name": "prepare_crew_notice", "fn": _preparar_aviso_cuadrilla,
      "input_schema": {"type": "object", "additionalProperties": False, "required": ["project_id", "message"],
                       "properties": {"project_id": _ID_OBRA,

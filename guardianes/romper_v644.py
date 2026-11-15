@@ -168,7 +168,8 @@ ROTURAS = [
     # ── Lo que se le dice al modelo ──
     ("⚠️ no dice que solo prepara", A,
      [("""        "- **Aprobar o rechazar una ausencia, aprobar o revertir una corrección de fichaje, cerrar un aviso, asignar a "
-        "alguien a una obra y mandar un aviso a la cuadrilla:** solo los PREPARAS. La persona ve una tarjeta y tiene que "
+        "alguien a una obra, mover o quitar días del tablero de alguien y mandar un aviso a la cuadrilla:** solo los "
+        "PREPARAS. La persona ve una tarjeta y tiene que "
         "pulsar **Confirm**: hasta entonces NO se ha hecho nada, y nunca digas que sí. Usa el ID que sale en las "
         "consultas; si falta un dato o no está claro cuál es, pregúntalo antes. En un aviso usa sus palabras. Si la "
         "tarjeta advierte algo (el saldo, certificados, ausencias), díselo.\\n"

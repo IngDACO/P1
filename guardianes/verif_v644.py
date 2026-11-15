@@ -152,6 +152,8 @@ AU.saldo = lambda g, u, tipo, ref=None: {"ilimitado": False, "restantes": _saldo
                                           "usados": 18.0, "pendientes": 0.0}
 AU.choques = lambda g, u, d0, d1: [{"etiqueta": "Bondi", "fecha": "2026-11-10", "proyecto_id": "PRJ-1"},
                                    {"etiqueta": "Bondi", "fecha": "2026-11-11", "proyecto_id": "PRJ-1"}]
+# v678 · la tarjeta de aprobar dice quién puede cubrir cada día (H16 del ciclo 3): sin esto leería la hoja real
+AU.sustitutos = lambda g, f, pid=None, excluir=None: [{"nombre": "Mei Chen", "cumple": True}]
 
 COR = [{"ID": "COR-1", "Group": "cliente1", "User": "campo000", "Name": "Field Test", "Type": TC.TIPO_GENERAL, "Project": "",
         "Field": CO.CAMPO_IN, "OldValue": "2026-11-02 07:00:00", "NewValue": "2026-11-02 06:30:00", "Reason": "forgot",
@@ -208,7 +210,9 @@ def preparar(nombre, entrada, ctx=None):
 
 
 _prep = {"n": 0, "esc": 0}
-NUEVAS = ["prepare_absence_decision", "prepare_time_fix_decision", "prepare_close_alert", "prepare_assignment", "prepare_crew_notice"]
+# v678 · y mover o quitar días del tablero (`prepare_board_change`, H10 del ciclo 3)
+NUEVAS = ["prepare_absence_decision", "prepare_time_fix_decision", "prepare_close_alert", "prepare_assignment",
+          "prepare_board_change", "prepare_crew_notice"]
 
 # ═════════════════════════════════════════════════════════════════
 sec("1. ⚠️ Cada rol, lo suyo")

@@ -116,7 +116,8 @@ def ej(nombre, entrada=None, ctx=None):
 sec("1. A quién se le dan")
 _d = CT.definiciones("field", "campo000")
 # ⚠️ v640 · Detrás van las que actúan (verif_v640): estas cinco siguen siendo las consultas.
-chk("las cinco consultas", [h["name"] for h in _d][:5] == ["get_my_day", "get_my_jobs", "get_job_details", "get_my_absences", "get_my_credentials"], [h["name"] for h in _d])
+# v678 · y su plan de otro día (`get_my_plan`, H14 del ciclo 3): seis consultas
+chk("las seis consultas", [h["name"] for h in _d][:6] == ["get_my_day", "get_my_plan", "get_my_jobs", "get_job_details", "get_my_absences", "get_my_credentials"], [h["name"] for h in _d])
 chk("⚠️ a la API no le llega la función", all(set(h) == {"name", "description", "input_schema"} for h in _d), [set(h) for h in _d][:1])
 chk("cada una dice cuándo usarla", all(len(h["description"]) > 60 and "Call it" in h["description"] for h in _d), [h["name"] for h in _d if "Call it" not in h["description"]])
 chk("⚠️ se pueden serializar", bool(json.dumps(_d)))

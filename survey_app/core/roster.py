@@ -681,6 +681,71 @@ def asignaciones_dia(grupo, usuario, fecha=None) -> list:
              "es_estado": it["asig"] in ESTADOS} for it in raw["items"]]
 
 
+MAX_DIAS_CAMBIO = 31     # v678 · lo que se mueve o se quita de una vez (un mes): un error no vacía un trimestre
+
+
+def cambiar_dias(grupo, usuario, desde, hasta, pid="", a_pid="", aplicar=False, hoy=None) -> tuple:
+    """Quita del tablero de UNA persona sus días en una obra (o en todas), o los pasa a otra obra con las mismas horas
+    (v678, H10 del ciclo 3: el Management assistant veía a installer CI 1 en una obra terminada y no podía ofrecer
+    arreglarlo). `(ok, cambios | mensaje)`; `cambios` = `[{fecha, antes, despues, ausente}]`, solo los días que cambian
+    (y los que se saltan por una ausencia, con `ausente`). Sin `aplicar` no escribe nada: es lo que enseña la tarjeta.
+
+    La regla de la pantalla: solo desde HOY (lo pasado se queda como se planificó, v670), una ausencia del tablero no
+    se toca nunca (su celda tampoco se puede editar en el Panel) y una escritura por semana (`guardar_persona`)."""
+    from core.num import parse_date
+    d0, d1 = parse_date(desde), parse_date(hasta or desde)
+    if not d0 or not d1:
+        return False, t("The dates could not be read.")
+    if d1 < d0:
+        d0, d1 = d1, d0
+    hoy = hoy or clock.today(grupo)
+    if d0 < hoy:
+        return False, t("Only from today on: what already happened stays as it was planned.")
+    if (d1 - d0).days >= MAX_DIAS_CAMBIO:
+        return False, t("That is more than {n} days: change it in parts.", n=MAX_DIAS_CAMBIO)
+    pid, a_pid = str(pid or "").strip(), str(a_pid or "").strip()
+    if a_pid and a_pid == pid:
+        return False, t("That is the same job.")
+    tidx = trabajos_idx(grupo)
+
+    def _de(asig):
+        return proyecto_de(asig, tidx) or asig
+
+    cambios, semanas = [], {}
+    d = d0
+    while d <= d1:
+        lunes = lunes_de(d)
+        if lunes not in semanas:
+            semanas[lunes] = dict((get_semana(grupo, lunes).get(str(usuario), {}) or {}))
+        celdas, dk = semanas[lunes], DIAS_TODOS[d.weekday()]
+        c = _norm_cell(celdas.get(dk, {}))
+        if any(i["asig"] in ESTADOS for i in c["items"]):
+            if any(i["asig"] not in ESTADOS and (not pid or _de(i["asig"]) == pid) for i in c["items"]):
+                cambios.append({"fecha": d, "antes": [], "despues": [], "ausente": True})
+            d += timedelta(days=1)
+            continue
+        tocar = [i for i in c["items"] if (not pid or _de(i["asig"]) == pid)]
+        if not tocar:
+            d += timedelta(days=1)
+            continue
+        resto = [i for i in c["items"] if i not in tocar]
+        nuevos = list(resto)
+        if a_pid and a_pid not in [_de(i["asig"]) for i in resto]:
+            nuevos += [{"asig": a_pid, "ini": i["ini"], "fin": i["fin"]} for i in tocar[:1]]
+        cambios.append({"fecha": d, "antes": [dict(i) for i in c["items"]], "despues": [dict(i) for i in nuevos],
+                        "ausente": False})
+        celdas[dk] = {"items": [{"a": i["asig"], "i": i["ini"], "f": i["fin"]} for i in nuevos], "nota": c["nota"]}
+        d += timedelta(days=1)
+    if aplicar:
+        for lunes, celdas in semanas.items():
+            if not any(x["fecha"] >= lunes and x["fecha"] < lunes + timedelta(days=7) and not x["ausente"] for x in cambios):
+                continue
+            ok, msg = guardar_persona(grupo, lunes, usuario, celdas)
+            if not ok:
+                return False, msg
+    return True, cambios
+
+
 def en_obras_cerradas(datos, cerradas, tidx) -> list:
     """`[(usuario, pid, [días])]` de una semana en obras CERRADAS (`projects.ids_cerradas`), por persona y obra
     (v676, H4 del ciclo 3: installer CI 1 seguía en una obra terminada el 09/11 toda la semana y la siguiente)."""

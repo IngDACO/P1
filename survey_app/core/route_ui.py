@@ -141,17 +141,51 @@ def _mapa_respaldo(marcadores):
 
 
 # ── Vista del CAMPO: mi ruta ─────────────────────────────────────
+def obras_de_mi_dia(usuario, grupo, fecha) -> list:
+    """Las obras del TABLERO de esa persona ese día, en su orden y sin repetir (v678, H13 del ciclo 3). Solo las de su
+    grupo; las ausencias y los trabajos sin obra no son una parada."""
+    from core import projects as P, roster as R
+    out, vistos = [], set()
+    for a in R.asignaciones_dia(grupo, usuario, fecha) or []:
+        pid = str(a.get("proyecto_id") or "").strip()
+        if not pid or a.get("es_estado") or pid in vistos:
+            continue
+        p = P.get_project(pid) or {}
+        if p and str(p.get("Group", "")) == str(grupo):
+            vistos.add(pid)
+            out.append(p)
+    return out
+
+
 def render_mi_ruta(usuario, grupo):
-    """Las obras activas del técnico, ordenadas, con navegación a Google Maps."""
-    from core import projects as P
+    """Las obras del técnico, ordenadas, con navegación a Google Maps.
+
+    v678 · H13 del ciclo 3: proponía pasar por TODAS sus obras asignadas (una acabada el 29/10, otra que no tenía en el
+    tablero) en vez de por las de su día. Ahora, las de su tablero del día que elija (hoy, por defecto), como la «Day
+    route» de la oficina; «All my active sites» deja ver las de siempre."""
+    from core import clock, projects as P
     _INACTIVOS = ("Completed", "Cancelled", "Archived")
+    _hoy = clock.today(grupo)
+    c1, c2 = st.columns([1.3, 2], vertical_alignment="bottom")
+    _dia = c1.date_input(t("Day"), value=_hoy, key="miruta_dia", format="DD/MM/YYYY")
+    _todas = c2.toggle(t("All my active sites"), key="miruta_todas",
+                       help=t("Every active site you are assigned to, not only the ones on your board that day."))
     try:
-        proys = [p for p in P.list_projects_for_field(usuario, grupo=grupo)
-                 if str(p.get("Status", "")) not in _INACTIVOS]
+        if _todas:
+            proys = [p for p in P.list_projects_for_field(usuario, grupo=grupo)
+                     if str(p.get("Status", "")) not in _INACTIVOS]
+        else:
+            proys = obras_de_mi_dia(usuario, grupo, _dia)
     except Exception:
         proys = []
     if not proys:
-        st.caption(t("You have no active sites assigned."))
+        if _todas:
+            st.caption(t("You have no active sites assigned."))
+        else:
+            from core.num import dmy as _dmy
+            _dd = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[_dia.weekday()]
+            st.info(t(":material/event_busy: Nothing is planned for you on {d}. Pick another day, or see all your sites.",
+                      d=f"{t(_dd)} {_dmy(_dia)}"))
         return
 
     paradas, sin_ubic = [], []

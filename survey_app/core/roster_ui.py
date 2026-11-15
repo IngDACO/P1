@@ -511,6 +511,21 @@ def _asignar_al_dia(grupo, lunes, usuario, sem_persona, dia, pid, ini, fin):
     return R.guardar_persona(grupo, lunes, usuario, sem)
 
 
+def _asignar_dias(grupo, lunes, usuario, sem_persona, dias_sel, pid, ini, fin):
+    """v678 · `_asignar_al_dia` para VARIOS días de la semana (H6 del ciclo 3), en UNA escritura: sin pisar sus otras
+    asignaciones ni las ausencias (una celda con Leave/OFF se salta)."""
+    sem = dict(sem_persona or {})
+    for dia in dias_sel:
+        cur = R._norm_cell(sem.get(dia, {}))
+        if any(it["asig"] in R.ESTADOS for it in cur["items"]):
+            continue
+        if str(pid) not in [it["asig"] for it in cur["items"]]:
+            cur["items"].append({"asig": str(pid), "ini": ini, "fin": fin})
+        sem[dia] = {"items": [{"a": it["asig"], "i": it["ini"], "f": it["fin"]} for it in cur["items"]],
+                    "nota": cur["nota"]}
+    return R.guardar_persona(grupo, lunes, usuario, sem)
+
+
 def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
     """Sugiere a quién asignar a un proyecto en un día/franja = libre esa franja + cumple los
     certificados que exige + sin choque de turno (v279). Asigna a los elegidos con un clic."""
@@ -544,9 +559,13 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         certs = [c.strip() for c in str((prj or {}).get("RequiredCerts", "")).split(";") if c.strip()]
 
         cda, cdb = st.columns([2, 3])
-        _dsel = cda.selectbox(t("Day"), dias, key="ai_dia", index=_idx_hoy(lunes, dias),
-                              format_func=lambda d: f"{R.DIAS_LABEL[d]} "
-                              f"{R.fecha_de_dia(lunes, d).strftime('%d/%m')}")
+        # v678 · VARIOS días (H6 del ciclo 3: para poner a alguien la semana entera, cinco veces), y «Whole week»
+        _fmt_d = lambda d: f"{R.DIAS_LABEL[d]} {R.fecha_de_dia(lunes, d).strftime('%d/%m')}"     # noqa: E731
+        _toda = cda.checkbox(t("Whole week (the days in view)"), key="ai_semana")
+        _dsel_l = (list(dias) if _toda else
+                   cda.multiselect(t("Days"), dias, default=[dias[_idx_hoy(lunes, dias)]], key="ai_dias",
+                                   format_func=_fmt_d, select_all=False))
+        _dsel_l = [d for d in dias if d in _dsel_l]          # en el orden de la semana
         c1, c2 = cdb.columns(2)
         _ti = c1.time_input(t("Start"), value=_to_time(R.TURNO_DEFAULT[0]), key="ai_ini", step=900)
         _tf = c2.time_input(t("End"), value=_to_time(R.TURNO_DEFAULT[1]), key="ai_fin", step=900)
@@ -554,23 +573,30 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
         if certs:
             st.caption(t(":material/badge: Requires: ") + " · ".join(certs))   # v551: «Exige»
 
+        if not _dsel_l:
+            st.caption(t("Pick at least one day."))
+            return
         datos = R.get_semana(grupo, lunes)
         libres, ocupados = [], []
         _et = _etq(staff, grupo)
         for u in staff:
             usr = u["User"]
             nom = _et.get(usr) or u.get("Name") or usr
-            items = R.celda_items(datos, usr, _dsel)
-            choca = any(_solapa(ini, fin, it["ini"], it["fin"]) for it in items)
+            # v678 · libre = libre en esa franja TODOS los días elegidos; si choca en alguno, se dice cuál
+            _dias_choque = [d for d in _dsel_l
+                            if any(_solapa(ini, fin, it["ini"], it["fin"]) for it in R.celda_items(datos, usr, d))]
+            choca = bool(_dias_choque)
             comp = credentials.compliance(usr, certs) if certs else {"cumple": True, "por_tipo": {}}
             todo_vigente = all(e == "vigente" for e in comp["por_tipo"].values())
             estado = "🟢" if (comp["cumple"] and todo_vigente) else ("🟡" if comp["cumple"] else "🔴")
             (ocupados if choca else libres).append(
-                {"usr": usr, "nom": nom, "cumple": comp["cumple"], "estado": estado})
+                {"usr": usr, "nom": nom, "cumple": comp["cumple"], "estado": estado,
+                 "dias": ", ".join(R.DIAS_LABEL[d] for d in _dias_choque)})
         libres.sort(key=lambda f: (0 if f["cumple"] else 1, f["nom"]))
+        _cuando = ", ".join(_fmt_d(d) for d in _dsel_l)
 
         if not libres:
-            st.warning(f":material/warning: Nobody free on {R.DIAS_LABEL[_dsel]} at {ini}–{fin}.")
+            st.warning(t(":material/warning: Nobody free on {d} at {a}–{b}.", d=_cuando, a=ini, b=fin))
         else:
             _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — " + t("not compliant")): f["usr"]
                      for f in libres}                  # v564 · «not compliant» con `t()`
@@ -582,21 +608,28 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
             if st.button(t(":material/check: Assign {n} to «{p}»").replace("{n}", str(len(_pick)))
                          .replace("{p}", _nom_prj), key="ai_go",
                          type="primary", width="stretch", disabled=not _pick):
-                _n = 0
+                _hechos, _mal = [], []
                 for _lbl in _pick:
                     _u = _opts[_lbl]
-                    ok, _ = _asignar_al_dia(grupo, lunes, _u, datos.get(_u, {}), _dsel, pid, ini, fin)
+                    ok, _ = _asignar_dias(grupo, lunes, _u, datos.get(_u, {}), _dsel_l, pid, ini, fin)
                     if ok:
                         try:
                             P.add_field_user(pid, _u)
                         except Exception:
                             pass
-                        _n += 1
-                flash.exito(f"Assigned {_n} to «{_nom_prj}» on {R.DIAS_LABEL[_dsel]} {ini}–{fin}.")
+                        _hechos.append(_et.get(_u) or _u)
+                    else:
+                        _mal.append(_et.get(_u) or _u)
+                # v678 · A QUIÉN y CUÁNDO (H6: decía «Assigned 1 to «C3 —…» on Tue 07:00–15:30.», sin nombre ni fecha)
+                if _hechos:
+                    flash.exito(t("{who} → «{p}» on {d}, {a}–{b}.", who=", ".join(_hechos), p=_nom_prj, d=_cuando,
+                                  a=ini, b=fin))
+                if _mal:
+                    flash.error(t("Could not save the board of: {who}.", who=", ".join(_mal)))
                 st.rerun()
         if ocupados:
             st.caption(":material/block: " + t("Busy in that slot") + ": "
-                       + _esc(", ".join(f["nom"] for f in ocupados)))
+                       + _esc(", ".join(f["nom"] + (f" ({f['dias']})" if len(_dsel_l) > 1 else "") for f in ocupados)))
 
 
 def _radar_scan(grupo, lunes, staff, tidx):

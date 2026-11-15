@@ -95,7 +95,8 @@ chk("«Requires:» con t() (era «Exige:»)", 't(":material/badge: Requires: ")'
     and '"Exige' not in _asig and "'Exige" not in _asig)
 chk("el botón de asignar lleva el NOMBRE de la obra", "Assign {n} to «{p}»" in _asig
     and "_nom_prj" in _asig)
-chk("el día de «Assign» abre en HOY", "index=_idx_hoy(lunes, dias)" in _asig)
+# v678 · «Days» con varios días (H6 del ciclo 3): el que viene puesto sigue siendo HOY
+chk("el día de «Assign» abre en HOY", "default=[dias[_idx_hoy(lunes, dias)]]" in _asig)
 chk("la herramienta «Assign» con t() (era «Asignar» suelto)",
     't(":material/bolt: Assign")' in RU_SRC and '"⚡ Asignar"' not in RU_SRC)
 chk("la vista Día dice «free» con t() (era «libre»)", 't("free")' in RU_SRC)
@@ -104,8 +105,10 @@ print("\n2b. «Hoy» por defecto en Day, Free y Assign (`_idx_hoy`, ejecutado)")
 import datetime as _dt                                              # noqa: E402
 from core import roster_ui as RU, roster as R0                      # noqa: E402
 
+# v678 · Assign elige VARIOS días (H6 del ciclo 3): el suyo abre con HOY puesto, `default=[dias[_idx_hoy(...)]]`
 chk("las tres pantallas abren con `_idx_hoy` (Day, Free, Assign)",
-    RU_SRC.count("index=_idx_hoy(lunes, dias)") >= 3, RU_SRC.count("index=_idx_hoy(lunes, dias)"))
+    RU_SRC.count("index=_idx_hoy(lunes, dias)") >= 2 and "default=[dias[_idx_hoy(lunes, dias)]]" in RU_SRC,
+    RU_SRC.count("index=_idx_hoy(lunes, dias)"))
 _L = _dt.date(2026, 10, 5)
 _today_orig = RU.clock.today
 try:
