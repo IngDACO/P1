@@ -112,7 +112,8 @@ _clic(at, "cpxkpi_cls_act")
 _v = _tabla(at)
 chk("⚠️ «Active» abre el desglose: solo las NO completadas (Beta, Gamma)",
     _v is not None and list(_v["Proyecto"]) == ["Beta", "Gamma"], None if _v is None else list(_v["Proyecto"]))
-chk("…con su título", any("Its active projects (not completed)" in m.value for m in at.markdown))
+# v673 · «activa» es la de Home (planificada o en curso, H4 del ciclo 2): el título lo dice
+chk("…con su título", any("Its active projects (planned or in progress)" in m.value for m in at.markdown))
 chk("⚠️ …y la vista BAJA a él una vez (`_bajar_a`)", at.session_state["_LL"].count("script") == 1,
     at.session_state["_LL"])
 _cj = json.loads(at.dataframe[0].proto.columns)

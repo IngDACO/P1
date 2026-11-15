@@ -256,6 +256,39 @@ def es_activa(p) -> bool:
     return str((p or {}).get("Status", "")) in ESTADOS_ACTIVOS
 
 
+def es_completada(p) -> bool:
+    """¿La obra está al 100 % o marcada «Completed»? (v665 en la ficha; aquí desde v673 para el asistente)"""
+    return _num((p or {}).get("Progress")) >= 99.95 or str((p or {}).get("Status", "")) == "Completed"
+
+
+def fin_de_obra(p) -> dict:
+    """Cómo se dice el fin de una obra (v673, H3): terminada → `{"finished_on": DD/MM/YYYY}` (la fecha REAL del 100 %);
+    si no, `{"estimated_finish": DD/MM/YYYY}`. Lo usan el asistente y la ficha."""
+    from core.num import dmy as _dmy
+    if es_completada(p):
+        _f = fecha_terminada(str((p or {}).get("ID", "")))
+        return {"finished_on": _dmy(_f.isoformat()) if _f else "complete (no end date recorded)"}
+    return {"estimated_finish": _dmy((p or {}).get("EndDateEst", ""))}
+
+
+def fecha_terminada(pid: str, acts: list = None):
+    """El día en que la obra llegó al 100 % (v673, H3 del ciclo 2): la última fecha de fin REAL de sus actividades.
+    `None` si alguna no está acabada o ninguna tiene fecha. Con una obra terminada, la ficha y el asistente decían
+    la fecha de fin ESTIMADA («Projected finish 16/12/2026» de una obra acabada en noviembre)."""
+    from core.num import parse_date as _pd
+    acts = list_activities(pid) if acts is None else acts
+    if not acts:
+        return None
+    fechas = []
+    for a in acts:
+        if _num(a.get("Progress")) < 99.95:
+            return None
+        _d = _pd(a.get("ActualEndDate"))
+        if _d:
+            fechas.append(_d)
+    return max(fechas) if fechas else None
+
+
 def es_cancelada(p) -> bool:
     """¿Obra CANCELADA? (v669) Ya no se factura nada más: vale lo facturado (`finance.project_revenue`).
     ⚠️ Archivar NO es cancelar: una archivada se sigue facturando (v369)."""

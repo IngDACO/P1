@@ -101,8 +101,13 @@ def _obra(entrada, ctx) -> dict:
 # ═════════════════════════════════════════════════════════════════
 def _estado_del_dia(prj, pid, ctx) -> dict:
     """Lo que esa obra le pide HOY a esta persona: Pre-Start y checklist del false car."""
-    from core import falsecar as FC, prestart as PS
+    from core import falsecar as FC, prestart as PS, projects as P
     g, u, n = ctx["grupo"], ctx["usuario"], ctx["nombre"]
+    # ⚠️ v673 · una obra terminada, cancelada o en pausa no pide nada (H2 del ciclo 2: a PRJ-0039, al 100 %, le
+    # reclamaba «Today's Pre-Start is missing»). Se dice por qué, para que el modelo no lo lea como «hecho».
+    if P.es_completada(prj) or str((prj or {}).get("Status", "")) in ("Cancelled", "On hold", "Archived"):
+        _por = "complete" if P.es_completada(prj) else str((prj or {}).get("Status", "")).lower()
+        return {"pre_start": "not_required", "false_car_check": "not_required", "why": f"the job is {_por}"}
     # La oficina pregunta por la obra, no por su propia firma
     if ctx.get("rol") == "administrator":
         _vivo = FC.activo(prj, clock.today(g))
@@ -164,11 +169,18 @@ def _mi_dia(entrada, ctx) -> dict:
             "jobs_today": pendientes, "credentials_expiring_soon": _vence}
 
 
+def _fin_de_obra(p) -> dict:
+    """v673 · H3 del ciclo 2: de una obra terminada, «finished_on» con la fecha REAL; si no, «estimated_finish». El
+    asistente decía «the estimated finish shows 16/12/2026, even though the job is marked complete»."""
+    from core import projects as P
+    return P.fin_de_obra(p)
+
+
 def _mis_trabajos(entrada, ctx) -> dict:
     return {"jobs": [{"project_id": o.get("ID", ""), "name": o.get("Name", ""), "location": o.get("Location", ""),
                       "type": o.get("Type", ""), "status": o.get("Status", ""),
                       "progress_pct": round(_num(o.get("Progress")), 1), "start": dmy(o.get("StartDate", "")),
-                      "estimated_finish": dmy(o.get("EndDateEst", "")),
+                      **_fin_de_obra(o),        # v673 · H3: la terminada dice cuándo terminó
                       "instructions": _corto(o.get("Instructions", ""))} for o in _mis_obras(ctx)]}
 
 
@@ -199,7 +211,7 @@ def _detalle_obra(entrada, ctx) -> dict:
                   "days_late": round(_num(AD._base(ctx["grupo"])["delays"].get(pid)))}
     return {**_extra, "project_id": pid, "name": prj.get("Name", ""), "location": prj.get("Location", ""),
             "status": prj.get("Status", ""), "progress_pct": round(_num(prj.get("Progress")), 1),
-            "estimated_finish": dmy(prj.get("EndDateEst", "")), "instructions": _corto(prj.get("Instructions", "")),
+            **_fin_de_obra(prj), "instructions": _corto(prj.get("Instructions", "")),   # v673 · H3
             "today": _estado_del_dia(prj, pid, ctx),
             "stages": etapas, "next_up": siguiente,
             "todo_open": [{"task_id": r.get("ID", ""), "text": _corto(r.get("Text", ""))} for r in TA.pendientes(pid)],
@@ -498,7 +510,7 @@ def _cartera(entrada, ctx) -> dict:
     jobs = [
         {"project_id": str(p.get("ID", "")), "name": p.get("Name", ""), "client": p.get("Client", ""),
          "status": p.get("Status", ""), "progress_pct": round(_num(p.get("Progress")), 1),
-         "estimated_finish": dmy(p.get("EndDateEst", "")), "assigned": _asignados(p, nom),
+         **_fin_de_obra(p), "assigned": _asignados(p, nom),           # v673 · H3
          "hours_worked": round(_num(b["horas"].get(str(p.get("ID", "")))), 1),
          "days_late": round(_num(b["delays"].get(str(p.get("ID", ""))))),
          "open_alerts": int(_num(b["alarmas"].get(str(p.get("ID", "")))))} for p in filas]
@@ -616,10 +628,17 @@ def _dinero(entrada, ctx) -> dict:
         prj = _obra(entrada, ctx)
         pid = str(prj.get("ID", ""))
         c, r = E.project_cost(pid, g), F.project_revenue(pid, g, prj)
+        # ⚠️ v673 · lo FACTURADO y lo COBRADO de la obra, no solo lo pendiente (H1 del ciclo 2: con «pending 0» dijo
+        # «check whether it has been billed» de una obra facturada entera)
+        _suyas = [f for f in INV.list_facturas(g)
+                  if any(str(ln.get("proyecto_id", "")).strip() == pid for ln in INV.lineas_de(f))]
         return {"project_id": pid, "name": prj.get("Name", ""), "budget": c["presupuesto"], "spent": c["total"], "materials": c["compras"],
                 "labour": c["mano_obra"], "committed_orders": c["comprometido"], "pct_of_budget": c["pct"], "over_budget": c["over"],
                 "will_go_over_with_orders": c["over_comp"], "estimated_revenue": r.get("ingreso"), "estimated_profit": r.get("ganancia"),
-                "pending_to_invoice": round(_num(INV.pendiente_de_facturar(pid, g, prj)), 2)}
+                "invoiced_ex_tax": round(_num(INV.facturado_por_proyecto(g).get(pid, 0.0)), 2),
+                "pending_to_invoice": round(_num(INV.pendiente_de_facturar(pid, g, prj)), 2),
+                "invoices": [_factura_de_obra(f, pid) for f in _suyas[:MAX_LISTA]],
+                "how_to_read": _COMO_LEER_DINERO}
     hoy = clock.today(g)
     d0 = _parse_date(entrada.get("from")) if entrada.get("from") else hoy.replace(day=1)
     d1 = _parse_date(entrada.get("to")) if entrada.get("to") else hoy
@@ -651,7 +670,48 @@ def _dinero(entrada, ctx) -> dict:
             "pending_to_invoice_total": round(sum(v for _, v in _por), 2),
             "open_invoices": [{"number": f.get("Number", ""), "client": f.get("ClientName", ""), "total": f.get("Total", ""),
                                "collected": f.get("Collected", ""), "due": dmy(f.get("ExpiryDate", "")), "status": INV.estado_cobro(f)}
-                              for f in _abiertas[:MAX_LISTA]]}
+                              for f in _abiertas[:MAX_LISTA]],
+            # v673 · H1: por CLIENTE y de siempre, con lo cobrado en facturas anuladas APARTE (supuso «if 0006 is the
+            # only invoice issued to C1…» con $14,058 cobrados a C1)
+            "by_client_all_time": _por_cliente(g),
+            "how_to_read": _COMO_LEER_DINERO}
+
+
+_COMO_LEER_DINERO = ("These are all the figures the books have. Do not explain a figure with a cause that is not in this "
+                     "data (no «because it was cancelled» unless it says so), and do not guess what is not here: say you "
+                     "cannot see it. An invoice can cover several jobs: «collected» is the whole invoice's.")
+
+
+def _factura_de_obra(f, pid) -> dict:
+    """Una factura vista desde UNA obra (v673): su estado y su cobro, y lo que lleva de ESA obra (sin impuesto)."""
+    from core import invoices as INV
+    _esta = sum(_num(ln.get("importe")) for ln in INV.lineas_de(f) if str(ln.get("proyecto_id", "")).strip() == str(pid))
+    return {"number": f.get("Number", ""), "date": dmy(f.get("Date", "")), "status": INV.estado_cobro(f),
+            "this_job_lines_ex_tax": round(_esta, 2), "invoice_total_incl_tax": round(_num(f.get("Total")), 2),
+            "invoice_collected": round(_num(f.get("Collected")), 2), "due": dmy(f.get("ExpiryDate", ""))}
+
+
+def _por_cliente(g) -> list:
+    """Facturado, cobrado, por cobrar y vencido por cliente, de SIEMPRE (v673, H1). Las anuladas no cuentan, y lo que
+    se cobró en ellas va aparte (`collected_on_voided_invoices`): es dinero del cliente que no está en ninguna cuenta."""
+    from core import invoices as INV
+    out = {}
+    for f in INV.list_facturas(g):
+        c = out.setdefault(str(f.get("ClientName", "") or "—"), {
+            "client": str(f.get("ClientName", "") or "—"), "invoices": 0, "invoiced_incl_tax": 0.0, "collected": 0.0,
+            "to_collect": 0.0, "overdue": 0.0, "collected_on_voided_invoices": 0.0})
+        _tot, _cob, _est = _num(f.get("Total")), _num(f.get("Collected")), INV.estado_cobro(f)
+        if _est == "anulada":
+            c["collected_on_voided_invoices"] += _cob
+            continue
+        c["invoices"] += 1
+        c["invoiced_incl_tax"] += _tot
+        c["collected"] += _cob
+        c["to_collect"] += max(0.0, _tot - _cob)          # una cobrada suma 0
+        if _est == "vencida":
+            c["overdue"] += max(0.0, _tot - _cob)
+    filas = [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in c.items()} for c in out.values()]
+    return sorted(filas, key=lambda x: -x["invoiced_incl_tax"])[:MAX_LISTA]
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1037,9 +1097,10 @@ LECTURA_OFICINA = [
                       "properties": {"project_id": {"type": "string", "description": "One job, like PRJ-0027. Without it, the whole company."},
                                      "from": {"type": "string", "description": "YYYY-MM-DD. Defaults to the 1st of this month."},
                                      "to": {"type": "string", "description": "YYYY-MM-DD. Defaults to today."}}},
-     "description": "The money. For one job: budget, spent, materials, labour, estimated profit and pending to invoice. For the company: "
-                    "profit and loss for a period, jobs by profit, over budget, pending to invoice and open invoices. Call it for anything "
-                    "about costs, budget, invoices or margin."},
+     "description": "The money. For one job: budget, spent, materials, labour, estimated profit, what was invoiced (and each invoice with "
+                    "its status and what was collected) and what is pending to invoice. For the company: profit and loss for a period, "
+                    "jobs by profit, over budget, pending to invoice, open invoices, and invoiced, collected, to collect and overdue by "
+                    "client (all time). Call it for anything about costs, budget, invoices, payments or margin."},
 ]
 _NOTA = {"type": "string", "description": "Optional. A short note the person sees."}
 PREPARAR_OFICINA = [

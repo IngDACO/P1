@@ -1096,7 +1096,8 @@ def _pantalla_busqueda(q: str, grupo) -> bool:
     qn = (q or "").strip()
     if not qn:
         return False
-    if len(_norm_busq(qn)) < 2:
+    # v673 · un número de documento de una cifra («4») sí se busca (visto verificando v672: la pantalla lo paraba)
+    if len(_norm_busq(qn)) < 2 and _num_documento(_norm_busq(qn)) is None:
         st.caption(t(":material/search: Type at least two letters."))
         return True
 

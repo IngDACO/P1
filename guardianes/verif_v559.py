@@ -213,6 +213,12 @@ from core import notify as _NT
 _NT.TELEGRAM_OBLIGATORIO_CAMPO = True
 _NT.telegram_configured = lambda: True
 _NT.bot_username = lambda: "copex_bot"
+# ⚠️ v673 · El DÍA también, como el de la foto: desde H17 («Already assigned» solo con lo vigente) una obra cuyo fin
+# estimado ya pasó no se avisa, y las de la foto acabaron antes de hoy — el «until DD/MM/YYYY» que vigila este
+# guardián desaparecía por los DATOS, no por el código.
+import datetime as _dt
+from core import clock as _CK
+_CK.today = lambda *a, **k: _dt.date(2026, 10, 19)
 PU._detalle_proyecto("PRJ-0015", "cliente1")
 '''
 at = AppTest.from_string(GUION_REAL, default_timeout=240)

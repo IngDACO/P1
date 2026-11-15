@@ -1701,10 +1701,17 @@ def avisos_asignacion(usuarios, grupo=None, exclude_pid=None, certs_req=None,
     otros = {}
     if grupo:
         try:
+            from core.num import parse_date as _pd_v673
+            _hoy_v673 = clock.today(grupo)
             for p in P.list_projects(grupo):
                 if str(p.get("ID", "")) == str(exclude_pid or ""):
                     continue
-                if str(p.get("Status", "")) in ("Completed", "Cancelled"):
+                # ⚠️ v673 · solo las asignaciones VIGENTES (H17 del ciclo 2: avisaba de una obra que acabó el 29/10):
+                # activa (planificada o en curso) y sin un fin estimado ya pasado
+                if not P.es_activa(p):
+                    continue
+                _fe = _pd_v673(p.get("EndDateEst"))
+                if _fe and _fe < _hoy_v673:
                     continue
                 for u in [x.strip() for x in str(p.get("FieldAssigned", "")).split(";")
                           if x.strip()]:
@@ -2656,8 +2663,8 @@ def _historial_section(pid: str):
 
 
 def _completada(prj) -> bool:
-    """¿La obra está al 100 % (o marcada «Completed»)? (v665)"""
-    return P._num((prj or {}).get("Progress")) >= 99.95 or str((prj or {}).get("Status", "")) == "Completed"
+    """¿La obra está al 100 % (o marcada «Completed»)? (v665; la regla vive en `projects.es_completada` desde v673)"""
+    return P.es_completada(prj)
 
 
 def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
@@ -2932,6 +2939,14 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     dv   = proj.get("desvio", 0.0)
     # v500: el retraso y el fin previsto salen de la CADENA, no del ritmo (SPI).
     dg   = proj.get("dias_cadena", 0.0)
+    # ⚠️ v673 · una obra TERMINADA ya no tiene plan por delante (H3 del ciclo 2: «Projected finish 16/12/2026» de una
+    # obra acabada), y una cancelada o en pausa tampoco (visto verificando v672: PRJ-0043, cancelada, decía «11 points
+    # behind plan» y «not started, should have started»). Sin proyección, sin ritmo y sin actividades «paradas».
+    _hecha = _completada(prj)
+    _quieta = (not _hecha) and (P.es_cancelada(prj) or str(prj.get("Status", "")) == "On hold")
+    if _hecha or _quieta:
+        d = dict(d, paradas=[], arrastradas=[], en_curso=[dict(x, tarde=False) for x in (d.get("en_curso") or [])])
+    _fin_real = P.fecha_terminada(pid) if _hecha else None
 
     # ── Titular: una frase que diga como va, antes de cualquier numero ──
     # ⚠️ v311: el titular se pintaba con `**...**` DENTRO de un `<div>` y Streamlit no
@@ -2940,7 +2955,13 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ⚠️ v452: la frase va ENTERA como clave de traduccion (con `{n}` de marcador), no
     # partida en `t("You are") + ... + t("plan")`: el orden de palabras cambia entre
     # idiomas y tres claves sueltas no se pueden recomponer en otro idioma.
-    if dv <= -1:
+    if _hecha:
+        _tit_html, _col = ((t("The job <b>finished on {f}</b>").replace("{f}", _fmt_fecha(_fin_real.isoformat()))
+                            if _fin_real else t("The job is <b>complete</b>")), "#1e8449")
+    elif _quieta:
+        _tit_html, _col = ((t("The job is <b>cancelled</b>: there is no plan to follow") if P.es_cancelada(prj)
+                            else t("The job is <b>on hold</b>: the plan is paused")), "#6b7280")
+    elif dv <= -1:
         _tit_html, _col = (t("You are <b>{n} points behind</b> plan").replace("{n}", f"{abs(dv):.0f}"), "#c0392b")
     elif dv >= 1:
         _tit_html, _col = (t("You are <b>{n} points ahead of</b> plan").replace("{n}", f"{dv:.0f}"), "#1e8449")
@@ -2967,6 +2988,18 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             _kpi_card(t("Variance"), f"{dv:+.0f}%", _col),
             _kpi_card(t("Situation"), _est, "#c0392b" if dg > 0.5 else None),
             _kpi_card(t("Projected finish"), _fin, _cf)]
+    if _hecha:                     # v673 · H3: cuándo terminó, frente a lo planificado
+        from core.num import parse_date as _pdt
+        _pf = _pdt(prj.get("EndDateEst"))
+        _vs = (_fin_real - _pf).days if (_fin_real and _pf) else None
+        tarj = [_kpi_card(t("Finished on"), _fmt_fecha(_fin_real.isoformat()) if _fin_real else "—", "#1e8449"),
+                _kpi_card(t("Planned finish"), _fmt_fecha(prj.get("EndDateEst")) or "—"),
+                _kpi_card(t("Vs the planned finish"),
+                          "—" if _vs is None else (t("on the date") if _vs == 0 else f"{_vs:+d} d"),
+                          "#c0392b" if (_vs or 0) > 0 else ("#1e8449" if (_vs or 0) < 0 else None))]
+        _dia_txt = ""
+    elif _quieta:
+        tarj, _dia_txt = [], ""
 
     # ── v311: titular + KPIs a ANCHO COMPLETO ────────────────────
     # Antes iban en la columna izquierda de un [3,2] cuya derecha llevaba 6 alarmas
@@ -2976,11 +3009,12 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # ⚠️ El titular va en `st.markdown` SIN html: iba dentro de un `<div>` y ahí el
     # markdown NO se procesa, así que los `**` salían literales en pantalla.
     st.markdown(f"<span style='font-size:16px'>{_tit_html}</span>"
-                f"<span style='color:#6b7280;font-size:14px'> · {_dia_txt}</span>",
+                + (f"<span style='color:#6b7280;font-size:14px'> · {_dia_txt}</span>" if _dia_txt else ""),
                 unsafe_allow_html=True)
     # v581 · rejilla: a 846 px con el menú «Projected finish» caía sola a 472 px
-    st.markdown('<div class="cpx-kpis" style="margin:8px 0 10px">'
-                + "".join(tarj) + "</div>", unsafe_allow_html=True)
+    if tarj:
+        st.markdown('<div class="cpx-kpis" style="margin:8px 0 10px">'
+                    + "".join(tarj) + "</div>", unsafe_allow_html=True)
 
     # ── v501: contra el plan ACORDADO (la línea base) ────────────
     # ⚠️ Hasta aquí todo se compara contra el plan VIGENTE, que se recalcula solo: si
@@ -3037,7 +3071,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # podía cumplirse nunca y su aviso era CÓDIGO MUERTO: un proyecto pasado de
     # fecha se quedaba sin banner de ritmo, en silencio. Ahora ese caso se atiende
     # ANTES de exigir `ritmo_nec`, y a partir de ahí sí está garantizado.
-    if d["ritmo_real"] is not None:
+    if d["ritmo_real"] is not None and not (_hecha or _quieta):          # v673 · sin plan por delante, sin ritmo
         if d["dias_rest"] <= 0 or d["ritmo_nec"] is None:
             st.warning(f":material/schedule: The planned finish date has already passed and there is "
                        f"**{100 - d['ev']:.0f}%** still to complete.")

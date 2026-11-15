@@ -30,8 +30,9 @@ def _creado_por() -> str:
 
 def _agregados(proys, horas, alarmas, costos):
     """(activos, avance_prom, horas, costo, alarmas) de una lista de proyectos."""
-    activos = [x for x in proys
-               if str(x.get("Status", "")) not in ("Completed", "Cancelled", "Archived")]
+    # v673 · la MISMA definición de activa que Home (`projects.es_activa`: planificada o en curso). H4 del ciclo 2:
+    # aquí contaban también las de pausa y las canceladas
+    activos = [x for x in proys if P.es_activa(x)]
     # ⚠️ v602 · el avance medio SIN las canceladas: una obra cancelada no avanza, y contaba como
     # un 0 % que hundía la media (Penrith, cancelada, a 0 % en producción)
     _cuentan = [x for x in proys if str(x.get("Status", "")) not in ("Cancelled", "Archived")]
@@ -82,7 +83,7 @@ def _cifras_cliente(key, n, activos, av, hrs, cost, al, con_coste, con_alertas):
     # producción, a 800 px con el menú cada tarjeta deja 87 px de pie y «linked to this
     # client» (97) salía «linked to this c…». Todos ≤ 80 px con la fuente real.
     _K = [("prj", t("Projects"), str(n), t("of this client")),
-          ("act", t("Active"), str(activos), t("not completed")),
+          ("act", t("Active"), str(activos), t("planned/ongoing")),     # v673 · H4 (≤ 15 caracteres: verif_v572)
           ("av", t("Avg. progress"), f"{av:.0f}%", t("across its jobs")),
           ("hrs", t("Hours"), _horas(hrs), t("clocked on jobs"))]
     if con_coste:
@@ -119,7 +120,7 @@ def _desglose_obras(key, proys, horas, costos, alarmas, con_coste, con_alertas):
               "al": int(_num(alarmas.get(str(p.get("ID", "")), 0)))} for p in proys]
     filas.sort(key=lambda f: f["nombre"].lower())
     if _v == "act":
-        filas = [f for f in filas if f["estado"] not in ("Completed", "Cancelled", "Archived")]
+        filas = [f for f in filas if P.es_activa({"Status": f["estado"]})]           # v673 · H4
     elif _v == "av":
         filas.sort(key=lambda f: f["av"])
     elif _v == "hrs":
@@ -128,7 +129,7 @@ def _desglose_obras(key, proys, horas, costos, alarmas, con_coste, con_alertas):
         filas.sort(key=lambda f: -f["cost"])
     elif _v == "al":
         filas = sorted([f for f in filas if f["al"]], key=lambda f: -f["al"])
-    _tit = {"prj": t("All its projects"), "act": t("Its active projects (not completed)"),
+    _tit = {"prj": t("All its projects"), "act": t("Its active projects (planned or in progress)"),
             "av": t("Progress by project, least advanced first"), "hrs": t("Hours by project"),
             "cost": t("Cost by project"), "al": t("Projects with open alerts")}
     with st.container(border=True, key="cpx_cls_desglose"):

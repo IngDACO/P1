@@ -37,7 +37,8 @@ ROTURAS = [
     ("⚠️ tocar una cifra deja de abrir el desglose", CU,
      [('                st.session_state[f"_cls_vista::{key}"] = "" if _cur == _s else _s\n', "")]),
     ("«Active» deja de filtrar (salen también las completadas)", CU,
-     [('        filas = [f for f in filas if f["estado"] not in ("Completed", "Cancelled", "Archived")]\n',
+     # v673 · re-anclada: el filtro es `projects.es_activa` (H4: la «activa» de Home). La misma rotura
+     [('        filas = [f for f in filas if P.es_activa({"Status": f["estado"]})]           # v673 · H4\n',
        "        pass\n")]),
     ("«Hours» deja de ordenar por horas", CU,
      [('        filas.sort(key=lambda f: -f["hrs"])\n', "        pass\n")]),
