@@ -97,7 +97,8 @@ try:
         chk(_q + " — y NO escribe", not ok and _w.cells == [], (ok, msg, _w.cells))
     E._next_id = lambda recs: "G-00009"
     ok, msg = E.add("PRJ-1", "G", 12.5, creado_por="x")
-    chk("«Receipt added (12.50).» (salía «Recibo agregado»)", ok and msg == "Receipt added (12.50).", msg)
+    # v674 · con «$» («Receipt added (4.50).» salía sin moneda, visto verificando v673 desde el campo)
+    chk("«Receipt added: $12.50.» (salía «Recibo agregado»)", ok and msg == "Receipt added: $12.50.", msg)
 finally:
     for n, f in _o.items():
         setattr(E, n, f)

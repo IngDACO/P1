@@ -488,7 +488,8 @@ def add(pid, grupo, valor, categoria="Materials", proveedor="", descripcion="",
         return False, f"{t('Error saving')}: {e}"
     _invalidate()
     # v568 · en inglés: «Recibo agregado» salía en español al guardar un recibo en Costs
-    return True, t("Receipt added ({x}).").replace("{x}", f"{_num(valor):,.2f}")
+    # v674 · con «$» (verificando v673 desde el campo: «Receipt added (4.50).»). Un solo importe: el «$» no abre fórmula
+    return True, t("Receipt added: {x}.").replace("{x}", "${:,.2f}".format(_num(valor)))
 
 
 def huerfanos(grupo) -> list:

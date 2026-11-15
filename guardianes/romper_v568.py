@@ -48,7 +48,8 @@ ROTURAS = [
      [('        if str(r.get("ProjectID", "")) in _ids:\n'
        '            return False, t("That purchase already belongs to a job.")\n', "")]),
     ("vuelve «Recibo agregado»", EX,
-     [('return True, t("Receipt added ({x}).").replace("{x}", f"{_num(valor):,.2f}")',
+     # v674 · re-anclada: el importe con «$». La misma rotura
+     [('return True, t("Receipt added: {x}.").replace("{x}", "${:,.2f}".format(_num(valor)))',
        'return True, f"Recibo agregado ({_num(valor):.2f})."')]),
     # ── las cifras ──
     ("⚠️ «Forecast» vuelve a sumar el coste de HOY de obras sin avance", PU,
