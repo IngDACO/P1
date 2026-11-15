@@ -2945,7 +2945,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     _hecha = _completada(prj)
     _quieta = (not _hecha) and (P.es_cancelada(prj) or str(prj.get("Status", "")) == "On hold")
     if _hecha or _quieta:
-        d = dict(d, paradas=[], arrastradas=[], en_curso=[dict(x, tarde=False) for x in (d.get("en_curso") or [])])
+        # v675 · y sin «Next milestone» (verificando v673: PRJ-0043, cancelada, decía «… starts on 19/11 (in 4 days)»)
+        d = dict(d, paradas=[], arrastradas=[], en_curso=[dict(x, tarde=False) for x in (d.get("en_curso") or [])],
+                 proximo=None)
     _fin_real = P.fecha_terminada(pid) if _hecha else None
 
     # ── Titular: una frase que diga como va, antes de cualquier numero ──

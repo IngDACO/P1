@@ -669,7 +669,9 @@ def _dinero(entrada, ctx) -> dict:
             # v647 · El total de TODAS, no de las listadas: el resumen del día lo sumaba a mano, y la lista va acotada
             "pending_to_invoice_total": round(sum(v for _, v in _por), 2),
             "open_invoices": [{"number": f.get("Number", ""), "client": f.get("ClientName", ""), "total": f.get("Total", ""),
-                               "collected": f.get("Collected", ""), "due": dmy(f.get("ExpiryDate", "")), "status": INV.estado_cobro(f)}
+                               "collected": f.get("Collected", ""), "due": dmy(f.get("ExpiryDate", "")), "status": INV.estado_cobro(f),
+                               # v675 · de qué obras es (verificando v673: «I can't tell which job 0006 belongs to»)
+                               "jobs": _obras_de_factura(f)}
                               for f in _abiertas[:MAX_LISTA]],
             # v673 · H1: por CLIENTE y de siempre, con lo cobrado en facturas anuladas APARTE (supuso «if 0006 is the
             # only invoice issued to C1…» con $14,058 cobrados a C1)
@@ -691,6 +693,13 @@ def _factura_de_obra(f, pid) -> dict:
             "invoice_collected": round(_num(f.get("Collected")), 2), "due": dmy(f.get("ExpiryDate", ""))}
 
 
+def _obras_de_factura(f) -> list:
+    """Las obras que lleva una factura (por sus líneas), sin repetir (v675)."""
+    from core import invoices as INV
+    return list(dict.fromkeys(str(ln.get("proyecto_id", "")).strip() for ln in INV.lineas_de(f)
+                              if str(ln.get("proyecto_id", "")).strip()))
+
+
 def _por_cliente(g) -> list:
     """Facturado, cobrado, por cobrar y vencido por cliente, de SIEMPRE (v673, H1). Las anuladas no cuentan, y lo que
     se cobró en ellas va aparte (`collected_on_voided_invoices`): es dinero del cliente que no está en ninguna cuenta."""
@@ -699,9 +708,11 @@ def _por_cliente(g) -> list:
     for f in INV.list_facturas(g):
         c = out.setdefault(str(f.get("ClientName", "") or "—"), {
             "client": str(f.get("ClientName", "") or "—"), "invoices": 0, "invoiced_incl_tax": 0.0, "collected": 0.0,
-            "to_collect": 0.0, "overdue": 0.0, "collected_on_voided_invoices": 0.0})
+            "to_collect": 0.0, "overdue": 0.0, "voided_invoices": 0, "collected_on_voided_invoices": 0.0})
         _tot, _cob, _est = _num(f.get("Total")), _num(f.get("Collected")), INV.estado_cobro(f)
         if _est == "anulada":
+            # v675 · cuántas anuladas tiene (verificando v673: de C2, con la 0003 anulada, dijo «It has no invoices»)
+            c["voided_invoices"] += 1
             c["collected_on_voided_invoices"] += _cob
             continue
         c["invoices"] += 1
