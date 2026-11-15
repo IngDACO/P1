@@ -45,7 +45,8 @@ ROTURAS = [
      [('j["entrada"], j["salida"],\n                    _dt.combine(_dia, _hora)',
        'j["entrada"], j["salida"],\n                    _dt.combine(_dia, _ci.time())')]),
     ("el Radar no las cuenta", RU,
-     [("\n         + len(_lg))", ")")]),
+     # v676 · re-anclada: detrás van las obras cerradas (H4 del ciclo 3). La misma rotura
+     [("\n         + len(_lg) + len({pid for _u, pid, _d in _ce}))", "\n         + len({pid for _u, pid, _d in _ce}))")]),
     ("el Radar no lleva a Hours", RU,
      [('            st.session_state["_admin_nav_pending"] = ("finanzas", "⏱ Horas")\n            st.rerun()',
        "            pass\n            st.rerun()")]),

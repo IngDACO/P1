@@ -216,7 +216,19 @@ def render_ruta_dia(grupo):
     # el widget va SIN `value`: con los dos, Streamlit apunta en el log «created with a
     # default value but also had its value set via the Session State API» (v537).
     if "rutadia_fecha" not in st.session_state:
-        st.session_state["rutadia_fecha"] = st.session_state.get("_rd_dia") or _hoy
+        _ini = st.session_state.get("_rd_dia")
+        if not _ini:
+            _ini = _hoy
+            # v676 · en sábado o domingo sin nada planificado ese día, el LUNES (H3 del ciclo 3: decía «Nothing is
+            # planned for this Sunday» justo cuando se mira a dónde va la cuadrilla mañana)
+            if _hoy.weekday() >= 5:
+                try:
+                    from core import roster as _R
+                    if not _R.dia_tiene_datos(_R.get_semana(grupo, _R.lunes_de(_hoy)), _R.DIAS_TODOS[_hoy.weekday()]):
+                        _ini = _R.semana_de_trabajo(_hoy)
+                except Exception:
+                    pass
+        st.session_state["rutadia_fecha"] = _ini
     # Salto de día pendiente: se aplica ANTES de instanciar el date_input, porque
     # escribir la clave de un widget YA creado es un error (regla v111).
     _salto = st.session_state.pop("_rd_salto", 0)

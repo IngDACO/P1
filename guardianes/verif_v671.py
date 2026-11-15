@@ -206,8 +206,9 @@ _b[0].click().run()
 chk("…y una línea lleva a Hours", at.session_state["_admin_nav_pending"] == ("finanzas", "⏱ Horas"))
 _n, _rp = funcion("core/roster_ui.py", "_radar_personal")
 _s_ru = src("core/roster_ui.py")
-chk("…y cuentan en el Radar (su cifra y su «nada que ver»)", "+ len(_lg))" in _rp and "_radar_largas(grupo, _lg)" in _rp
-    and "+ len(_jornadas_largas(grupo)))" in _s_ru)
+# v676 · detrás de las jornadas largas suman las obras cerradas (H4 del ciclo 3): la forma del final cambió
+chk("…y cuentan en el Radar (su cifra y su «nada que ver»)", "+ len(_lg) + len({pid" in _rp and "_radar_largas(grupo, _lg)" in _rp
+    and "+ len(_jornadas_largas(grupo))" in _s_ru)
 _n, _gh = funcion("core/projects_ui.py", "render_group_hours")
 chk("Hours la pinta antes de la tabla (sea cual sea el periodo)",
     "jornadas_largas_section(grupo)" in _gh and _gh.find("jornadas_largas_section(grupo)") < _gh.find("if not data:"))

@@ -633,8 +633,8 @@ def aplicar_al_roster(a: dict, quitar: bool = False) -> tuple:
     estado = cfg.get("estado_roster", "OFF")
     usuario = str(a.get("User", ""))
     grupo = str(a.get("Group", ""))
-    # Se marcan TODOS los días del rango, fin de semana incluido: si la persona no
-    # está, no está — y el tablero ya admite sábado y domingo desde v390.
+    # Se recorren TODOS los días del rango, fin de semana incluido (para QUITAR lo que puso, aunque sea de antes de
+    # v676); al PONER, el sábado y el domingo solo si la ausencia los incluye o ese día tenía trabajo (v676, abajo).
     dias = dias_del_rango(a.get("From"), a.get("To"), incluir_findes=True)
     if not dias:
         return False, t("The range has no days.")
@@ -654,6 +654,11 @@ def aplicar_al_roster(a: dict, quitar: bool = False) -> tuple:
                     if str(a.get("ID", "")) in str(_c.get("nota", "")):
                         celdas.pop(dia, None)
                         n += 1
+                elif d.weekday() >= 5 and not incluye_findes(a) and not [
+                        it for it in R._norm_cell(celdas.get(dia, {}))["items"] if it["asig"] not in R.ESTADOS]:
+                    # ⚠️ v676 · el fin de semana, solo si la ausencia lo incluye o ese día tenía trabajo (que se libera):
+                    # marcarlo siempre llenaba sábado y domingo de «Leave» y abría sus columnas (H15 del ciclo 3)
+                    continue
                 else:
                     celdas[dia] = {"asig": estado, "nota": nota}
                     n += 1

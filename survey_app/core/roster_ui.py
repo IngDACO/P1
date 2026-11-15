@@ -86,7 +86,8 @@ def _semana_activa() -> date:
     """Lunes de la semana que se está viendo (en session_state)."""
     k = "ros_lunes"
     if k not in st.session_state:
-        st.session_state[k] = R.lunes_de().isoformat()
+        # v676 · en sábado o domingo, la semana SIGUIENTE (H3 del ciclo 3): el fin de semana se planifica el lunes
+        st.session_state[k] = R.semana_de_trabajo().isoformat()
     from datetime import date as _d
     y, m, dd = str(st.session_state[k]).split("-")
     return _d(int(y), int(m), int(dd))
@@ -617,6 +618,10 @@ def _radar_scan(grupo, lunes, staff, tidx):
     from core import credentials
     datos = R.get_semana(grupo, lunes)
     choques, sin_cumplir, _seen = [], [], set()
+    try:
+        _cerradas = P.ids_cerradas(grupo)    # v676 · H4: una obra cerrada no «bloquea» certificados (sale aparte)
+    except Exception:
+        _cerradas = set()
     marcas, _comp = {}, {}          # _comp: cachea compliance por (usuario, proyecto)
     # v551 · de QUIÉN es cada línea, para que el Radar las abra (nada pasivo)
     quien = {"choques": [], "certs": []}
@@ -647,7 +652,7 @@ def _radar_scan(grupo, lunes, staff, tidx):
                 if it["asig"] in R.ESTADOS:
                     continue
                 pid = R.proyecto_de(it["asig"], tidx)
-                if not pid:
+                if not pid or pid in _cerradas:
                     continue
                 _k = (usr, pid)
                 if _k not in _comp:              # una sola consulta por persona×proyecto
@@ -704,6 +709,40 @@ def _radar_sin_gente(grupo, sp):
                       width="stretch", help=t("Open Assign with this job"), on_click=_ir_a_asignar, args=(pid,))
 
 
+def _en_cerradas(grupo, lunes, tidx) -> list:
+    """v676 · Quién está en el tablero de la semana en una obra CERRADA (H4 del ciclo 3: installer CI 1 seguía en
+    PRJ-0039, terminada el 09/11, esta semana y la siguiente). `[(usuario, pid, [días])]`."""
+    try:
+        return R.en_obras_cerradas(R.get_semana(grupo, lunes), P.ids_cerradas(grupo), tidx)
+    except Exception:
+        logger.warning("roster_ui.en_cerradas", exc_info=True)
+        return []
+
+
+def _liberar_cerrada(grupo, pid) -> None:
+    """Callback (v676): quita una obra cerrada del tablero desde MAÑANA; lo que ya pasó se queda como se planificó."""
+    _man = clock.today(grupo) + timedelta(days=1)
+    n = R.limpiar_proyecto(grupo, pid, desde=_man)
+    from core.num import dmy as _dmy
+    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=pid, n=n, f=_dmy(_man.isoformat())))
+
+
+def _radar_cerradas(grupo, lst):
+    """En el Radar, las obras cerradas que siguen en el tablero, con el botón para liberarlas desde mañana (v676)."""
+    if not lst:
+        return
+    _prj = {str(p.get("ID", "")): p for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
+    _nom = {str(u.get("User", "")): str(u.get("Name") or u.get("User", "")) for u in auth.list_users(grupo)}
+    st.markdown(t("**:red[:material/event_busy:] Planned on a closed job (completed, cancelled or archived):**"))
+    for pid in dict.fromkeys(pid for _u, pid, _d in lst):
+        p = _prj.get(pid, {})
+        _est = (t("completed") if P.es_completada(p) else t("cancelled") if P.es_cancelada(p) else t("archived"))
+        _gente = ", ".join(f"{_nom.get(u, u)} ({len(d)} d)" for u, q, d in lst if q == pid)
+        st.markdown(f"{_esc(str(p.get('Name', '') or pid))} ({pid}) · {_esc(_est)} — {_esc(_gente)}")
+        st.button(t(":material/event_busy: Free it on the board from tomorrow"), key=f"radar_cerr_{pid}",
+                  on_click=_liberar_cerrada, args=(grupo, pid))
+
+
 def _jornadas_largas(grupo) -> list:
     """Las jornadas cerradas imposibles (`timeclock.jornadas_largas`, v671): también al Radar (H27 del ciclo 2)."""
     try:
@@ -745,8 +784,9 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
             logger.warning("roster_ui.sin_planificar", exc_info=True)
             sp = {"obras": [], "jefes": []}
     _lg = _jornadas_largas(grupo)                          # v671 · H27
+    _ce = _en_cerradas(grupo, lunes, tidx)                 # v676 · H4 del ciclo 3
     n = (len(choques) + len(sin_cumplir) + len(sp.get("obras", [])) + len(sp.get("jefes", []))
-         + len(_lg))
+         + len(_lg) + len({pid for _u, pid, _d in _ce}))
     # ⚠️ v552 · La ficha que se abrió desde una línea se pinta DEBAJO de esa línea, no
     # arriba del Panel: desde la altura del Radar quedaba 373 px por encima de la vista y
     # el clic parecía no hacer nada (medido en producción). `_panel_ficha_en` = la key
@@ -798,6 +838,7 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
                     _pintada = True
         if _fic and _en.startswith("radar_") and not _pintada:
             _ficha_rapida(grupo, _fic)         # su línea se movió o desapareció: al final
+        _radar_cerradas(grupo, _ce)            # v676
         _radar_sin_gente(grupo, sp)            # v666
         _radar_largas(grupo, _lg)              # v671
 
@@ -892,6 +933,11 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
     off = (clock.today() - lunes).days
     d = (R.DIAS_TODOS[off] if (0 <= off < len(R.DIAS_TODOS)
                                and R.DIAS_TODOS[off] in dias) else None)
+    # v676 · en fin de semana, con la semana SIGUIENTE a la vista (H3 del ciclo 3), los libres del LUNES: decía
+    # «Free today: — today is not in this view» justo cuando se planifica el lunes
+    _lbl_libres = t("Free today")
+    if d is None and clock.today().weekday() >= 5 and lunes == R.semana_de_trabajo():
+        d, _lbl_libres = "lun", t("Free on Monday")
     libres = ([u for u in staff if not R.celda_items(datos, u["User"], d)]
               if d else [])
     # ⚠️ v551 · Tarjetas ACTIVAS (regla del usuario: nada pasivo). Eran `kpi_row` (HTML
@@ -901,7 +947,7 @@ def _panel_kpis(grupo, lunes, staff, datos, choques, sin_cumplir, dias=None):
     _kp = [("pnl_fich", ":material/sensors:", t("Clocked in now"), fich,
             f"{en_prj} on a project", theme.VERDE if fich else theme.GRIS_TXT,
             {"tool": "cumpl"}),
-           ("pnl_libres", ":material/event_available:", t("Free today"),
+           ("pnl_libres", ":material/event_available:", _lbl_libres,
             (len(libres) if d else "—"),
             (", ".join((u.get("Name") or u["User"]) for u in libres[:2]) +
              ("…" if len(libres) > 2 else "")) if libres else
@@ -930,6 +976,13 @@ def _confirmar_copia(grupo, lunes, staff, datos):
     quién se le PISA lo que ya tiene en esta. `datos` = la semana destino (la que se ve)."""
     origen = R.get_semana(grupo, lunes - timedelta(days=7)) or {}
     _nom = {u["User"]: (u.get("Name") or u["User"]) for u in staff}
+    # ⚠️ v676 · lo de obras CERRADAS no se copia, y se dice (H4 del ciclo 3: arrastraba una obra terminada semana a semana)
+    try:
+        _cerradas = P.ids_cerradas(grupo)
+    except Exception:
+        _cerradas = set()
+    _tidx = R.trabajos_idx(grupo)
+    _no_copia = R.en_obras_cerradas(origen, _cerradas, _tidx)
     # «Tiene algo» = un trabajo O una nota en cualquier día: una semana con solo notas
     # («vehicle, equipment…») también se pierde entera al copiar encima.
     def _con_algo(sem):
@@ -950,11 +1003,14 @@ def _confirmar_copia(grupo, lunes, staff, datos):
                     "{who}", _esc(", ".join(_nom.get(u, u) for u in pisa))))
             else:
                 st.caption(t("Nobody's plan for this week will be replaced."))
+            if _no_copia:
+                st.info(t(":material/event_busy: Not copied (the job is closed): {x}.", x=_esc(", ".join(
+                    f"{_nom.get(u, u)} → {pid}" for u, pid, _d in _no_copia))))
         c1, c2 = st.columns(2)
         if origen and c1.button(t(":material/content_copy: Yes, copy it"), key="ros_copy_si",
                                 type="primary", width="stretch"):
             st.session_state.pop("_ros_copiar", None)
-            ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes)
+            ok, msg = R.copiar_semana(grupo, lunes - timedelta(days=7), lunes, cerradas=_cerradas)
             (flash.exito if ok else flash.error)(msg)
             st.rerun()
         if c2.button(t("Cancel"), key="ros_copy_no", width="stretch"):
@@ -1116,7 +1172,8 @@ def render_planificacion(grupo):
     # y el Panel se leía como una lista. Ahora es una fila de accesos y solo se abre
     # el elegido — la pantalla queda: KPIs → vista → tablero → una herramienta.
     _n_rad = (len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])
-              + len(_jornadas_largas(grupo)))           # v671 · H27
+              + len(_jornadas_largas(grupo))            # v671 · H27
+              + len({pid for _u, pid, _d in _en_cerradas(grupo, lunes, tidx)}))   # v676 · H4 del ciclo 3
     # v293: «En vivo» y «Plan vs real» eran la misma pregunta a distinta resolución
     # de tiempo → una sola herramienta «Cumplimiento» (lo vivo va en cada fila).
     # v551 · «Asignar» salía en español y sin `t()`
@@ -1182,6 +1239,22 @@ def _cumplimiento(grupo, lunes, staff, tidx, dias=None):
         fecha = R.fecha_de_dia(lunes, _dsel)
         es_hoy = (fecha == hoy)
         datos = R.get_semana(grupo, lunes)
+        # ⚠️ v676 · un día que AÚN NO HA LLEGADO no se compara con el fichaje (H11 del ciclo 3: el domingo, el lunes
+        # salía con «7 not clocked in» y siete avisos amarillos): se dice lo planificado, sin avisos
+        if fecha > hoy:
+            _et0 = _etq(staff, grupo)
+            _plan = []
+            for u in staff:
+                _lb = ", ".join(R.etiqueta_de(a, tidx) for a in R.celda_asigs(datos, u["User"], _dsel)
+                                if R.proyecto_de(a, tidx))
+                if _lb:
+                    _plan.append((_et0.get(u["User"]) or u.get("Name") or u["User"], _lb))
+            st.info(t(":material/event_upcoming: {d} hasn't started yet: {n} planned on a job. Compliance compares "
+                      "the plan with the time clock once the day comes.",
+                      d=f"{R.DIAS_LABEL[_dsel]} {fecha.strftime('%d/%m')}", n=len(_plan)))
+            for _nm, _lb in _plan:
+                st.markdown(f":gray[:material/event:]  **{_esc(_nm)}** — {_esc(_lb)}")
+            return
         real  = timeclock.proyectos_por_usuario_dia(grupo, fecha)
 
         # ── Capa EN VIVO (solo si el día elegido es HOY: ayer no hay nadie fichado) ──

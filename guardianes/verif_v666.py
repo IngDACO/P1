@@ -117,7 +117,9 @@ _rp = funcion("core/roster_ui.py", "render_planificacion")
 chk("el Panel lo calcula una vez, lo cuenta en «Radar (n)» y se lo pasa",
     "_sp = R.sin_planificar(grupo, lunes)" in _rp
     # v671 · y suma las jornadas de más de 16 h (H27 del ciclo 2)
-    and '_n_rad = (len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])\n              + len(_jornadas_largas(grupo)))' in _rp
+    # v676 · y las obras cerradas que siguen en el tablero (H4 del ciclo 3)
+    and '_n_rad = (len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])\n              + len(_jornadas_largas(grupo))' in _rp
+    and "+ len({pid for _u, pid, _d in _en_cerradas(grupo, lunes, tidx)}))" in _rp
     and "_radar_personal(grupo, lunes, staff, tidx, scan=_scan, sp=_sp)" in _rp)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════════

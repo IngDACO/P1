@@ -203,7 +203,8 @@ import streamlit as st
 from core import roster as R, roster_ui as RU, auth, projects as P, credentials as C
 from core import timeclock as TC, clock as CK
 
-LUNES = R.lunes_de()
+# v676 · la semana que abre el Panel: la de TRABAJO (en sábado o domingo, la siguiente, H3 del ciclo 3)
+LUNES = R.semana_de_trabajo()
 ANT = LUNES - datetime.timedelta(days=7)
 def _c(*asigs, nota=""):
     return {"items": [{"a": a, "i": "07:00", "f": "15:30"} for a in asigs], "nota": nota}
@@ -275,7 +276,7 @@ def css_cel(at):
 
 
 from core import roster as _R                                       # noqa: E402
-_WK = _R.lunes_de().strftime("%Y%m%d")
+_WK = _R.semana_de_trabajo().strftime("%Y%m%d")   # v676 · la semana que abre el Panel (H3)
 
 at = AppTest.from_string(GUION, default_timeout=90)
 at.run()

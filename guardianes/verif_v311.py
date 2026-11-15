@@ -72,7 +72,9 @@ for n in ast.walk(_fn):
         if _t:
             _tits.append(_t)
 _con_ast = _tits
-check("se leyeron los 3 titulares", len(_con_ast), 3)
+# v676 · y un cuarto: «The job starts on …» antes de empezar (H5 del ciclo 3). Los de v673 (terminada,
+# cancelada o en pausa) van en un ternario y este lector no los cuenta; lo que vigila —`<b>`, nunca `**`— igual
+check("se leyeron los 4 titulares", len(_con_ast), 4)
 check("ninguno lleva `**` (no se procesa dentro de HTML)",
       [t for t in _con_ast if "**" in t], [])
 check("...y llevan <b>", all("<b>" in t for t in _con_ast))

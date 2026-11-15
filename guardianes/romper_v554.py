@@ -43,8 +43,9 @@ ROTURAS = [
     ("⚠️ el Panel vuelve a abrir en otra semana",
      RT, [('        st.session_state["ros_lunes"] = roster.lunes_de(fecha).isoformat()\n', '')]),
     ("⚠️ al volver, otra vez a HOY (no se recuerda el día)",
-     RT, [('        st.session_state["rutadia_fecha"] = st.session_state.get("_rd_dia") or _hoy\n',
-           '        st.session_state["rutadia_fecha"] = _hoy\n')]),
+     # v676 · re-anclada: el día recordado entra por `_ini` (el fin de semana abre en el lunes, H3). La misma rotura
+     RT, [('        _ini = st.session_state.get("_rd_dia")\n',
+           '        _ini = None\n')]),
     ("el `date_input` vuelve a llevar `value` (aviso en el log)",
      RT, [('cf.date_input(t("Day"), key="rutadia_fecha",',
            'cf.date_input(t("Day"), value=_hoy, key="rutadia_fecha",')]),

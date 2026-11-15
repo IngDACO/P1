@@ -50,8 +50,10 @@ def dias_con_datos(datos, extra_pedidos=()) -> list:
     con_datos = set()
     for _sem in (datos or {}).values():
         for _d, _c in (_sem or {}).items():
-            if _d in DIAS_EXTRA and (_norm_cell(_c)["items"] or
-                                     _norm_cell(_c)["nota"].strip()):
+            # ⚠️ v676 · un fin de semana con solo una AUSENCIA (Leave/OFF) no abre la columna a todos: no hay trabajo que
+            # enseñar ese día (H15 del ciclo 3: una baja sin fines de semana sacaba el sábado y el domingo en el tablero)
+            _it = [i for i in _norm_cell(_c)["items"] if i["asig"] not in ESTADOS]
+            if _d in DIAS_EXTRA and (_it or _norm_cell(_c)["nota"].strip()):
                 con_datos.add(_d)
     pedidos = set(extra_pedidos or ())
     return DIAS + [d for d in DIAS_EXTRA if d in con_datos or d in pedidos]
@@ -124,6 +126,15 @@ def lunes_de(d=None) -> date:
     if isinstance(d, datetime):
         d = d.date()
     return d - timedelta(days=d.weekday())
+
+
+def semana_de_trabajo(d=None) -> date:
+    """El lunes de la semana que toca PLANIFICAR: la de `d`, salvo en sábado o domingo, que es la siguiente (v676, H3
+    del ciclo 3: el domingo el Panel abría en la semana que acababa y el Radar hablaba de días ya pasados)."""
+    d = d or clock.today()
+    if isinstance(d, datetime):
+        d = d.date()
+    return lunes_de(d) + timedelta(days=7) if d.weekday() >= 5 else lunes_de(d)
 
 
 def fecha_de_dia(lunes, dia_key) -> date:
@@ -664,13 +675,47 @@ def asignaciones_dia(grupo, usuario, fecha=None) -> list:
              "es_estado": it["asig"] in ESTADOS} for it in raw["items"]]
 
 
-def copiar_semana(grupo, lunes_origen, lunes_destino) -> tuple:
-    """Clona todas las asignaciones de una semana a otra (1 fila por persona)."""
+def en_obras_cerradas(datos, cerradas, tidx) -> list:
+    """`[(usuario, pid, [días])]` de una semana en obras CERRADAS (`projects.ids_cerradas`), por persona y obra
+    (v676, H4 del ciclo 3: installer CI 1 seguía en una obra terminada el 09/11 toda la semana y la siguiente)."""
+    out = {}
+    for usuario, sem in (datos or {}).items():
+        for dk in DIAS_TODOS:
+            for it in _norm_cell((sem or {}).get(dk, {}))["items"]:
+                pid = proyecto_de(it["asig"], tidx) or (it["asig"] if str(it["asig"]) in cerradas else "")
+                if pid and pid in cerradas:
+                    out.setdefault((str(usuario), pid), []).append(dk)
+    return [(u, pid, dias) for (u, pid), dias in out.items()]
+
+
+def _sin_cerradas(celdas, cerradas, tidx) -> dict:
+    """Las celdas de una persona SIN lo que es de una obra cerrada (las notas y los estados se quedan)."""
+    out = {}
+    for dk, cel in (celdas or {}).items():
+        c = _norm_cell(cel)
+        items = [it for it in c["items"]
+                 if not ((proyecto_de(it["asig"], tidx) or it["asig"]) in cerradas)]
+        if items or str(c["nota"]).strip():
+            out[dk] = {"items": [{"a": it["asig"], "i": it["ini"], "f": it["fin"]} for it in items],
+                       "nota": c["nota"]}
+    return out
+
+
+def copiar_semana(grupo, lunes_origen, lunes_destino, cerradas=None) -> tuple:
+    """Clona todas las asignaciones de una semana a otra (1 fila por persona).
+    v676 · sin los días de obras CERRADAS (`cerradas`, de `projects.ids_cerradas`): copiar arrastraba una obra
+    terminada semana a semana (H4 del ciclo 3)."""
     datos = get_semana(grupo, lunes_origen)
     if not datos:
         return False, t("The source week is empty.")
+    cerradas = set(cerradas or ())
+    tidx = trabajos_idx(grupo) if cerradas else {}
     n = 0
     for usuario, dias in datos.items():
+        if cerradas:
+            dias = _sin_cerradas(dias, cerradas, tidx)
+            if not dias:
+                continue
         ok, _ = guardar_persona(grupo, lunes_destino, usuario, dias)
         n += 1 if ok else 0
     return True, f"{n} " + t("person(s) copied.")

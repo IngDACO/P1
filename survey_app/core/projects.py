@@ -256,6 +256,16 @@ def es_activa(p) -> bool:
     return str((p or {}).get("Status", "")) in ESTADOS_ACTIVOS
 
 
+def ids_cerradas(grupo: str) -> set:
+    """IDs de las obras CERRADAS del grupo: terminadas (100 % o «Completed»), canceladas o archivadas (v676, H4 del
+    ciclo 3: una obra terminada seguía ocupando el tablero, el Radar y «Copy previous week»). Lectura en caché."""
+    out = set()
+    for p in list_projects(grupo=grupo, incluir_archivados=True):
+        if es_completada(p) or es_cancelada(p) or str(p.get("Status", "")) == "Archived":
+            out.add(str(p.get("ID", "")))
+    return out
+
+
 def es_completada(p) -> bool:
     """¿La obra está al 100 % o marcada «Completed»? (v665 en la ficha; aquí desde v673 para el asistente)"""
     return _num((p or {}).get("Progress")) >= 99.95 or str((p or {}).get("Status", "")) == "Completed"

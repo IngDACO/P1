@@ -2851,6 +2851,17 @@ def lista_cierre(pid: str, grupo: str, prj: dict) -> list:
     except Exception as e:
         logger.warning("lista_cierre tareas %s: %s", pid, e)
         out.append(t("The To-do list could not be checked."))
+    # v676 · y el TABLERO desde mañana (H4 del ciclo 3: installer CI 1 seguía planificado en PRJ-0039, terminada el
+    # 09/11, esta semana y la siguiente). El botón para liberarlo va en `_cierre_section`.
+    try:
+        from core import roster as _RO
+        _dd = _RO.dias_desde(grupo, pid, clock.today(grupo) + timedelta(days=1))
+        if _dd:
+            out.append(t("**{n}** day(s) still on the board from tomorrow: {who}.", n=sum(_dd.values()),
+                         who=", ".join(_nombres_de(list(_dd), grupo))))
+    except Exception as e:
+        logger.warning("lista_cierre tablero %s: %s", pid, e)
+        out.append(t("The board could not be checked."))
     try:
         from core import inventory as _INV
         if _INV.is_configured():
@@ -2875,6 +2886,14 @@ def lista_cierre(pid: str, grupo: str, prj: dict) -> list:
     return out
 
 
+def _liberar_tablero_obra(grupo, pid) -> None:
+    """Callback (v676): quita la obra del tablero desde MAÑANA; lo pasado se queda como se planificó."""
+    from core import roster as _RO
+    _man = clock.today(grupo) + timedelta(days=1)
+    n = _RO.limpiar_proyecto(grupo, pid, desde=_man)
+    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=pid, n=n, f=_fmt_fecha(_man.isoformat())))
+
+
 def _cierre_section(pid: str, grupo: str, prj: dict):
     """La lista de cierre de una obra al 100 % (v665)."""
     if not _completada(prj):
@@ -2883,6 +2902,16 @@ def _cierre_section(pid: str, grupo: str, prj: dict):
     if _l:
         st.warning(t(":material/flag: **The job is complete — before closing it:**") + "\n\n"
                    + "\n".join(f"- {x}" for x in _l))
+        # v676 · liberar el tablero desde mañana, aquí mismo (H4 del ciclo 3; cancelar ya lo ofrecía desde v670)
+        if str((st.session_state.get("auth") or {}).get("rol", "")) == "administrator":
+            try:
+                from core import roster as _RO
+                _hay = bool(_RO.dias_desde(grupo, pid, clock.today(grupo) + timedelta(days=1)))
+            except Exception:
+                _hay = False
+            if _hay:
+                st.button(t(":material/event_busy: Free it on the board from tomorrow"), key=f"cierre_lib_{pid}",
+                          on_click=_liberar_tablero_obra, args=(grupo, str(pid)))
     else:
         st.success(t(":material/task_alt: **The job is complete and nothing is left open** (alerts, To-do, "
                      "assets on site, invoicing). You can archive it in «Data»."))
@@ -2949,6 +2978,10 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         d = dict(d, paradas=[], arrastradas=[], en_curso=[dict(x, tarde=False) for x in (d.get("en_curso") or [])],
                  proximo=None)
     _fin_real = P.fecha_terminada(pid) if _hecha else None
+    # v676 · una obra que AÚN NO HA EMPEZADO tampoco va «on plan · day -1 of 25» (H5 del ciclo 3): dice cuándo empieza
+    from core.num import parse_date as _pd0
+    _ini0, _hoy0 = _pd0(prj.get("StartDate")), clock.today(grupo)
+    _antes = (not _hecha) and (not _quieta) and _ini0 is not None and _ini0 > _hoy0
 
     # ── Titular: una frase que diga como va, antes de cualquier numero ──
     # ⚠️ v311: el titular se pintaba con `**...**` DENTRO de un `<div>` y Streamlit no
@@ -2963,6 +2996,10 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     elif _quieta:
         _tit_html, _col = ((t("The job is <b>cancelled</b>: there is no plan to follow") if P.es_cancelada(prj)
                             else t("The job is <b>on hold</b>: the plan is paused")), "#6b7280")
+    elif _antes:
+        _faltan0 = (_ini0 - _hoy0).days
+        _tit_html, _col = (t("The job <b>starts on {f}</b> ({c})").replace("{f}", _fmt_fecha(_ini0.isoformat()))
+                           .replace("{c}", t("tomorrow") if _faltan0 == 1 else t("in {n} days", n=_faltan0)), "#2e6da4")
     elif dv <= -1:
         _tit_html, _col = (t("You are <b>{n} points behind</b> plan").replace("{n}", f"{abs(dv):.0f}"), "#c0392b")
     elif dv >= 1:
@@ -3002,6 +3039,11 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         _dia_txt = ""
     elif _quieta:
         tarj, _dia_txt = [], ""
+    elif _antes:                   # v676 · H5: sin desvío ni «situación» antes de empezar
+        tarj = [_kpi_card(t("Starts on"), _fmt_fecha(_ini0.isoformat()), "#2e6da4"),
+                _kpi_card(t("Planned finish"), _fmt_fecha(prj.get("EndDateEst")) or "—"),
+                _kpi_card(t("Working days planned"), f"{_tot}")]
+        _dia_txt = ""
 
     # ── v311: titular + KPIs a ANCHO COMPLETO ────────────────────
     # Antes iban en la columna izquierda de un [3,2] cuya derecha llevaba 6 alarmas
@@ -3073,7 +3115,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # podía cumplirse nunca y su aviso era CÓDIGO MUERTO: un proyecto pasado de
     # fecha se quedaba sin banner de ritmo, en silencio. Ahora ese caso se atiende
     # ANTES de exigir `ritmo_nec`, y a partir de ahí sí está garantizado.
-    if d["ritmo_real"] is not None and not (_hecha or _quieta):          # v673 · sin plan por delante, sin ritmo
+    if d["ritmo_real"] is not None and not (_hecha or _quieta or _antes):   # v673/v676 · sin plan en marcha, sin ritmo
         if d["dias_rest"] <= 0 or d["ritmo_nec"] is None:
             st.warning(f":material/schedule: The planned finish date has already passed and there is "
                        f"**{100 - d['ev']:.0f}%** still to complete.")
