@@ -263,7 +263,10 @@ ck("...y lo dice", any(str(contable._MAX_DIAS) in a for a in _lg["avisos"]), Tru
 
 # ═════ 6 · PayrollID ════════════════════════════════════════════════════════
 print("\n[6] el identificador de nómina")
-ck("la columna es la ÚLTIMA (migra sola)", auth.LOGIN_HEADERS[-1], "PayrollID")
+# ⚠️ v671 · tras ella va «SuperFund» (H25 del ciclo 2), también al final: la regla es que PayrollID quede DETRÁS
+# de las históricas y que lo nuevo vaya después, nunca en medio
+ck("la columna va al final (detrás, solo lo nuevo: SuperFund, v671)",
+   auth.LOGIN_HEADERS[auth.LOGIN_HEADERS.index("PayrollID"):], ["PayrollID", "SuperFund"])
 # ⚠️ Y lo que de verdad protege la regla: que NADA se cuele antes de las históricas.
 # Comprobar solo el último elemento dejaba pasar una columna insertada en medio, que
 # es justo el fallo de v363 — las filas se escriben por POSICIÓN.
@@ -271,7 +274,8 @@ _HIST = ["User", "Password", "Role", "Name", "Active", "Group", "SessionToken",
          "SessionTime", "Email", "TelegramChatID", "HourlyRate", "StartedOn"]
 ck("las columnas históricas siguen en su orden y al principio",
    auth.LOGIN_HEADERS[:len(_HIST)], _HIST)
-ck("...y lo nuevo va DESPUÉS", auth.LOGIN_HEADERS[len(_HIST):], ["PayrollID"])
+# v671 · y detrás de PayrollID, SuperFund (H25 del ciclo 2)
+ck("...y lo nuevo va DESPUÉS", auth.LOGIN_HEADERS[len(_HIST):], ["PayrollID", "SuperFund"])
 ck("sin duplicados en la cabecera",
    len(auth.LOGIN_HEADERS), len(set(auth.LOGIN_HEADERS)))
 # ⚠️ `_COL` se DERIVA desde v433: si volviera a escribirse a mano, la escritura
@@ -295,10 +299,34 @@ _lee = [n for n in ast.walk(_fu) if isinstance(n, ast.Call)
 ck("...y lo lee para precargarlo", len(_lee) >= 1, True)
 
 # Las dos guardas, EJECUTADAS: importar no ejecuta (v378).
-ck("el setter genérico rechaza un campo SECRETO",
-   auth.set_login_setting("admin1", "Password", "x")[0], False)
-ck("...y una columna que no existe",
-   auth.set_login_setting("admin1", "NoExiste", "x")[0], False)
+# ⚠️ v671 · por el camino donde son las ÚNICAS (trampa 55): con «admin1», que no existe, el setter devolvía False
+# también SIN la guarda («User not found») y la rotura escapaba. Ahora la hoja (de mentira) SÍ tiene la fila, y
+# sin la guarda se escribiría: se comprueba que no se escribe nada (y la auditoría, sustituida: no sale nada).
+class _WSL:
+    def __init__(self):
+        self.escritas = []
+
+    def update_cell(self, *a):
+        self.escritas.append(a)
+
+
+_wsl = _WSL()
+_o484 = (auth._get_login_ws, auth._find_row, auth._invalidate_login, auditoria.registrar)
+auth._get_login_ws = lambda: (_wsl, None)
+auth._find_row = lambda ws, u: (2, {"User": u})
+auth._invalidate_login = lambda: None
+auditoria.registrar = lambda *a, **k: True
+try:
+    _r_sec = auth.set_login_setting("admin1", "Password", "x")
+    _r_no = auth.set_login_setting("admin1", "NoExiste", "x")
+    _r_ok = auth.set_login_setting("admin1", "PayrollID", "E-1")
+finally:
+    auth._get_login_ws, auth._find_row, auth._invalidate_login, auditoria.registrar = _o484
+ck("el setter genérico rechaza un campo SECRETO (sin escribir nada)",
+   (_r_sec[0], [e for e in _wsl.escritas if e[1] == auth._COL["Password"]]), (False, []))
+ck("...y una columna que no existe", _r_no[0], False)
+ck("...y una que SÍ se puede escribe (la hoja de mentira funciona: la prueba no pasa en vacío)",
+   (_r_ok[0], len(_wsl.escritas)), (True, 1))
 
 # ═════ 7 · la pantalla ══════════════════════════════════════════════════════
 print("\n[7] la pantalla")

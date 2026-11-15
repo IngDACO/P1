@@ -5,7 +5,7 @@ Sección 📅 Planificación en 🛠 Mi grupo: la rejilla persona×día coloread
 el board del usuario), edición de la semana persona a persona, "copiar la semana
 anterior" y el catálogo de trabajos.
 """
-from datetime import date, timedelta, time as _time  # `date`: lo que devuelve `_semana_activa` (v666)
+from datetime import date, datetime, timedelta, time as _time  # `date`: lo que devuelve `_semana_activa` (v666); `datetime`: v671
 
 from core.i18n import t
 
@@ -704,6 +704,32 @@ def _radar_sin_gente(grupo, sp):
                       width="stretch", help=t("Open Assign with this job"), on_click=_ir_a_asignar, args=(pid,))
 
 
+def _jornadas_largas(grupo) -> list:
+    """Las jornadas cerradas imposibles (`timeclock.jornadas_largas`, v671): también al Radar (H27 del ciclo 2)."""
+    try:
+        from core import timeclock as _TC
+        return _TC.jornadas_largas(grupo)
+    except Exception:
+        logger.warning("roster_ui.jornadas_largas", exc_info=True)
+        return []
+
+
+def _radar_largas(grupo, lg):
+    """En el Radar, las jornadas de más de 16 h: cada línea lleva a Hours, donde se arreglan (v671)."""
+    if not lg:
+        return
+    st.markdown(t("**:red[:material/error:] Workdays of more than 16 h (fix them in Hours):**"))
+    for _i, j in enumerate(lg[:6]):
+        try:
+            from core import timeclock as _TC
+            _f = datetime.strptime(j["entrada"], _TC.FMT).strftime("%d/%m/%Y")
+        except ValueError:
+            _f = j["entrada"][:10]
+        if st.button(_esc(f"{j['nombre']} · {_f} · {j['horas']:.2f} h"), key=f"radar_lg_{_i}", width="stretch"):
+            st.session_state["_admin_nav_pending"] = ("finanzas", "⏱ Horas")
+            st.rerun()
+
+
 def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
     """Radar de personal: choques de turno + certificados que bloquean (v280).
     v287: se abre desde la fila de herramientas del Panel (ya no es un expander).
@@ -718,7 +744,9 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
         except Exception:
             logger.warning("roster_ui.sin_planificar", exc_info=True)
             sp = {"obras": [], "jefes": []}
-    n = len(choques) + len(sin_cumplir) + len(sp.get("obras", [])) + len(sp.get("jefes", []))
+    _lg = _jornadas_largas(grupo)                          # v671 · H27
+    n = (len(choques) + len(sin_cumplir) + len(sp.get("obras", [])) + len(sp.get("jefes", []))
+         + len(_lg))
     # ⚠️ v552 · La ficha que se abrió desde una línea se pinta DEBAJO de esa línea, no
     # arriba del Panel: desde la altura del Radar quedaba 373 px por encima de la vista y
     # el clic parecía no hacer nada (medido en producción). `_panel_ficha_en` = la key
@@ -771,6 +799,7 @@ def _radar_personal(grupo, lunes, staff, tidx, scan=None, sp=None):
         if _fic and _en.startswith("radar_") and not _pintada:
             _ficha_rapida(grupo, _fic)         # su línea se movió o desapareció: al final
         _radar_sin_gente(grupo, sp)            # v666
+        _radar_largas(grupo, _lg)              # v671
 
 
 def _ficha_rapida(grupo, usuario):
@@ -1086,7 +1115,8 @@ def render_planificacion(grupo):
     # Antes eran 5 bloques APILADOS (asignación, radar, en vivo, plan-vs-real, catálogo)
     # y el Panel se leía como una lista. Ahora es una fila de accesos y solo se abre
     # el elegido — la pantalla queda: KPIs → vista → tablero → una herramienta.
-    _n_rad = len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])
+    _n_rad = (len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])
+              + len(_jornadas_largas(grupo)))           # v671 · H27
     # v293: «En vivo» y «Plan vs real» eran la misma pregunta a distinta resolución
     # de tiempo → una sola herramienta «Cumplimiento» (lo vivo va en cada fila).
     # v551 · «Asignar» salía en español y sin `t()`

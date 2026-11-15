@@ -79,8 +79,9 @@ CASOS = [
 
     ("v432: el recorte deja de informarse (ajuste de dinero invisible)",
      "core/payroll.py",
-     '"solapadas": solapadas, "recortes": recortes}',
-     '"solapadas": solapadas}'),
+     # v671 · re-anclada: la nómina devuelve además las jornadas de más de 16 h que dejó fuera (H27)
+     '"solapadas": solapadas, "recortes": recortes, "largas": fuera_largas}',
+     '"solapadas": solapadas, "largas": fuera_largas}'),
 
     ("v432: asignar personal deja de mirar las ausencias",
      "core/projects_ui.py",

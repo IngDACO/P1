@@ -1254,6 +1254,95 @@ def horas_por_usuario_rango(grupo: str, desde, hasta, solo_cerradas: bool = Fals
     return {k: {"nombre": v["nombre"], "horas": round(v["horas"], 2)} for k, v in out.items()}
 
 
+# v671 · una JORNADA cerrada de más de esto (o que cruza dos medianoches) no es una jornada de trabajo: es un olvido
+# que se cerró tarde. Ciclo 2 (H27): 71.95 h, 50.08 h y 23.96 h de campo000, noches y fin de semana contados como
+# trabajados, en el coste de la obra, y nada lo señalaba (v621 solo impide las NUEVAS).
+JORNADA_MAX_H = 16.0
+
+
+def jornadas_largas(grupo: str, umbral: float = JORNADA_MAX_H, desde=None, hasta=None) -> list:
+    """Las JORNADAS (general) CERRADAS de más de `umbral` horas o que cruzan dos medianoches (v671, H27), de la más
+    reciente a la más antigua: `[{usuario, cuenta, nombre, entrada, salida, horas}]`. Con `desde`/`hasta` (date), solo
+    las que tocan ese rango; `cuenta` es el login. Lee de la caché (es para enseñar y avisar; corregir lee fresco)."""
+    grupo = (grupo or "").strip()
+    _pn = mapa_nombres(grupo)
+    out = []
+    for r in _cached_records():
+        if (str(r.get("Group", "")).strip() != grupo or _tipo_of(r) != TIPO_GENERAL
+                or str(r.get("Status", "")).strip().upper() == "ABIERTO"):
+            continue
+        try:
+            ci = datetime.strptime(str(r.get("Clock In", "")).strip(), FMT)
+            co = datetime.strptime(str(r.get("Clock Out", "")).strip(), FMT)
+        except (TypeError, ValueError):
+            continue
+        h = (co - ci).total_seconds() / 3600.0
+        if h <= umbral and (co.date() - ci.date()).days < 2:
+            continue
+        if desde is not None and co.date() < desde:
+            continue
+        if hasta is not None and ci.date() > hasta:
+            continue
+        clave = clave_de(r, _pn)
+        if not clave:
+            continue
+        out.append({"usuario": clave, "cuenta": str(r.get("User", "") or "").strip(),
+                    "nombre": str(r.get("Name", "")).strip() or clave,
+                    "entrada": ci.strftime(FMT), "salida": co.strftime(FMT), "horas": round(h, 2)})
+    return sorted(out, key=lambda x: x["entrada"], reverse=True)
+
+
+def recortar_jornada(grupo, usuario, nombre, entrada, salida_actual, salida_nueva) -> tuple:
+    """Pone la salida REAL a una jornada cerrada y a sus entradas de obra que pasan de ella (v671, H27).
+
+    `(ok, {"jornada": (vieja, nueva), "obras": [(proyecto, vieja, nueva)]} | mensaje)`. Primero las entradas de obra y
+    después la jornada: `corregir_fichaje` no deja que una entrada de obra quede fuera de su jornada (v663), así que al
+    revés se negaría. Una entrada de obra que EMPIEZA después de la hora nueva no se puede recortar: se dice."""
+    if hasattr(salida_nueva, "strftime"):
+        salida_nueva = salida_nueva.strftime(FMT)
+    salida_nueva, salida_actual, entrada = str(salida_nueva).strip(), str(salida_actual).strip(), str(entrada).strip()
+    try:
+        _ci, _co, _cn = (datetime.strptime(entrada, FMT), datetime.strptime(salida_actual, FMT),
+                         datetime.strptime(salida_nueva, FMT))
+    except ValueError:
+        return False, t("The times could not be read.")
+    if not (_ci < _cn < _co):
+        return False, t("The real end must be after the start ({a}) and before the end recorded now ({b}).",
+                        a=_ci.strftime("%d/%m/%Y %H:%M"), b=_co.strftime("%d/%m/%Y %H:%M"))
+    ws, err = _get_worksheet()
+    if err:
+        return False, err
+    try:
+        registros = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
+    except Exception as e:
+        return False, f"{t('Error reading the sheet')}: {e}"
+    obras = []
+    for r in registros:
+        if not _matches(r, usuario, nombre, grupo) or _tipo_of(r) != TIPO_PROYECTO:
+            continue
+        try:
+            p0 = datetime.strptime(str(r.get("Clock In", "")).strip(), FMT)
+            p1 = datetime.strptime(str(r.get("Clock Out", "")).strip(), FMT)
+        except (TypeError, ValueError):
+            continue
+        if not (_ci <= p0 <= _co) or p1 <= _cn:
+            continue
+        if p0 >= _cn:
+            return False, t("The entry on {p} starts at {h}, after the new end: correct that one first.",
+                            p=str(r.get("Project", "") or "?"), h=p0.strftime("%d/%m %H:%M"))
+        obras.append((str(r.get("Project", "") or ""), p1.strftime(FMT)))
+    hechas = []
+    for proy, vieja in obras:
+        ok, msg = corregir_fichaje(grupo, usuario, nombre, TIPO_PROYECTO, "Clock Out", vieja, salida_nueva)
+        if not ok:
+            return False, msg
+        hechas.append((proy, vieja, salida_nueva))
+    ok, msg = corregir_fichaje(grupo, usuario, nombre, TIPO_GENERAL, "Clock Out", salida_actual, salida_nueva)
+    if not ok:
+        return False, msg
+    return True, {"jornada": (salida_actual, salida_nueva), "obras": hechas}
+
+
 def jornadas_abiertas(grupo: str, desde, hasta) -> dict:
     """`{clave: nombre}` de quien tiene una JORNADA (general) aún abierta que empezó dentro de
     [desde, hasta] o antes (v663). La nómina las deja fuera y lo dice."""

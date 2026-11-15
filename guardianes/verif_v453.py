@@ -291,6 +291,14 @@ chk(bool(_esc), f"payroll escribe tipos de concepto ({sorted(_esc)})")
 # fallo es que `neto()` compare un valor que nadie escribe: esa rama esta MUERTA (v442).
 chk(_cmp <= _esc,
     f"toda rama de neto() compara un tipo que alguien ESCRIBE (muertas: {sorted(_cmp - _esc)})")
+# v671 · y al revés, contra TODO el módulo: `saldar_horas` escribe «deduccion» otra vez, así que
+# traducir el de `generar` dejaba «deduccion» en _esc y la rotura pasaba. Todo tipo escrito tiene que
+# ser uno que payroll COMPARA en algún sitio (neto, _pcts, saldar_horas): si no, nadie lo cuenta.
+_cmp_mod = {c.value for cp in ast.walk(_a_pay) if isinstance(cp, ast.Compare)
+            for c in cp.comparators
+            if isinstance(c, ast.Constant) and isinstance(c.value, str)}
+chk(_esc <= _cmp_mod,
+    f"todo tipo que payroll ESCRIBE lo compara alguien (huérfanos: {sorted(_esc - _cmp_mod)})")
 
 # Y la prueba de que el nombre NO decide el dinero: mismo neto con el concepto en
 # español (histórico) y en inglés (migrado).

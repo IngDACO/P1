@@ -144,6 +144,117 @@ def resumen(grupo: str) -> dict:
     return {"a_pagar": round(ap, 2), "pagado": round(pg, 2), "n": n}
 
 
+def ultimo_hasta(grupo: str):
+    """La fecha hasta la que hay nóminas generadas (la mayor `PeriodTo` de las no anuladas), o None (v671, H15 del
+    ciclo 2: «Generate» volvía a proponer el periodo ya generado y pagado en parte)."""
+    _f = [_parse_date(n.get("PeriodTo")) for n in list_nominas(grupo)]
+    _f = [x for x in _f if x]
+    return max(_f) if _f else None
+
+
+def horas_sin_pagar(grupo: str) -> list:
+    """Las horas fichadas DESPUÉS de generar la colilla de su periodo (v671, H15 del ciclo 2).
+
+    `[{nid, usuario, nombre, desde, hasta, en_colilla, ahora, dif, pagada, tarifa}]` por persona y periodo (sumando
+    las colillas de ajuste del mismo periodo). Ciclo 2: +0.23 h de hjg,ujgjg y +0.13 h de Bobo entraron tras generar
+    y no estaban en ninguna colilla, sin que nada lo dijera. `nid` es la colilla a la que se le añadiría (la última
+    SIN pagar del periodo) o la primera si todas están pagadas (entonces va en una colilla de ajuste)."""
+    grupos = {}
+    for n in list_nominas(grupo):
+        k = (str(n.get("User", "")), str(n.get("PeriodFrom", "")), str(n.get("PeriodTo", "")))
+        grupos.setdefault(k, []).append(n)
+    out, _por_periodo = [], {}
+    for (u, d, h), ns in grupos.items():
+        if (d, h) not in _por_periodo:
+            try:
+                _por_periodo[(d, h)] = timeclock.horas_por_usuario_rango(grupo, d, h, solo_cerradas=True)
+            except Exception as e:
+                logger.warning("payroll.horas_sin_pagar %s-%s: %s", d, h, e)
+                _por_periodo[(d, h)] = {}
+        ahora = _num((_por_periodo[(d, h)].get(u) or {}).get("horas"))
+        en = round(sum(_num(n.get("Hours")) for n in ns), 2)
+        dif = round(ahora - en, 2)
+        if dif < 0.01:
+            continue
+        _sin = [n for n in ns if str(n.get("Status", "")).lower() != "pagada"]
+        _ref = (_sin or ns)[-1]
+        out.append({"nid": str(_ref.get("ID", "")), "usuario": u, "nombre": str(_ref.get("Name", "") or u),
+                    "desde": d, "hasta": h, "en_colilla": en, "ahora": round(ahora, 2), "dif": dif,
+                    "pagada": not _sin, "tarifa": _num(_ref.get("HourlyRate"))})
+    return sorted(out, key=lambda x: (x["hasta"], x["nombre"]), reverse=True)
+
+
+def _pcts(n: dict) -> tuple:
+    """(super %, retención %) de una colilla, deducidos de sus importes sobre el bruto (base + devengos)."""
+    con = conceptos_de(n)
+    bruto = _num(n.get("Base")) + sum(_num(c.get("monto")) for c in con if str(c.get("tipo", "")).lower() == "devengo")
+    if bruto <= 0:
+        return 0.0, 0.0
+    sup = sum(_num(c.get("monto")) for c in con if str(c.get("tipo", "")).lower() == "aporte")
+    ret = sum(_num(c.get("monto")) for c in con if str(c.get("tipo", "")).lower() == "deduccion"
+              and "PAYG" in str(c.get("concepto", "")))
+    return round(100.0 * sup / bruto, 4), round(100.0 * ret / bruto, 4)
+
+
+def saldar_horas(nid: str, horas, creado_por: str = "") -> tuple:
+    """Paga las horas que faltan de un periodo (v671, H15): a una colilla SIN pagar se le suman (horas, base, super y
+    retención a su mismo %); si está pagada, va una colilla de AJUSTE del mismo periodo, solo con esas horas. `(ok, msg)`."""
+    n = get_nomina(nid)
+    if not n:
+        return False, t("Payslip not found.")
+    h = round(_num(horas), 2)
+    if h <= 0:
+        return False, t("There are no hours to add.")
+    tarifa = _num(n.get("HourlyRate"))
+    sup_pct, ret_pct = _pcts(n)
+    w, err = _ws()
+    if err:
+        return False, err
+    if str(n.get("Status", "")).lower() != "pagada":
+        con = conceptos_de(n)
+        base = round((_num(n.get("Hours")) + h) * tarifa, 2)
+        bruto = base + sum(_num(c.get("monto")) for c in con if str(c.get("tipo", "")).lower() == "devengo")
+        for c in con:
+            _tp = str(c.get("tipo", "")).lower()
+            if _tp == "aporte" and str(c.get("concepto", "")) == "Superannuation":
+                c["monto"] = round(bruto * sup_pct / 100.0, 2)
+            elif _tp == "deduccion" and "PAYG" in str(c.get("concepto", "")):
+                c["monto"] = round(bruto * ret_pct / 100.0, 2)
+        row = _find_row(w, nid)
+        if row is None:
+            return False, t("Payslip not found.")
+        try:
+            w.batch_update([
+                {"range": f"{_col_letter(_NCOL['Hours'])}{row}", "values": [[str(round(_num(n.get('Hours')) + h, 2))]]},
+                {"range": f"{_col_letter(_NCOL['Base'])}{row}", "values": [[str(base)]]},
+                {"range": f"{_col_letter(_NCOL['ConceptsJSON'])}{row}",
+                 "values": [[json.dumps(con, ensure_ascii=False)]]},
+                {"range": f"{_col_letter(_NCOL['Net'])}{row}", "values": [[str(neto(base, con))]]},
+            ], value_input_option="RAW")
+        except Exception as e:
+            return False, str(e)
+        _invalidate()
+        return True, t("{h} h added to payslip {n}.", h=f"{h:.2f}", n=nid)
+    # pagada: colilla de ajuste
+    base = round(h * tarifa, 2)
+    con = []
+    if ret_pct > 0:
+        con.append({"concepto": "Income tax withheld (PAYG)", "tipo": "deduccion", "monto": round(base * ret_pct / 100.0, 2)})
+    if sup_pct > 0:
+        con.append({"concepto": "Superannuation", "tipo": "aporte", "monto": round(base * sup_pct / 100.0, 2)})
+    nuevo = _ids_nuevos(_max_num(), 1)[0]
+    try:
+        w.append_rows([[nuevo, str(n.get("Group", "")), str(n.get("User", "")), str(n.get("Name", "")),
+                        str(n.get("PeriodFrom", "")), str(n.get("PeriodTo", "")), str(h), str(tarifa), str(base),
+                        json.dumps(con, ensure_ascii=False), str(neto(base, con)), "", "emitida",
+                        f"Adjustment to {nid}: hours clocked after it was paid", str(creado_por or ""),
+                        clock.now().strftime("%Y-%m-%d %H:%M:%S")]], value_input_option="RAW")
+    except Exception as e:
+        return False, str(e)
+    _invalidate()
+    return True, t("Adjustment payslip {n} created for {h} h ({x} was already paid).", n=nuevo, h=f"{h:.2f}", x=nid)
+
+
 # ── Escrituras ───────────────────────────────────────────────────
 def _max_num() -> int:
     """El mayor NOM- en uso, leído FRESCO (v581): es ruta de ESCRITURA, y un número
@@ -199,6 +310,14 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     # después de generar ya no entraba en ninguna colilla. Se nombra a quién se deja fuera.
     horas = timeclock.horas_por_usuario_rango(grupo, desde, hasta, solo_cerradas=True)
     abiertas = sorted(timeclock.jornadas_abiertas(grupo, desde, hasta).values())
+    # ⚠️ v671 · quien tiene en el periodo una jornada CERRADA imposible (más de 16 h) queda FUERA hasta arreglarla
+    # (H27 del ciclo 2: 71.95 h de un olvido se habrían pagado como trabajadas). Se dice a quién y por qué.
+    largas = {}
+    try:
+        for _j in timeclock.jornadas_largas(grupo, desde=_parse_date(str(desde)), hasta=_parse_date(str(hasta))):
+            largas.setdefault(_j["usuario"], _j)
+    except Exception as e:
+        logger.warning("payroll.generar: no se pudieron mirar las jornadas largas: %s", e)
     rates = auth.rate_map(grupo)
     # ⚠️ v347: las ANULADAS no bloquean. Antes se contaban como existentes, así que
     # **no había forma de reemitir el periodo de nadie**: anulabas la nómina mal hecha
@@ -254,6 +373,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
                              "pagadas": _r["pagadas"]})
 
     rows, creadas, omitidas, sin_tarifa, solapadas = [], 0, 0, [], []
+    fuera_largas = []
     base_num = _max_num()
     for clave in sorted(set(horas) | set(aus)):
         info = horas.get(clave) or {
@@ -261,6 +381,10 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
             "nombre": str((aus.get(clave) or {}).get("nombre") or clave)}
         if (clave, d_iso, h_iso) in existentes:
             omitidas += 1
+            continue
+        if clave in largas:
+            _j = largas[clave]
+            fuera_largas.append(f"{_j['nombre']} ({_j['horas']:.2f} h, {_j['entrada'][8:10]}/{_j['entrada'][5:7]})")
             continue
         if clave in solapes:
             # ⚠️ NO se emite: pagar dos veces las mismas horas es un error de dinero y
@@ -334,7 +458,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
         _veces[nom] = _veces.get(nom, 0) + 1
     st_txt = [f"{nom} ({clave})" if _veces[nom] > 1 else nom for nom, clave in sin_tarifa]
     return {"creadas": creadas, "omitidas": omitidas, "sin_tarifa": st_txt, "abiertas": abiertas,
-            "solapadas": solapadas, "recortes": recortes}
+            "solapadas": solapadas, "recortes": recortes, "largas": fuera_largas}
 
 
 def _find_row(w, nid):

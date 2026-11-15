@@ -43,7 +43,8 @@ ROTURAS = [
     ("el jefe de una obra ya listada se repite", RU,
      [('if pid not in set(sp.get("obras", []))]', "]")]),
     ("«Radar (n)» no lo cuenta", RU,
-     [('_n_rad = len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])', "_n_rad = len(_scan[0]) + len(_scan[1])")]),
+     # v671 · re-anclada: el recuento suma además las jornadas de más de 16 h (H27)
+     [('_n_rad = (len(_scan[0]) + len(_scan[1]) + len(_sp["obras"]) + len(_sp["jefes"])', "_n_rad = (len(_scan[0]) + len(_scan[1])")]),
     # ── H14 · la ficha y el alta ──
     ("⚠️ la ficha no avisa", PU,
      [("    _plan_semana_section(pid, grupo, prj)            # v666", "    pass            # v666")]),

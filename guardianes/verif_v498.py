@@ -173,6 +173,10 @@ def _sospechosos():
         if not rel.endswith(".py"):
             continue
         tr = ast.parse(_fuente(rel))
+        # ⚠️ v671 · el conjunto se vacía en CADA fichero: guarda `id()` de nodos, y los de un árbol ya descartado
+        # pueden volver a salir en el siguiente (Python reutiliza la memoria). Con él acumulado, la llamada de la
+        # sonda heredaba por azar el id de una de otro fichero y se saltaba: rojo intermitente en la suite de v671.
+        _vistos_comp = set()
         for fn in [n for n in ast.walk(tr) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             # si `t` es variable de ESA función, ahí no es la de i18n
             loc = {tg.id for a in ast.walk(fn) if isinstance(a, ast.Assign)

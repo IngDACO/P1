@@ -22,6 +22,8 @@ from core import flash          # v365: mensajes que sobreviven al st.rerun()
 from core.maps import literal_md
 from core.num import num as _num, dmy as _dmy
 from core import tabla
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _creado_por() -> str:
@@ -72,10 +74,41 @@ def _accion_pendiente():
         return
     if _acc.get("accion") == "anular":
         _ok, _msg = payroll.anular(_acc.get("nid", ""))
+    elif _acc.get("accion") == "saldar":          # v671 · H15: las horas fichadas tras la colilla
+        _ok, _msg = payroll.saldar_horas(_acc.get("nid", ""), _acc.get("horas", 0), _creado_por())
     else:
         _ok, _msg = payroll.deshacer_pago(_acc.get("nid", ""))
     (flash.exito if _ok else flash.error)(_msg)
     st.rerun()
+
+
+def horas_sin_pagar_section(grupo, pref, desde=None, hasta=None):
+    """Las horas fichadas DESPUÉS de generar la colilla de su periodo, con «Settle» (v671, H15 del ciclo 2): se
+    suman a la colilla si no está pagada, o van en una colilla de ajuste si lo está. Con `desde`/`hasta`, solo ese
+    periodo (la vista previa de «Generate»)."""
+    try:
+        _p = payroll.horas_sin_pagar(grupo)
+    except Exception as e:
+        logger.warning("horas_sin_pagar_section: %s", e)
+        return
+    if desde is not None:
+        _p = [x for x in _p if x["desde"] == str(desde) and x["hasta"] == str(hasta)]
+    if not _p:
+        return
+    st.warning(t(":material/schedule: **Hours clocked after their payslip was generated** — not paid by any "
+                 "payslip yet:"))
+    for i, x in enumerate(_p[:10]):
+        c1, c2 = st.columns([4, 2])
+        c1.markdown(t("**{n}** · {d} → {h} · **+{x} h** (payslip {p}: {a} h; clocked now: {b} h){s}",
+                      n=literal_md(x["nombre"]), d=_dmy(x["desde"]), h=_dmy(x["hasta"]), x=f"{x['dif']:.2f}",
+                      p=x["nid"], a=f"{x['en_colilla']:.2f}", b=f"{x['ahora']:.2f}",
+                      s=(" · " + t("already paid")) if x["pagada"] else ""))
+        _lbl = (t(":material/add: Adjustment payslip (+{h} h)", h=f"{x['dif']:.2f}") if x["pagada"]
+                else t(":material/add: Add +{h} h to {p}", h=f"{x['dif']:.2f}", p=x["nid"]))
+        if c2.button(_lbl, key=f"{pref}_saldar_{i}", width="stretch"):
+            st.session_state["_nom_accion"] = {"accion": "saldar", "nid": x["nid"], "horas": x["dif"]}
+            st.session_state.pop("_nom_gen", None)
+            st.rerun()
 
 
 # ── Vista admin ──────────────────────────────────────────────────
@@ -126,6 +159,8 @@ def render_nominas(grupo):
     if st.button(t(":material/add_circle: Generate payroll"), type="primary", key="nom_gen_btn"):
         st.session_state["_nom_gen"] = True
         st.rerun()
+
+    horas_sin_pagar_section(grupo, "nom_lst")
 
     if not noms:
         st.caption(t("No payslips yet. Generate the first one with «Generate payroll»."))
@@ -264,8 +299,20 @@ def _generar(grupo):
     # ⚠️ v663 · el periodo por defecto acaba AYER: acabar hoy pagaba un día a medias (en el ciclo 1,
     # lo que campo000 fichó esa tarde quedó dentro de un periodo ya pagado y fuera de toda colilla).
     _h0 = hoy - timedelta(days=1)
-    _d0 = {"Semanal": _h0 - timedelta(days=6), "Quincenal": _h0 - timedelta(days=13),
-           "Mensual": _h0 - timedelta(days=29)}.get(per, _h0 - timedelta(days=6))
+    _len = {"Semanal": 6, "Quincenal": 13, "Mensual": 29}.get(per, 6)
+    _d0 = _h0 - timedelta(days=_len)
+    # ⚠️ v671 · el periodo SIGUIENTE al último generado (H15 del ciclo 2: proponía 03/11–09/11, ya generado y pagado
+    # en parte, y al generar decía «0 created. 2 already existed»)
+    try:
+        _ult = payroll.ultimo_hasta(grupo)
+    except Exception as e:
+        logger.warning("payroll_ui._generar ultimo_hasta: %s", e)
+        _ult = None
+    if _ult is not None:
+        _d0 = _ult + timedelta(days=1)
+        _h0 = _d0 + timedelta(days=_len)
+        st.caption(t(":material/event_available: Payroll is generated up to {u}: the next period starts on {d}.",
+                     u=_ult.strftime("%d/%m/%Y"), d=_d0.strftime("%d/%m/%Y")))
     c1, c2 = st.columns(2)
     desde = c1.date_input(t("From"), value=_d0, key=f"nom_desde_{per}", format="DD/MM/YYYY")
     hasta = c2.date_input(t("To"), value=_h0, key=f"nom_hasta_{per}", format="DD/MM/YYYY")
@@ -290,6 +337,24 @@ def _generar(grupo):
         st.warning(t(":material/schedule: **Workday still open:** {l}. An open workday is not paid "
                      "yet (its hours keep growing): close it in Timeclock, then generate — the same "
                      "period takes it without duplicating.", l=", ".join(literal_md(x) for x in _abiertas)))
+    # ⚠️ v671 · una jornada CERRADA imposible (más de 16 h) en el periodo deja a esa persona fuera (H27 del ciclo 2)
+    try:
+        _lg = timeclock.jornadas_largas(grupo, desde=desde, hasta=hasta)
+    except Exception as e:
+        logger.warning("payroll_ui._generar jornadas_largas: %s", e)
+        _lg = []
+    if _lg:
+        st.error(t(":material/error: **Workday of more than 16 h to fix first:** {l}. Those people are left out "
+                   "until it is fixed (a forgotten clock-out closed late would be paid as work).",
+                   l=", ".join(f"{literal_md(j['nombre'])} ({j['horas']:.2f} h, {_dmy(j['entrada'][:10])})"
+                               for j in _lg[:6])))
+        if st.button(t(":material/build: Fix them in Hours"), key="nom_gen_ir_horas"):
+            from core import home_ui
+            home_ui.navegar("finanzas", "⏱ Horas")
+    # v671 · lo ya generado de ESE periodo, y las horas que entraron después (H15)
+    _ya = {str(n.get("User", "")): n for n in payroll.list_nominas(grupo)
+           if str(n.get("PeriodFrom", "")) == desde.isoformat() and str(n.get("PeriodTo", "")) == hasta.isoformat()}
+    horas_sin_pagar_section(grupo, "nom_gen", desde.isoformat(), hasta.isoformat())
     if horas:
         st.markdown(t("**{n} user(s)** with workday hours in the period:", n=len(horas)))
         # ⚠️ v574 · quien no tiene tarifa se dice ANTES de generar (salía a $0 en la
@@ -308,7 +373,9 @@ def _generar(grupo):
             "Usuario": v["nombre"], "Horas": round(v["horas"], 2),            # v663: 2 decimales
             "Rate/h": round(_num(rates.get(k, 0)), 2),
             "Base": round(v["horas"] * _num(rates.get(k, 0)), 2),
-            "Nota": _nota_tarifa(rates.get(k, 0)),
+            # v671 · H15: ya tiene colilla de ESE periodo (no se duplica: «already exists»)
+            "Nota": (t("already on {n} ({h} h)", n=_ya[k].get("ID", ""), h=f"{_num(_ya[k].get('Hours')):.2f}")
+                     if k in _ya else _nota_tarifa(rates.get(k, 0))),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
             column_config=tabla.cfg(None, {"Usuario": st.column_config.TextColumn(t("Employee")),
                            "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),
@@ -346,6 +413,10 @@ def _generar(grupo):
         # ⚠️ v346: ya NO se crea una colilla de $0. Se salta y se dice a quién, con el
         # camino para arreglarlo; al ponerle la tarifa y regenerar el mismo periodo
         # entra sin duplicar (no dejó fila).
+        if res.get("largas"):         # v671 · H27
+            flash.aviso(t(":material/error: Left out because they have a workday of more than 16 h to fix first: "
+                          "**{l}**. Fix it in Finance → Hours and generate this same period again — it will be "
+                          "added without duplicating.", l=", ".join(literal_md(x) for x in res["largas"])))
         if res.get("abiertas"):
             flash.aviso(t(":material/schedule: Left out because their workday is still open: **{l}**. "
                           "Close it and generate this same period again — it will be added without "
@@ -421,6 +492,21 @@ def _detalle(grupo, nid):
             st.download_button(t(":material/download: Download payslip (PDF)"), data=_pdf,
                                file_name=f"Payslip_{f.get('Name', '')}_{f.get('PeriodTo', '')}.pdf",
                                mime="application/pdf", key=f"nom_pdf_{nid}")
+            # ⚠️ v671 · lo que a la colilla le FALTA, al lado del PDF (H25 del ciclo 2: salía «cliente1» sin ABN y
+            # sin el fondo de super). El PDF ya los imprime cuando están puestos.
+            _faltan = []
+            try:
+                from core import contable as _CB
+                _id = _CB.identidad(grupo)
+                if not str(_id.get("abn") or "").strip():
+                    _faltan.append(t("the company's ABN (the account owner sets it in Administration → Groups → «Tax "
+                                     "identity and payment terms»)"))
+            except Exception:
+                pass
+            if not payslip_pdf.fondo_super(f):
+                _faltan.append(t("{n}'s super fund (Planning → Users → their record)", n=literal_md(str(f.get("Name", "")))))
+            if _faltan:
+                st.caption(t(":material/warning: This payslip is missing {x}.", x="; ".join(_faltan)))
         except Exception as e:
             st.caption(t(":material/warning: The PDF could not be generated: {e}", e=str(e)))
     with der:

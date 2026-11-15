@@ -301,6 +301,31 @@ def aprobar(cid, revisor, nota="") -> tuple:
     return (True, t("Correction approved.")) if ok else (False, msg)
 
 
+def recortar_jornada_oficina(grupo, usuario, nombre, entrada, salida_actual, salida_nueva, revisor,
+                             motivo="") -> tuple:
+    """La oficina pone la salida REAL a una jornada cerrada imposible (v671, H27): la jornada y sus entradas de obra
+    (`timeclock.recortar_jornada`), y cada cambio queda como corrección APROBADA por quien la hizo, con la hora vieja
+    y la nueva (el rastro de v461). `(ok, mensaje)`."""
+    ok, res = timeclock.recortar_jornada(grupo, usuario, nombre, entrada, salida_actual, salida_nueva)
+    if not ok:
+        return False, res
+    _nota = str(motivo or "").strip() or "Workday closed late, fixed by the office"
+    for tipo, proy, vieja, nueva in ([(timeclock.TIPO_PROYECTO, p, v, n) for p, v, n in res["obras"]]
+                                     + [(timeclock.TIPO_GENERAL, "", res["jornada"][0], res["jornada"][1])]):
+        okr, cid = registrar(grupo, usuario, nombre, tipo, proy, CAMPO_OUT, vieja, nueva, motivo=_nota)
+        if okr:
+            aprobar(cid, revisor, nota=_nota)
+        else:
+            logger.warning("recortar_jornada_oficina: el fichaje se corrigió pero no se apuntó: %s", cid)
+    from datetime import datetime
+    try:
+        _h = datetime.strptime(str(res["jornada"][1]), timeclock.FMT).strftime("%d/%m/%Y %H:%M")
+    except ValueError:
+        _h = str(res["jornada"][1])
+    return True, t("Workday fixed: it now ends at {h} ({n} job entry/entries corrected too).",
+                   h=_h, n=len(res["obras"]))
+
+
 def ajustar(cid, revisor, hora, nota="") -> tuple:
     """El admin FIJA la hora buena, en vez de revertir. Devuelve (ok, mensaje).
 

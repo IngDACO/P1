@@ -327,7 +327,10 @@ _lit = []
 for n in ast.walk(_arb):
     if isinstance(n, ast.Call) and isinstance(n.func, (ast.Attribute, ast.Name)):
         _fn = n.func.attr if isinstance(n.func, ast.Attribute) else n.func.id
-        if _fn in _DISP:
+        # v671 · `logger.warning(...)` no es texto de PANTALLA (se llama igual que `st.warning`): fuera
+        _de_logger = isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) \
+            and n.func.value.id == "logger"
+        if _fn in _DISP and not _de_logger:
             for a in n.args[:1]:
                 if (isinstance(a, ast.Constant) and isinstance(a.value, str) and _frase(a.value)) or \
                         (isinstance(a, ast.JoinedStr) and _frase("".join(

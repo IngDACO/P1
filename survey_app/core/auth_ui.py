@@ -1430,6 +1430,20 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 (flash.exito if ok else st.error)(msg)
                 if ok:
                     st.rerun()
+        # v671 · el fondo de super, que va en su colilla (H25 del ciclo 2)
+        _s1, _s2 = st.columns(2)
+        with _s1:
+            _sf = st.text_input(t(":material/savings: Super fund (optional)"),
+                                value=str(u.get("SuperFund", "") or ""), key=f"{k}_sfund",
+                                placeholder=t("e.g. AustralianSuper · member 123456"),
+                                help=t("Printed on their payslips, next to the super contribution."))
+        with _s2:
+            st.caption("")
+            if st.button(t("Save super fund"), key=f"{k}_savesf", width="stretch"):
+                ok, msg = auth.set_login_setting(sel, "SuperFund", _sf)
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
         if owner:   # el propietario también reasigna rol y grupo (v184)
             _gopts = [""] + [g["Group"] for g in auth.list_groups()]
             _rc, _gc = st.columns(2)

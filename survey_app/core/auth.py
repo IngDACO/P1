@@ -40,7 +40,10 @@ LOGIN_HEADERS = ["User", "Password", "Role", "Name", "Active", "Group",
                  # proveedor no lo conoce; casa por nombre, y el nombre se repite.
                  # OPCIONAL: sin él el parte cae al nombre y AVISA de los homónimos.
                  # Al final → migra sola, como las 11 columnas anteriores.
-                 "PayrollID"]
+                 "PayrollID",
+                 # v671 · el fondo de super de la persona (nombre y nº de socio): una colilla australiana lo lleva
+                 # (H25 del ciclo 2: salía «Superannuation $0.98» sin decir a qué fondo). OPCIONAL, al final → migra sola.
+                 "SuperFund"]
 GROUPS_SHEET   = "Groups"
 GROUPS_HEADERS = ["Group", "Description", "Active", "TimeZone", "DefaultMargin", "DefaultTax",
                   "DefaultSuper", "DefaultWithholding",

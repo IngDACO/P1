@@ -32,8 +32,14 @@ ROTURAS = [
      '("Rip out mechanical components - tracción",\n',
      "⚠️ se traduce la OPCION excluyente y deja de casar con su actividad"),
 
-    ("payroll.py", '"tipo": "deduccion"', '"tipo": "deduction"',
+    # v671 · re-anclada a la de `generar`: la colilla de ajuste (saldar_horas) también la escribe, ANTES en el fichero
+    ("payroll.py", '"tipo": "deduccion", "monto": round(bruto * ret_pct / 100.0, 2)',
+     '"tipo": "deduction", "monto": round(bruto * ret_pct / 100.0, 2)',
      "⚠️ se traduce el TIPO del concepto (neto() dejaria de restar la deduccion)"),
+    # v671 · la segunda fuente: la colilla de AJUSTE de saldar_horas
+    ("payroll.py", '"tipo": "deduccion", "monto": round(base * ret_pct / 100.0, 2)',
+     '"tipo": "deduction", "monto": round(base * ret_pct / 100.0, 2)',
+     "⚠️ se traduce el TIPO en la colilla de ajuste (su neto no restaria la retencion)"),
 
     ("schedule.py", '("Puertas de rellano".replace("x","x"))', None, None),  # placeholder
     # ⚠️ v515: el nombre vivia en `schedule.PHASES`; ahora en el catalogo. El fallo es

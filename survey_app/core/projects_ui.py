@@ -6618,6 +6618,61 @@ def _gh_abrir_obra(pid: str, internos: set):
         _ir_a("proyectos", "📊 Proyectos")
 
 
+def jornadas_largas_section(grupo: str):
+    """Las JORNADAS cerradas de más de 16 h (o que cruzan dos medianoches), con «Fix it» (v671, H27 del ciclo 2).
+
+    Ciclo 2: campo000 tenía cerradas jornadas de 71.95 h, 50.08 h y 23.96 h —olvidos cerrados tarde, de antes de
+    v621— que contaban noches y fin de semana como trabajados: 188 h en 30 días y $10,385 de coste en una obra, y
+    nada lo señalaba. «Fix it» pone la salida REAL a la jornada y a sus entradas de obra, y deja las correcciones
+    apuntadas y aprobadas por quien lo hizo (`correcciones.recortar_jornada_oficina`)."""
+    from datetime import datetime as _dt
+    try:
+        _lg = timeclock.jornadas_largas(grupo)
+    except Exception as e:
+        logger.warning("jornadas_largas_section: %s", e)
+        return
+    if not _lg:
+        return
+
+    _fdh = _fecha_hora                    # «2026-10-23 06:23:27» → «23/10/2026 06:23»
+    with st.container(border=True, key="cpx_gh_largas"):
+        st.error(t(":material/error: **{n} closed workday(s) of more than {h} h** — a clock-out forgotten and closed "
+                   "late, so nights or weekends count as work: they inflate the job costs, and payroll leaves those "
+                   "people out until they are fixed. Put the real end:", n=len(_lg), h=f"{timeclock.JORNADA_MAX_H:g}"))
+        _abierta = st.session_state.get("_gh_fix")
+        for i, j in enumerate(_lg[:10]):
+            _id = f"{j['cuenta'] or j['usuario']}|{j['entrada']}"
+            c1, c2 = st.columns([4, 1])
+            c1.markdown(f"**{maps.literal_md(j['nombre'])}** · {_fdh(j['entrada'])} → {_fdh(j['salida'])} · "
+                        f"**{j['horas']:.2f} h**")
+            if c2.button(t(":material/build: Fix it"), key=f"gh_fix_{i}", width="stretch"):
+                st.session_state["_gh_fix"] = None if _abierta == _id else _id
+                st.rerun()
+            if _abierta != _id:
+                continue
+            _ci = _dt.strptime(j["entrada"], timeclock.FMT)
+            _sug = _ci + timedelta(hours=8)
+            f1, f2 = st.columns(2)
+            _dia = f1.date_input(t("Real end — day"), value=_sug.date(), min_value=_ci.date(),
+                                 max_value=_dt.strptime(j["salida"], timeclock.FMT).date(),
+                                 key=f"gh_fixd_{i}", format="DD/MM/YYYY")
+            _hora = f2.time_input(t("Real end — time"), value=_sug.time().replace(second=0, microsecond=0),
+                                  key=f"gh_fixt_{i}")
+            _mot = st.text_input(t("Why (optional)"), key=f"gh_fixm_{i}",
+                                 placeholder=t("Forgot to clock out; left the site at 15:30"))
+            if st.button(t(":material/check: Apply the real end"), key=f"gh_fixok_{i}", type="primary"):
+                from core import correcciones
+                ok, msg = correcciones.recortar_jornada_oficina(
+                    grupo, j["cuenta"] or j["usuario"], j["nombre"], j["entrada"], j["salida"],
+                    _dt.combine(_dia, _hora), str((st.session_state.get("auth") or {}).get("usuario", "")), _mot)
+                (flash.exito if ok else flash.error)(msg)
+                if ok:
+                    st.session_state.pop("_gh_fix", None)
+                st.rerun()
+        if len(_lg) > 10:
+            st.caption(t("… and {n} more.", n=len(_lg) - 10))
+
+
 def render_group_hours(grupo: str):
     """⏱ Horas del grupo (v577, probada acción por acción).
 
@@ -6707,6 +6762,9 @@ def render_group_hours(grupo: str):
                 st.session_state["_gh_orden"] = _ir
                 st.session_state["_gh_bajar_proy" if _ir == "obras" else "_gh_bajar_tabla"] = True
                 st.rerun()
+
+    # v671 · las jornadas cerradas imposibles, con su arreglo (H27 del ciclo 2), sea cual sea el periodo
+    jornadas_largas_section(grupo)
 
     if not data:
         # ⚠️ v577 · un periodo sin fichajes dejaba la pantalla EN BLANCO (sin cifras ni
