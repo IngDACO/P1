@@ -425,7 +425,8 @@ else:
     fallo("la fila vieja deja de resolver")
 _hist = ast.get_source_segment(fuente("correcciones_ui"),
                                func("correcciones_ui", "render_bandeja"))
-if "i18n.etiqueta(str(r.get(\"Status\"" in _hist:
+# v677 · o por `estado()`, que es `etiqueta()` con mayúscula (H1 del ciclo 3)
+if "i18n.etiqueta(str(r.get(\"Status\"" in _hist or "i18n.estado(str(r.get(\"Status\"" in _hist:
     ok("el historial pinta el estado por etiqueta()")
 else:
     fallo("el historial muestra el estado CRUDO")

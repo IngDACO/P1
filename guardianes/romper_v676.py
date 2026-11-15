@@ -74,9 +74,10 @@ ROTURAS = [
     # ── H15 ──
     ("⚠️ H15 · la ausencia vuelve a marcar el fin de semana vacío", AU,
      [("                elif d.weekday() >= 5 and not incluye_findes(a) and not [", "                elif False and not [")]),
+    # v677 · re-anclada: la regla se mudó a `celda_con_trabajo` (la nota de una ausencia también abría). La misma rotura
     ("H15 · una celda de ausencia vuelve a abrir el fin de semana", RO,
-     [('            _it = [i for i in _norm_cell(_c)["items"] if i["asig"] not in ESTADOS]',
-       '            _it = _norm_cell(_c)["items"]')]),
+     [('    if any(i["asig"] not in ESTADOS for i in n["items"]):\n        return True',
+       '    if n["items"]:\n        return True')]),
     ("H15 · una ausencia con fines de semana deja de marcarlos", AU,
      [("                elif d.weekday() >= 5 and not incluye_findes(a) and not [",
        "                elif d.weekday() >= 5 and not [")]),

@@ -724,7 +724,10 @@ def _liberar_cerrada(grupo, pid) -> None:
     _man = clock.today(grupo) + timedelta(days=1)
     n = R.limpiar_proyecto(grupo, pid, desde=_man)
     from core.num import dmy as _dmy
-    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=pid, n=n, f=_dmy(_man.isoformat())))
+    # v677 · con el NOMBRE de la obra (decía «PRJ-0039: 40 day(s) freed…», visto verificando v676)
+    _nom = str((P.get_project(pid) or {}).get("Name", "") or "").strip()
+    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=f"{_nom} ({pid})" if _nom else pid, n=n,
+                  f=_dmy(_man.isoformat())))
 
 
 def _radar_cerradas(grupo, lst):
@@ -1004,8 +1007,11 @@ def _confirmar_copia(grupo, lunes, staff, datos):
             else:
                 st.caption(t("Nobody's plan for this week will be replaced."))
             if _no_copia:
+                # v677 · con el NOMBRE de la obra (decía «installer CI 1 → PRJ-0039», visto verificando v676)
+                _np = {str(p.get("ID", "")): str(p.get("Name", "") or "")
+                       for p in P.list_projects(grupo=grupo, incluir_archivados=True)}
                 st.info(t(":material/event_busy: Not copied (the job is closed): {x}.", x=_esc(", ".join(
-                    f"{_nom.get(u, u)} → {pid}" for u, pid, _d in _no_copia))))
+                    f"{_nom.get(u, u)} → {_np.get(pid) or pid} ({pid})" for u, pid, _d in _no_copia))))
         c1, c2 = st.columns(2)
         if origen and c1.button(t(":material/content_copy: Yes, copy it"), key="ros_copy_si",
                                 type="primary", width="stretch"):

@@ -17,6 +17,9 @@ from core import clock
 from core.maps import literal_md as _lit
 from core import flash          # v365: mensajes que sobreviven al st.rerun()
 from core import tabla
+import logging
+
+logger = logging.getLogger(__name__)   # v677 · `logger.warning`, la forma que los barridos de idioma saben que no es texto
 
 
 def _contacto_uno(sel, key_prefix="cc"):
@@ -1589,6 +1592,7 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                                      for _n, _hh in sorted(_pp.items(), key=lambda x: -x[1])))
         if rec["n"]:
             st.caption(f"They have uploaded receipts totalling **${rec['total']:,.0f}** in all.")
+        _saldo_ausencias(grupo, sel, k)        # v677 · H2 del ciclo 3
         st.caption(t("Hours and receipts are managed from :material/schedule: Time clock and each project's detail; this is a summary."))
 
     else:  # 🗑 eliminar
@@ -1599,6 +1603,33 @@ def _ficha_usuario(u, grupo, owner=False, sel_key="gp_fichasel"):
                 if ok:
                     st.session_state.pop(sel_key, None)
                     st.rerun()
+
+
+def _saldo_ausencias(grupo, sel, k):
+    """El saldo de vacaciones, baja y días libres de la persona, en su ficha (v677, H2 del ciclo 3: «Their work» no lo
+    decía y había que preguntárselo al asistente). Activo: «Register an absence» abre la bandeja con ella elegida."""
+    from core import ausencias as _AU
+    if not _AU.is_configured():
+        return
+    _p = []
+    for _tp in _AU.TIPOS:
+        try:
+            s = _AU.saldo(grupo, sel, _tp)
+        except Exception as e:
+            logger.warning("auth_ui._saldo_ausencias: %s", e)
+            return
+        if s["ilimitado"]:
+            _p.append(t("{x}: {n} used", x=_AU.nombre_tipo(_tp), n=f"{s['usados']:.0f}"))
+        else:
+            _p.append(t("{x}: **{n}** of {a} left", x=_AU.nombre_tipo(_tp), n=f"{max(s['disponibles'], 0):.0f}",
+                        a=f"{s['asignados']:.0f}")
+                      + (" " + t("({n} pending)", n=f"{s['pendientes']:.0f}") if s["pendientes"] else ""))
+    c1, c2 = st.columns([3, 1], vertical_alignment="center")
+    c1.markdown(t(":material/beach_access: **Leave balance** · ") + " · ".join(_p))
+    if c2.button(t(":material/person_add: Register an absence"), key=f"{k}_ausreg", width="stretch"):
+        st.session_state["_aus_of_pers_pending"] = sel
+        st.session_state["_admin_nav_pending"] = ("planificacion", "🌴 Ausencias")
+        st.rerun()
 
 
 def _error_email_alta(em, confirmado, obligatorio=True) -> str:

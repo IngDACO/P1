@@ -29,7 +29,9 @@ ROTURAS = [
     ("core/projects_ui.py", 'f"→ {t(\'Go to\')} {secn}"', 'f"→ Ir a {secn}"',
      "el botón de navegar vuelve al español"),
     # los chips de ausencias
-    ("core/ausencias_ui.py", 'AU.APROBADA: "🟢 " + t("approved")', 'AU.APROBADA: "🟢 aprobada"',
+    # v677 · re-anclada: el chip lleva el estado con mayúscula (`i18n.estado`, H1 del ciclo 3). La misma rotura
+    ("core/ausencias_ui.py", 'AU.CANCELADA: "⚪ "}.get(e, "") + _estado(e)',
+     'AU.CANCELADA: "⚪ "}.get(e, "") + {"approved": "aprobada"}.get(e, _estado(e))',
      "un chip de estado vuelve al español"),
     # el buscador
     ("core/home_ui.py", '"persona": "People"', '"persona": "Personas"',

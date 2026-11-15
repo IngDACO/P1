@@ -190,6 +190,13 @@ chk("el lunes (aún no ha llegado) dice «hasn't started yet: 2 planned on a job
 # ═════════════════════════════════════════════════════════════════════════════
 print("5. La ausencia y el fin de semana (H15)")
 chk("dias_con_datos: un sábado con solo una AUSENCIA no abre la columna", R.dias_con_datos({"ana": {"sab": _c("LEAVE")}}) == R.DIAS)
+# v677 · con la NOTA que deja de verdad `aplicar_al_roster` («Sick leave · AUS-0009»): sin ella, el chk de arriba pasaba
+# en vacío y en producción la semana del 30/11 seguía abriendo sábado y domingo (trampa 1)
+chk("…tampoco con la nota que deja la ausencia («Sick leave · AUS-0009»)",
+    R.dias_con_datos({"ana": {"sab": _c("LEAVE", nota="Sick leave · AUS-0009"),
+                              "dom": _c("OFF", nota="Day off · AUS-0010")}}) == R.DIAS)
+chk("…y una nota escrita en un día vacío sí la abre", R.dias_con_datos({"ana": {"sab": {"items": [], "nota": "van"}}})
+    == R.DIAS + ["sab"])
 chk("…uno con trabajo, sí", R.dias_con_datos({"ana": {"sab": _c("PRJ-1")}}) == R.DIAS + ["sab"])
 _W = {}
 _d = [_sustituir(R, get_semana=lambda g, l: json.loads(json.dumps(_W.get(str(l), {}))),

@@ -31,8 +31,9 @@ def _kpi(label, valor, pie=None, color=None):
 
 
 def _chip_estado(e: str) -> str:
-    return {AU.PENDIENTE: "🟡 " + t("pending"), AU.APROBADA: "🟢 " + t("approved"),
-            AU.RECHAZADA: "🔴 " + t("rejected"), AU.CANCELADA: "⚪ " + t("cancelled")}.get(e, e)
+    """v677 · con mayúscula, como el resto de la app (H1 del ciclo 3: «🟢 approved» junto a «In progress»)."""
+    from core.i18n import estado as _estado
+    return {AU.PENDIENTE: "🟡 ", AU.APROBADA: "🟢 ", AU.RECHAZADA: "🔴 ", AU.CANCELADA: "⚪ "}.get(e, "") + _estado(e)
 
 
 def _fdma(x) -> str:
@@ -191,6 +192,9 @@ def _pedir(grupo, usuario, nombre):
         elif not _n:
             _no = t("That range only covers the weekend. If those days are worked, tick "
                     "«include weekends».")
+        elif AU.msg_solape(grupo, usuario, desde, hasta):
+            # v677 · H12 del ciclo 3: la MISMA regla del motor, antes de enviar (decía «17 left after this»)
+            _no = ":material/block: " + AU.msg_solape(grupo, usuario, desde, hasta)
         elif _ex and cfg["aprobacion"]:
             _no = t(":material/block: You are asking for **{a}** and you have **{b}** available.",
                     a=_dias(_n), b=f"{max(_s['disponibles'], 0):.0f}")
@@ -379,6 +383,109 @@ def _avisar_admins(grupo, nombre, tipo, desde, hasta, cfg, exceso=0):
 # ═══════════════════════════════════════════════════════════════════
 # ADMIN — bandeja
 # ═══════════════════════════════════════════════════════════════════
+def registrar_oficina(grupo, usuario, nombre, tipo, desde, hasta, motivo, incluir_findes, quien) -> tuple:
+    """La oficina registra una ausencia EN NOMBRE de alguien (v677, H2 del ciclo 3: una baja avisada por teléfono, unas
+    vacaciones pactadas de palabra). `(ok, mensaje)`. Las mismas reglas que la del campo (`AU.solicitar` →
+    `problema_solicitud`); nace aprobada por quien la registra, va al tablero y se le dice a la persona."""
+    ok, res = AU.solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo, incluir_findes=incluir_findes,
+                           por_oficina=quien)
+    if not ok:
+        return False, res
+    # ⚠️ La recién creada, leída SOLO en este grupo (`_de_grupo`, v351): nunca por un ID global suelto
+    _r = _de_grupo(grupo, res)
+    _ok2, _n = AU.aplicar_al_roster(_r)
+    _avisar_registrada(usuario, _r, motivo)
+    _msg = t("{x} recorded and approved for {who} ({i}).", x=AU.nombre_tipo(tipo), who=nombre, i=res)
+    return True, _msg + (f" {_n} {t('day(s) marked in the planner.')}" if _ok2 else
+                         f" ⚠️ {t('Could not write to the planner')}: {_n}")
+
+
+def _avisar_registrada(usuario, r, motivo=""):
+    """v677 · La persona se entera de que la oficina le registró una ausencia. Best-effort; en inglés y sin `t()`."""
+    try:
+        from core import notify
+        cfg = AU.TIPOS.get(str(r.get("Type", "")), {})
+        _rg = _rango(r.get("From"), r.get("To"))
+        _l = [f"The office recorded your <b>{cfg.get('nombre', r.get('Type'))}</b> ({_rg}). It is approved: "
+              "those days are off your board."]
+        if str(motivo or "").strip():
+            _l.append(f"Reason: {motivo}")
+        notify.notify_user(str(usuario), f"Absence recorded: {_rg}", _l)
+    except Exception as e:
+        logger.warning("ausencias_ui._avisar_registrada: %s", e)
+
+
+def _registrar_oficina_form(grupo, quien):
+    """«Register an absence» en la bandeja (v677, H2 del ciclo 3). Sin `st.form`, como «My absences» (v627): lo que
+    gasta y si se puede se ve antes de pulsar, con la MISMA regla del motor (`problema_solicitud`)."""
+    from core import auth
+    from core import ui_common as _ui
+    _pre = st.session_state.pop("_aus_of_pers_pending", None)      # desde la ficha de la persona
+    if _pre:
+        st.session_state["_aus_of_desde_ficha"] = True
+    # ⚠️ Abierto si se llegó desde la ficha, y la condición va en la CLAVE (v547): si no, el desplegable no se abriría.
+    # Se recuerda hasta registrar: con la clave cambiando en cada pasada se cerraría al elegir el tipo
+    _abrir = bool(st.session_state.get("_aus_of_desde_ficha"))
+    with st.expander(t("Register an absence for someone"), icon=":material/person_add:",
+                     expanded=_abrir, key=f"exp_aus_oficina_{_abrir}"):
+        st.caption(t("For an absence the person told you about (a phone call, a holiday agreed in person). It is "
+                     "approved straight away, goes to the board and the person is told."))
+        _g = st.session_state.get("_aus_of_gen", 0)
+        try:
+            _us = [u for u in auth.list_users(grupo)
+                   if str(u.get("Active", "SI")).strip().upper() in auth._ACTIVE_OK
+                   and str(u.get("Role", "")).lower() in ("field", "administrator")]
+            _et = auth.etiqueta_usuarios(_us)
+        except Exception as e:
+            # sin la lista de personas no se puede registrar a nadie, pero la bandeja de debajo sigue
+            logger.warning("ausencias_ui._registrar_oficina_form: %s", e)
+            _us, _et = [], {}
+        _opc = {(_et.get(str(u.get("User", ""))) or str(u.get("Name") or u.get("User"))): str(u.get("User", ""))
+                for u in _us}
+        _kp = f"aus_of_u_{_g}"
+        if _pre and _pre in _opc.values():
+            st.session_state[_kp] = next(k for k, v in _opc.items() if v == _pre)   # antes de crear el widget (v111)
+        _usr = _ui.elegir(t("Person"), _opc, key=_kp, vacio=t("— pick the person —"))
+        tipo = st.selectbox(t("Type"), list(AU.TIPOS), key=f"aus_of_t_{_g}",
+                            format_func=lambda _k: f"{AU.TIPOS[_k]['emoji']} {AU.nombre_tipo(_k)}")
+        # ⚠️ nombres propios (`_hoy_of`, `_so`, `_vp`): con los de «My absences» las anclas de sus baterías salían repetidas
+        _hoy_of = clock.today(grupo)
+        c1, c2 = st.columns(2)
+        desde = c1.date_input(t("From"), value=_hoy_of, key=f"aus_of_d_{_g}", format="DD/MM/YYYY")
+        hasta = c2.date_input(t("To"), value=_hoy_of, key=f"aus_of_h_{_g}", format="DD/MM/YYYY")
+        findes = st.checkbox(t("Include weekends"), key=f"aus_of_f_{_g}",
+                             help=t("Tick this only if those days are worked. Otherwise they are not taken off the balance."))
+        motivo = st.text_input(t("Reason (optional)"), key=f"aus_of_m_{_g}",
+                               placeholder=t("Called in sick this morning"))
+        _no = ""
+        if _usr:
+            _no = AU.problema_solicitud(grupo, _usr, tipo, desde, hasta, findes)
+            if _no:
+                st.warning(":material/block: " + _no)
+            else:
+                _n = len(AU.dias_del_rango(desde, hasta, findes))
+                _so = AU.saldo(grupo, _usr, tipo)
+                _vp = t(":material/event: This takes **{n}**", n=_dias(_n))
+                if not _so["ilimitado"]:
+                    _vp += " · " + t("{n} left after this", n=f"{_so['disponibles'] - _n:.0f}")
+                st.caption(_vp)
+                _ex = AU.exceso(grupo, _usr, tipo, _n)
+                if _ex:
+                    st.warning(t(":material/warning: This goes **{n}** over their sick leave balance. It is recorded "
+                                 "anyway: decide below how those days are paid.", n=_dias(_ex)))
+        if st.button(t(":material/check_circle: Register it (approved)"), key=f"aus_of_ok_{_g}", type="primary",
+                     disabled=bool(_no or not _usr)):
+            ok, msg = registrar_oficina(grupo, _usr, next((k for k, v in _opc.items() if v == _usr), _usr),
+                                        tipo, desde, hasta, motivo, findes, quien)
+            if not ok:
+                st.error(msg)
+            else:
+                flash.exito(msg)
+                st.session_state["_aus_of_gen"] = _g + 1
+                st.session_state.pop("_aus_of_desde_ficha", None)
+                st.rerun()
+
+
 def render_bandeja(grupo: str):
     """⚠️ SIN título propio: `_sub_header` ya pinta «Planificación · Ausencias»."""
     if not AU.is_configured():
@@ -387,6 +494,7 @@ def render_bandeja(grupo: str):
     quien = str((st.session_state.get("auth", {}) or {}).get("usuario", ""))
 
     _accion_pendiente(grupo, quien)          # v555 · ACCIÓN DIFERIDA (ver su docstring)
+    _registrar_oficina_form(grupo, quien)    # v677 · H2 del ciclo 3
 
     todas = AU.list_group(grupo)
     # v555 · lo más PRÓXIMO primero: `list_group` ordena de la más lejana a la más

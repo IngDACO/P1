@@ -38,7 +38,8 @@ ROTURAS = [
     ("la oficina no las deja aprobadas", CO,
      [("            aprobar(cid, revisor, nota=_nota)\n", "            pass\n")]),
     ("⚠️ Hours deja de enseñar las jornadas imposibles", PU,
-     [("    jornadas_largas_section(grupo)\n\n    if not data:", "\n    if not data:")]),
+     # v677 · re-anclada: detrás va «Add a missed day» (H9 del ciclo 3). La misma rotura
+     [("    jornadas_largas_section(grupo)\n    dia_olvidado_section(grupo)", "    dia_olvidado_section(grupo)")]),
     ("«Fix it» propone la misma hora de entrada", PU,
      [("            _sug = _ci + timedelta(hours=8)\n", "            _sug = _ci\n")]),
     ("⚠️ «Apply» ignora la hora puesta", PU,

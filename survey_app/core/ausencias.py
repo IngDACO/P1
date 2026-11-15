@@ -742,6 +742,18 @@ def _next_id(recs) -> str:
         return f"AUS-{mx + 1:04d}"
 
 
+def msg_solape(grupo, usuario, desde, hasta) -> str:
+    """Por qué esas fechas pisan otra ausencia VIGENTE de esa persona, o "" (v677, H12 del ciclo 3). Aparte para que la
+    vista previa de «My absences» lo diga ANTES de enviar: prometía «17 left after this» y el motor la paraba."""
+    _sol = solapadas(grupo, usuario, desde, hasta)
+    if not _sol:
+        return ""
+    _r = _sol[0]
+    return (f"{t('There is already an absence overlapping those dates')}: "
+            f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
+            f"{dmy(_r.get('From'))} → {dmy(_r.get('To'))}, {t(str(_r.get('Status')))}).")
+
+
 def problema_solicitud(grupo, usuario, tipo, desde, hasta, incluir_findes=False) -> str:
     """Por qué no se puede registrar esa ausencia, o "". v640 · Aparte de `solicitar` y sin escribir
     nada: el asistente lo pregunta ANTES de ofrecer la tarjeta, y así no hay dos listas de reglas."""
@@ -761,12 +773,9 @@ def problema_solicitud(grupo, usuario, tipo, desde, hasta, incluir_findes=False)
     if not dias:
         return t("That range only covers the weekend. If those days are "
                         "worked, tick «include weekends».")
-    _sol = solapadas(grupo, usuario, desde, hasta)
+    _sol = msg_solape(grupo, usuario, desde, hasta)
     if _sol:
-        _r = _sol[0]
-        return (f"{t('There is already an absence overlapping those dates')}: "
-                       f"{_r.get('ID')} ({TIPOS.get(str(_r.get('Type')), {}).get('nombre', _r.get('Type'))}, "
-                       f"{dmy(_r.get('From'))} → {dmy(_r.get('To'))}, {t(str(_r.get('Status')))}).")
+        return _sol
 
     cfg = TIPOS[tipo]
     # ⚠️ v627 · Lo que se PIDE no pasa del saldo, aquí y no solo en la pantalla. La enfermedad no
@@ -780,12 +789,15 @@ def problema_solicitud(grupo, usuario, tipo, desde, hasta, incluir_findes=False)
 
 
 def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
-              incluir_findes=False) -> tuple:
+              incluir_findes=False, por_oficina="") -> tuple:
     """Crea la solicitud. Devuelve (ok, id|error).
 
     ⚠️ La enfermedad nace **aprobada**: no se pide permiso para estar enfermo (ver el
     docstring del módulo). El administrador la ve igual y puede rechazarla después si
     hace falta, pero mientras tanto el tablero YA dice la verdad.
+
+    `por_oficina` = el login de quien la registra EN NOMBRE de la persona (v677, H2 del ciclo 3: una baja avisada
+    por teléfono). Nace aprobada por esa persona, con las MISMAS reglas (`problema_solicitud`), y queda quién la creó.
     """
     if tipo not in TIPOS:
         return False, f"{t('Unknown absence type')}: {tipo}"
@@ -798,16 +810,16 @@ def solicitar(grupo, usuario, nombre, tipo, desde, hasta, motivo="",
     _d0, _d1 = _parse_date(desde), _parse_date(hasta)
     dias = dias_del_rango(desde, hasta, incluir_findes)
     cfg = TIPOS[tipo]
-    estado = PENDIENTE if cfg["aprobacion"] else APROBADA
+    estado = PENDIENTE if (cfg["aprobacion"] and not por_oficina) else APROBADA
     hoy = clock.now(grupo).strftime("%Y-%m-%d %H:%M")
     fila = [_next_id(valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)),
             str(grupo), str(usuario), str(nombre or usuario), str(tipo),
             _d0.strftime("%Y-%m-%d"), _d1.strftime("%Y-%m-%d"), str(len(dias)),
             str(motivo or ""), estado,
-            # una que nace aprobada la «resuelve» el propio sistema, y se dice
-            (t("(automatic)") if estado == APROBADA else ""),
+            # una que nace aprobada la «resuelve» el propio sistema, y se dice; la de la oficina, quien la registró
+            (str(por_oficina) if por_oficina else t("(automatic)") if estado == APROBADA else ""),
             (hoy if estado == APROBADA else ""),
-            "", str(usuario), hoy,
+            "", str(por_oficina or usuario), hoy,
             ("SI" if incluir_findes else "NO"), ""]
     if len(fila) != len(HEADERS):
         return False, (f"{t('Internal error: the row has')} {len(fila)} "

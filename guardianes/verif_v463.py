@@ -68,8 +68,10 @@ def celdas_crudas(src):
                 # solo las dos primeras, un `etiqueta(...)` importado pelado
                 # salia marcado siendo CORRECTO — la sonda midiendo por la
                 # forma en que se escribio la primera vez (v450/v459).
+                # v677 · y `i18n.estado`, que es `etiqueta()` con mayúscula (H1 del ciclo 3)
                 if ("attr='etiqueta'" in dump or "id='_etq'" in dump
-                        or "id='etiqueta'" in dump):
+                        or "id='etiqueta'" in dump
+                        or "value=Name(id='i18n', ctx=Load()), attr='estado'" in dump):
                     continue          # ya se traduce
                 for sub in ast.walk(v):
                     if (isinstance(sub, ast.Call)

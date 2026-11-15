@@ -63,6 +63,12 @@ def _dif_horas(r) -> str:
     es otra cosa."""
     # ⚠️ v663 · el EFECTO en horas trabajadas, no el desplazamiento de la marca: una entrada que
     # pasa de 14:48 a 14:30 SUMA 0,30 h y salía «−0.30 h» (ciclo 1).
+    if str(r.get("Field", "")) == C.CAMPO_DIA:          # v677 · un día añadido: suma la jornada entera
+        try:
+            _a, _b = (datetime.strptime(x, timeclock.FMT) for x in C.ventana(r))
+            return t("{d} h worked", d=f"{(_b - _a).total_seconds() / 3600.0:+.2f}")
+        except ValueError:
+            return "—"
     try:
         a = datetime.strptime(str(r.get("OldValue")), timeclock.FMT)
         b = datetime.strptime(str(r.get("NewValue")), timeclock.FMT)
@@ -94,6 +100,36 @@ def _fdmh(ts) -> str:
     if len(s) < 10:
         return s or "—"
     return (_fmt_fecha(s[:10]) + (" " + s[11:16] if len(s) >= 16 else "")).strip()
+
+
+def _campo_txt(r) -> str:
+    """«clock in», «clock out» o «added day» (v677)."""
+    _f = str(r.get("Field", ""))
+    return (t("added day") if _f == C.CAMPO_DIA else t("clock in") if _f == C.CAMPO_IN else t("clock out"))
+
+
+def _horas_txt(r) -> str:
+    """Lo que cambió, en horas del reloj: «05:46 → 05:45», o «07:00 → 15:30» para un día añadido (v677: su
+    `NewValue` lleva las dos horas, y salía «— → 07:00»)."""
+    if str(r.get("Field", "")) == C.CAMPO_DIA:
+        _a, _b = C.ventana(r)
+        return f"{_hhmm(_a)} → {_hhmm(_b)}"
+    return f"{_hhmm(r.get('OldValue'))} → {_hhmm(r.get('NewValue'))}"
+
+
+def avisar_dia_anadido(usuario, entrada, salida, proyecto="", motivo=""):
+    """v677 · La persona se entera de que la oficina le añadió un día: sus horas pagadas cambian (como `_avisar_persona`).
+    Best-effort: el día ya está guardado. ⚠️ En inglés y SIN `t()`: es un mensaje para la persona; `notify` escapa."""
+    try:
+        from core import notify
+        _d = entrada.strftime("%d/%m/%Y")
+        _l = [f"The office added a workday for you on <b>{_d}</b>: <b>{entrada:%H:%M} → {salida:%H:%M}</b>"
+              + (f" on <b>{proyecto}</b>." if str(proyecto or "").strip() else ".")]
+        if str(motivo or "").strip():
+            _l.append(f"Reason: {motivo}")
+        notify.notify_user(str(usuario), f"Workday added: {_d}", _l)
+    except Exception as e:
+        logger.warning("correcciones_ui.avisar_dia_anadido: %s", e)
 
 
 def _tipo_txt(r) -> str:
@@ -207,6 +243,9 @@ def no_se_puede(r, accion, todas=None) -> str:
         _por = C.sustituida_por(r, todas)
         if _por:
             return t("Superseded by {x}: the same entry was changed again later. Its time is reviewed there.", x=_por)
+    # v677 · un día AÑADIDO no tiene hora anterior: no es el cierre de una sesión olvidada
+    if accion == "revertir" and str(r.get("Field", "")) == C.CAMPO_DIA:
+        return t("It added a missed day: there is no earlier time to go back to.")
     # ⚠️ Revertir el cierre de una sesión olvidada la REABRE: 34 h al día siguiente (ver `_tarjeta`)
     if accion == "revertir" and not str(r.get("OldValue", "")).strip():
         return t("It closed an entry that was left open: there is no earlier time to go back to.")
@@ -298,11 +337,8 @@ def _kpis(pend, hechas, etq):
                 st.caption(t("Nothing."))
             for r in _filas:
                 _usr = str(r.get("User", ""))
-                st.markdown(f"**{etq.get(_usr) or r.get('Name') or _usr}** · "
-                            + (t("clock in") if str(r.get("Field")) == C.CAMPO_IN
-                               else t("clock out"))
-                            + f" · {_dia(r)} · {_hhmm(r.get('OldValue'))} → "
-                              f"{_hhmm(r.get('NewValue'))}")
+                st.markdown(f"**{etq.get(_usr) or r.get('Name') or _usr}** · "     # v677 · y el día añadido
+                            + _campo_txt(r) + f" · {_dia(r)} · {_horas_txt(r)}")
 
 
 def render_bandeja(grupo: str):
@@ -339,12 +375,13 @@ def render_bandeja(grupo: str):
                 "Persona": (_etq_us.get(str(r.get("User", "")))
                             or str(r.get("Name") or r.get("User") or "")),
                 "Día": _dia(r),                                     # v556
-                "Campo": str(r.get("Field", "")),
-                "Antes": _hhmm(r.get("OldValue")),
-                "Ahora": _hhmm(r.get("NewValue")),
-                # ⚠️ El VALOR se muestra traducido, la hoja guarda el español
-                # (v442): `etiqueta()` cambia lo que se ve, nunca el dato.
-                "Estado": i18n.etiqueta(str(r.get("Status", ""))),
+                # v677 · «Added day» con sus dos horas en «Ahora» (salía «07:00 → 15:30» en una celda ilegible)
+                "Campo": _campo_txt(r).capitalize(),
+                "Antes": "—" if str(r.get("Field", "")) == C.CAMPO_DIA else _hhmm(r.get("OldValue")),
+                "Ahora": _horas_txt(r) if str(r.get("Field", "")) == C.CAMPO_DIA else _hhmm(r.get("NewValue")),
+                # ⚠️ El VALOR se muestra traducido, la hoja guarda el español (v442): `estado()` cambia lo que se ve,
+                # nunca el dato. v677 · con mayúscula, como en el resto de la app (H1 del ciclo 3)
+                "Estado": i18n.estado(str(r.get("Status", ""))),
                 # v556 · el NOMBRE, no el login («Admin2» donde la app dice «Bobo»)
                 "Revisor": (_etq_us.get(str(r.get("ReviewedBy", "")))
                             or str(r.get("ReviewedBy", ""))),

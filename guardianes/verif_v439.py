@@ -54,8 +54,10 @@ sec("1. Las CLAVES de dato siguen en español (traducirlas rompe en silencio)")
 # sube la cuenta y sigue pasando; renombrar la baja y salta.
 # (v621 · `"clock_in"` baja de 6 a 5: la lista de olvidos salió a `timeclock.olvidos`, que usa la
 # misma clave; no es un renombrado)
+# (v677 · `"clock_in"` sube a 7: la barra lateral dice desde cuándo, H8 del ciclo 3. Con el mínimo en 5 y la cuenta en 7,
+# renombrar UNA ya no bajaba del mínimo: romper_v439 lo destapó. El mínimo va a la cuenta REAL)
 CLAVES = {
-    "core/timeclock_ui.py": {'"usuario"': 5, '"proyecto"': 5, '"clock_in"': 5, '"tipo"': 1},
+    "core/timeclock_ui.py": {'"usuario"': 5, '"proyecto"': 5, '"clock_in"': 7, '"tipo"': 1},
     "core/prestart_ui.py":  {'"usuario"': 10, '"User"': 2, '"fecha"': 2, '"nombre"': 5},
     "core/ausencias_ui.py": {"'From'": 5, "'To'": 5, "'Type'": 3, '"User"': 1},
     "core/route_ui.py":     {'"User"': 1, '"Location"': 4},

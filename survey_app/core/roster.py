@@ -52,22 +52,28 @@ def dias_con_datos(datos, extra_pedidos=()) -> list:
         for _d, _c in (_sem or {}).items():
             # ⚠️ v676 · un fin de semana con solo una AUSENCIA (Leave/OFF) no abre la columna a todos: no hay trabajo que
             # enseñar ese día (H15 del ciclo 3: una baja sin fines de semana sacaba el sábado y el domingo en el tablero)
-            _it = [i for i in _norm_cell(_c)["items"] if i["asig"] not in ESTADOS]
-            if _d in DIAS_EXTRA and (_it or _norm_cell(_c)["nota"].strip()):
+            if _d in DIAS_EXTRA and celda_con_trabajo(_c):
                 con_datos.add(_d)
     pedidos = set(extra_pedidos or ())
     return DIAS + [d for d in DIAS_EXTRA if d in con_datos or d in pedidos]
 
 
+def celda_con_trabajo(c) -> bool:
+    """¿Esta celda tiene algo que enseñar? Una obra o un trabajo, o una nota escrita en un día SIN estado (v677).
+
+    ⚠️ Una ausencia (Leave/OFF) no cuenta, ni su NOTA: `ausencias.aplicar_al_roster` deja «Sick leave · AUS-0009» en la
+    celda, y v676 abría por esa nota el sábado y el domingo de la baja a todos (visto en producción en la semana del
+    30/11; el guardián probaba una celda sin nota). La usan `dias_con_datos` y `dia_tiene_datos`: una regla."""
+    n = _norm_cell(c or {})
+    if any(i["asig"] not in ESTADOS for i in n["items"]):
+        return True
+    return bool(str(n["nota"]).strip()) and not n["items"]
+
+
 def dia_tiene_datos(datos, dia) -> list:
     """Usuarios con algo asignado ese día — para no dejar quitar una columna con
-    trabajo dentro (y poder DECIR de quién es)."""
-    out = []
-    for u, _sem in (datos or {}).items():
-        c = _norm_cell((_sem or {}).get(dia, {}))
-        if c["items"] or c["nota"].strip():
-            out.append(u)
-    return out
+    trabajo dentro (y poder DECIR de quién es). v677 · con la regla de `celda_con_trabajo`."""
+    return [u for u, _sem in (datos or {}).items() if celda_con_trabajo((_sem or {}).get(dia, {}))]
 
 # Estados (NO-trabajo). Claves reservadas (no colisionan con TRB-####). El usuario
 # eligió: OFF, Leave, Formación + nota libre.

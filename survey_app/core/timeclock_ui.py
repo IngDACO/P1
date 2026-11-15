@@ -385,6 +385,14 @@ def _sidebar_olvido():
 def _sidebar_fichado(nombre, usuario, grupo, gen, prj):
     """Estás fichado: cronómetros + las dos salidas + el aviso del Pre-Start."""
     st.markdown(t("###### :material/schedule: CLOCKED IN"))
+    # v677 · DÓNDE y desde CUÁNDO, en texto (H8 del ciclo 3): desde cualquier otra pantalla solo se veía «CLOCKED IN» y
+    # los botones; el nombre de la obra del cronómetro va dentro del dibujo, en 11 px y cortado
+    # ⚠️ la hora de entrada por corchetes, como el resto del módulo: una sesión abierta siempre la trae
+    if prj:
+        st.caption(t(":material/apartment: {p} · since {h}", p=literal_md(prj.get("proyecto") or "—"),
+                     h=str(prj["clock_in"])[11:16]))
+    elif gen:
+        st.caption(t(":material/schedule: Workday, no project · since {h}", h=str(gen["clock_in"])[11:16]))
     # ⚠️ v375: la etiqueta del cronómetro va DENTRO de HTML crudo (`components.html`),
     # donde `:material/...:` no es nada — es sintaxis de markdown de Streamlit. Desde
     # la migración de iconos (v233) se veía el literal «:material/schedule: Jornada»
@@ -482,6 +490,25 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
         _fichar(nombre, nom_de.get(_pid, ""), grupo, usuario, _pid)
 
 
+def nota_obra(pid, grupo="") -> str:
+    """Lo que hay que saber al fichar en esa obra, o "" (v677, H7 del ciclo 3): que aún no ha empezado («This job
+    starts on Mon 16/11/2026») o que está en pausa. Sin bloquear —puede ser una visita antes de empezar—, pero que no se
+    impute en silencio a una obra que no está en marcha."""
+    try:
+        p = projects_data.get_project(pid) or {}
+    except Exception:
+        return ""
+    if str(p.get("Status", "")) == "On hold":
+        return t(":material/pause_circle: This job is on hold: these hours go to a paused job.")
+    from core.num import dmy as _dmy, parse_date as _pd
+    _ini = _pd(p.get("StartDate"))
+    if _ini and _ini > clock.today(grupo):
+        _dd = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[_ini.weekday()]
+        return t(":material/event_upcoming: This job starts on {d}: these hours go to a job that hasn't started yet.",
+                 d=f"{t(_dd)} {_dmy(_ini)}")
+    return ""
+
+
 def _fichar(nombre, nom_obra, grupo, usuario, pid):
     """Ficha al proyecto y deja pendiente el aviso del Pre-Start si falta.
 
@@ -494,6 +521,9 @@ def _fichar(nombre, nom_obra, grupo, usuario, pid):
         st.error(msg)
         return
     flash.exito(msg + (t("  :material/schedule: Your workday was opened too.") if auto else ""))
+    _nota = nota_obra(pid, grupo)            # v677 · H7 del ciclo 3
+    if _nota:
+        flash.aviso(_nota)
     _armar_aviso_prestart(pid, nom_obra, grupo)
     st.rerun()
 
@@ -1022,6 +1052,8 @@ def render_timeclock_tab():
                                                        usuario=usuario, new_pid=_nuevo)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
+                        if nota_obra(_nuevo, grupo):                # v677 · H7: también al cambiar de obra
+                            flash.aviso(nota_obra(_nuevo, grupo))
                         _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla
                         st.rerun()
         elif not idmap:

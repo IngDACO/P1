@@ -25,7 +25,9 @@ ROTURAS = [
     ("⚠️⚠️ el motor tampoco deja registrar una baja sin saldo", M,
      [('    if _ex and cfg["aprobacion"]:\n        return t("You are asking for {n}', '    if _ex:\n        return t("You are asking for {n}')]),
     ("⚠️ vuelve a escribirse el exceso, que se desincroniza", M,
-     [('            "", str(usuario), hoy,\n', '            (f"Over the balance by {_ex}" if _ex else ""), str(usuario), hoy,\n')]),
+     # v677 · re-anclada: «CreatedBy» puede ser la oficina (`por_oficina`, H2 del ciclo 3). La misma rotura
+     [('            "", str(por_oficina or usuario), hoy,\n',
+       '            (f"Over the balance by {_ex}" if _ex else ""), str(por_oficina or usuario), hoy,\n')]),
     ("lo que no tiene tope excede", M,
      [('    return 0 if s["ilimitado"] else max(0, int(dias - max(s["disponibles"], 0)))\n',
        '    return max(0, int(dias - max(s["disponibles"], 0)))\n')]),

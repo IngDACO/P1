@@ -61,6 +61,10 @@ ESTADOS = (PENDIENTE, APROBADA, REVERTIDA, SUSTITUIDA)
 
 # Qué campo del fichaje se corrigió.
 CAMPO_IN, CAMPO_OUT = "Clock In", "Clock Out"
+# v677 · un día que no se fichó, AÑADIDO por la oficina (H9 del ciclo 3). No corrige una hora: crea la jornada (y su
+# entrada de obra), así que no hay valor anterior. `NewValue` = «entrada → salida» (`ventana`); nace aprobado.
+CAMPO_DIA = "Added day"
+_SEP_DIA = " → "
 
 
 def _libro_de(_hoja) -> str:
@@ -324,6 +328,40 @@ def recortar_jornada_oficina(grupo, usuario, nombre, entrada, salida_actual, sal
         _h = str(res["jornada"][1])
     return True, t("Workday fixed: it now ends at {h} ({n} job entry/entries corrected too).",
                    h=_h, n=len(res["obras"]))
+
+
+def ventana(r) -> tuple:
+    """`(entrada, salida)` de una corrección «Added day» (v677), o `("", "")` si es de otra clase."""
+    if str((r or {}).get("Field", "")) != CAMPO_DIA:
+        return "", ""
+    a, _, b = str(r.get("NewValue", "")).partition(_SEP_DIA)
+    return a.strip(), b.strip()
+
+
+def anadir_dia_oficina(grupo, usuario, nombre, entrada, salida, proyecto, proyecto_id, revisor, motivo) -> tuple:
+    """La oficina añade un día que no se fichó (v677, H9 del ciclo 3): la jornada y su entrada de obra, CERRADAS
+    (`timeclock.anadir_jornada`), y la corrección APROBADA por quien lo hizo, con el motivo (el rastro de v461, como
+    `recortar_jornada_oficina`). `(ok, mensaje, nómina)`: la nómina viva que ya cubre ese día, o "" — esas horas
+    salen en Payroll como fichadas después de su colilla (`payroll.horas_sin_pagar`) y se saldan allí."""
+    _mot = str(motivo or "").strip()
+    if not _mot:
+        return False, t("Say why the day is added: it stays in the record."), ""
+    ok, res = timeclock.anadir_jornada(grupo, usuario, nombre, entrada, salida, proyecto, proyecto_id)
+    if not ok:
+        return False, res, ""
+    _v = entrada.strftime(timeclock.FMT) + _SEP_DIA + salida.strftime(timeclock.FMT)
+    okr, cid = registrar(grupo, usuario, nombre, timeclock.TIPO_GENERAL, proyecto, CAMPO_DIA, "", _v, motivo=_mot)
+    if okr:
+        aprobar(cid, revisor, nota=_mot)
+    else:
+        logger.warning("anadir_dia_oficina: el día se añadió pero no se apuntó: %s", cid)
+    from core.num import dmy as _dmy
+    _d, _a, _b, _h = _dmy(entrada), entrada.strftime("%H:%M"), salida.strftime("%H:%M"), f"{res:.2f}"
+    # ⚠️ Cada marcador con su argumento A LA VISTA (verif_v470: un `**kw` no lo ve nadie)
+    _txt = (t("Day added for {who}: {d}, {a} → {b} · {h} h on {p}.", who=nombre, d=_d, a=_a, b=_b, h=_h, p=proyecto)
+            if str(proyecto or "").strip() else
+            t("Day added for {who}: {d}, {a} → {b} · {h} h.", who=nombre, d=_d, a=_a, b=_b, h=_h))
+    return True, _txt, nomina_que_cubre(grupo, usuario, entrada)
 
 
 def ajustar(cid, revisor, hora, nota="") -> tuple:

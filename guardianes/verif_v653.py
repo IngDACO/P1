@@ -76,8 +76,9 @@ chk("...y no marca lo escapado, un número, un parámetro técnico ni el valor d
 _app = HS.barrer()
 chk("en TODA la app: ningún dato de la hoja sin escapar en HTML ni en un PDF", _app == set(), sorted(_app)[:12])
 _av = HS.por_aviso_comprobado()
-chk("los avisos que se dejan fuera del barrido siguen saliendo por `notify_user` (los 6)",
-    len(_av) == 6 and all(_av.values()), _av)
+# v677 · y los dos nuevos: la ausencia que registra la oficina (H2) y el día que añade (H9)
+chk("los avisos que se dejan fuera del barrido siguen saliendo por `notify_user` (los 8)",
+    len(_av) == 8 and all(_av.values()), _av)
 _nu = next(n for n in ast.walk(ast.parse(src("core/notify.py")))
            if isinstance(n, ast.FunctionDef) and n.name == "notify_user")
 chk("...y `notify_user` escapa el texto con `html_seguro` (v603)",

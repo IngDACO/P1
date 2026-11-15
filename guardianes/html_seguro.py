@@ -50,7 +50,9 @@ CAMPOS_TEXTO_MAYUS = {"PROYECTO", "CLIENTE", "UBICACION", "INGENIERO", "MODELO"}
 # ⚠️ `por_aviso_comprobado()` exige que cada una SIGA llamando a `notify_user`.
 POR_AVISO = {("core/notify.py", "notify_assignment"), ("core/credentials.py", "notify_expiring"),
              ("core/ausencias_ui.py", "_avisar_cancelacion"), ("core/ausencias_ui.py", "_avisar_exceso"),
-             ("core/ausencias_ui.py", "_avisar_persona"), ("core/ausencias_ui.py", "_avisar_persona_cancelada")}
+             ("core/ausencias_ui.py", "_avisar_persona"), ("core/ausencias_ui.py", "_avisar_persona_cancelada"),
+             # v677 · la ausencia que registra la oficina (H2) y el día que añade (H9): también por `notify_user`
+             ("core/ausencias_ui.py", "_avisar_registrada"), ("core/correcciones_ui.py", "avisar_dia_anadido")}
 
 
 def por_aviso_comprobado(fuentes=None) -> dict:

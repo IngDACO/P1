@@ -225,8 +225,9 @@ _carl = _df[_df["Persona"] == "Carl"].iloc[0] if _df is not None else {}
 chk("…el revisor por su NOMBRE («Jefa Boss», no «jefa»)", _df is not None and _carl["Revisor"] == "Jefa Boss",
     _carl["Revisor"] if _df is not None else None)
 chk("…y la fecha en dd/mm/aaaa", _df is not None and _carl["Fecha"] == "08/10/2026 09:00")
-chk("la sustituida sale en el histórico como «superseded»",
-    _df is not None and "superseded" in list(_df["Estado"]))
+# v677 · con mayúscula, como el resto de los estados de la app (H1 del ciclo 3)
+chk("la sustituida sale en el histórico como «Superseded»",
+    _df is not None and "Superseded" in list(_df["Estado"]))
 
 print("\n6. Aislamiento")
 at.session_state["_cor_accion"] = {"cid": "COR-5", "accion": "aprobar", "nota": ""}

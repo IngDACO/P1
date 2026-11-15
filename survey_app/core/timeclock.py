@@ -1343,6 +1343,65 @@ def recortar_jornada(grupo, usuario, nombre, entrada, salida_actual, salida_nuev
     return True, {"jornada": (salida_actual, salida_nueva), "obras": hechas}
 
 
+def problema_jornada(registros, usuario, nombre, grupo, entrada, salida, con_obra=True) -> str:
+    """Por qué no se puede AÑADIR una jornada cerrada de `entrada` a `salida` (datetime), o "" (v677, H9 del ciclo 3).
+
+    UNA regla para la vista previa (con la caché) y para la escritura (con lo leído fresco): la salida después de la
+    entrada, nada que no haya pasado aún, no más de `JORNADA_MAX_H` horas (más es un olvido, v671), y sin pisar otra
+    jornada ni otra entrada de obra de esa persona (`_choca`, la regla de v546: esos minutos contarían dos veces)."""
+    if salida <= entrada:
+        return t("The end must be after the start.")
+    if salida > datetime.strptime(_now(), FMT):
+        return t("That end time hasn't come yet: a missed day is added once it is over.")
+    _h = (salida - entrada).total_seconds() / 3600.0
+    if _h > JORNADA_MAX_H:
+        return t("That is {h} h: a workday can't be longer than {m} h.", h=f"{_h:.2f}", m=f"{JORNADA_MAX_H:g}")
+    for _tipo in ((TIPO_GENERAL, TIPO_PROYECTO) if con_obra else (TIPO_GENERAL,)):
+        _r = _choca(registros, usuario, nombre, grupo, _tipo, entrada, salida)
+        if _r:
+            return _msg_choque(_r, _tipo)
+    return ""
+
+
+def anadir_jornada(grupo, usuario, nombre, entrada, salida, proyecto="", proyecto_id="") -> tuple:
+    """Añade una jornada CERRADA y, con obra, su entrada de obra a las mismas horas: un día que no se fichó del todo
+    (v677, H9 del ciclo 3). `(ok, horas | mensaje)`.
+
+    Ciclo 3: «Did you forget…» es solo de hoy y la oficina solo recortaba jornadas largas (v671), así que un viernes
+    sin fichar no existía para la nómina ni para el coste de la obra. Lee FRESCO, mira `problema_jornada` antes de
+    escribir y las dos filas van en UNA escritura. El rastro (la corrección aprobada) lo deja
+    `correcciones.anadir_dia_oficina`."""
+    ws, err = _get_worksheet()
+    if err:
+        return False, err
+    grupo, nombre = (grupo or "").strip(), (nombre or "").strip()
+    if not nombre:
+        return False, t("Pick the person.")
+    try:
+        registros = columnas.canonizar(ws.get_all_records(numericise_ignore=['all']))
+    except Exception as e:
+        return False, f"{t('Error reading the sheet')}: {e}"
+    _con = bool(str(proyecto_id or "").strip() or str(proyecto or "").strip())
+    _no = problema_jornada(registros, usuario, nombre, grupo, entrada, salida, con_obra=_con)
+    if _no:
+        return False, _no
+    _e, _s = entrada.strftime(FMT), salida.strftime(FMT)
+    _h = round((salida - entrada).total_seconds() / 3600.0, 2)
+    filas = [[nombre, "", "", "", _e, _s, str(_h), "CERRADO", grupo, TIPO_GENERAL, usuario or "", ""]]
+    if _con:
+        filas.append([nombre, "", proyecto or "", "", _e, _s, str(_h), "CERRADO", grupo, TIPO_PROYECTO,
+                      usuario or "", str(proyecto_id or "")])
+    # ⚠️ La fila es POSICIONAL (v363): si no casa con HEADERS, cada dato cae en la columna de al lado
+    if any(len(f) != len(HEADERS) for f in filas):
+        return False, f"internal: the row does not match the {len(HEADERS)} columns"
+    try:
+        ws.append_rows(filas, value_input_option="RAW")
+    except Exception as e:
+        return False, f"{t('Error writing the timeclock entry')}: {e}"
+    _invalidate_records()
+    return True, _h
+
+
 def jornadas_abiertas(grupo: str, desde, hasta) -> dict:
     """`{clave: nombre}` de quien tiene una JORNADA (general) aún abierta que empezó dentro de
     [desde, hasta] o antes (v663). La nómina las deja fuera y lo dice."""

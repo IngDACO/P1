@@ -2891,7 +2891,10 @@ def _liberar_tablero_obra(grupo, pid) -> None:
     from core import roster as _RO
     _man = clock.today(grupo) + timedelta(days=1)
     n = _RO.limpiar_proyecto(grupo, pid, desde=_man)
-    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=pid, n=n, f=_fmt_fecha(_man.isoformat())))
+    # v677 · con el NOMBRE de la obra, como el Radar (decía «PRJ-0039: 40 day(s) freed…»)
+    _nom = str((P.get_project(pid) or {}).get("Name", "") or "").strip()
+    flash.exito(t("{p}: {n} day(s) freed on the board from {f}.", p=f"{_nom} ({pid})" if _nom else pid, n=n,
+                  f=_fmt_fecha(_man.isoformat())))
 
 
 def _cierre_section(pid: str, grupo: str, prj: dict):
@@ -6757,6 +6760,103 @@ def jornadas_largas_section(grupo: str):
             st.caption(t("… and {n} more.", n=len(_lg) - 10))
 
 
+def _ultimo_laborable(hoy):
+    """El último día laborable ANTES de hoy (el viernes, un lunes): el día olvidado más probable."""
+    d = hoy - timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def dia_olvidado_section(grupo: str):
+    """«Add a missed day» (v677, H9 del ciclo 3): la oficina añade un día que alguien trabajó sin fichar NADA.
+
+    Ciclo 3: «Did you forget…» es solo de hoy y aquí solo se recortaban jornadas largas (v671), así que un viernes sin
+    fichar no existía para la nómina ni para el coste de la obra. Crea la jornada y su entrada de obra CERRADAS y la
+    corrección aprobada con el motivo (`correcciones.anadir_dia_oficina`). La vista previa usa la MISMA regla que la
+    escritura (`timeclock.problema_jornada`): sin pisar otra jornada, ni más de 16 h, ni lo que aún no ha pasado; y
+    avisa si ese día ya está en una colilla."""
+    from datetime import datetime as _dt
+    from core import auth, correcciones, correcciones_ui, roster as _R, timeclock as _TC
+    from core import ui_common as _ui
+    with st.expander(t("Add a missed day"), icon=":material/more_time:", key="exp_gh_dia"):
+        st.caption(t("Someone worked a day and clocked nothing, not even the workday. Add it here: it goes to their "
+                     "hours, to payroll and to the job cost, and it stays in Planning → Time fixes as approved by you, "
+                     "with the reason."))
+        _g = st.session_state.get("_gh_dia_gen", 0)
+        try:
+            _us = [u for u in auth.list_users(grupo)
+                   if str(u.get("Active", "SI")).strip().upper() in auth._ACTIVE_OK
+                   and str(u.get("Role", "")).lower() in ("field", "administrator")]
+        except Exception:
+            _us = []
+        _et = auth.etiqueta_usuarios(_us)
+        _nom_de = {str(u.get("User", "")): str(u.get("Name") or u.get("User") or "") for u in _us}
+        try:
+            _proys = [p for p in P.list_projects(grupo=grupo, incluir_internos=True)
+                      if str(p.get("Status", "")) != "Archived"]
+        except Exception:
+            _proys = []
+        _lbl_p = P.etiqueta_con_id(_proys)
+        _nom_p = {str(p.get("ID", "")): str(p.get("Name", "")) for p in _proys}
+        c1, c2 = st.columns(2)
+        with c1:
+            _usr = _ui.elegir(t("Person"), {(_et.get(k) or v): k for k, v in _nom_de.items()},
+                              key=f"gh_dia_u_{_g}", vacio=t("— pick the person —"))
+        with c2:
+            _pid = _ui.elegir(t("Job"), {v: k for k, v in _lbl_p.items()}, key=f"gh_dia_p_{_g}",
+                              vacio=t("— pick the job —"))
+        _hoy = clock.today(grupo)
+        d1, d2, d3 = st.columns(3)
+        _dia = d1.date_input(t("Day"), value=_ultimo_laborable(_hoy), max_value=_hoy, key=f"gh_dia_d_{_g}",
+                             format="DD/MM/YYYY")
+        _hi = d2.time_input(t("Start"), value=_to_time_ini(_R.TURNO_DEFAULT[0]), key=f"gh_dia_i_{_g}", step=900)
+        _hf = d3.time_input(t("End"), value=_to_time_ini(_R.TURNO_DEFAULT[1]), key=f"gh_dia_f_{_g}", step=900)
+        _mot = st.text_input(t("Why"), key=f"gh_dia_m_{_g}",
+                             placeholder=t("Didn't clock in on Friday; the supervisor confirms 07:00–15:30"))
+        _ent, _sal = _dt.combine(_dia, _hi), _dt.combine(_dia, _hf)
+        _no = ""
+        if _usr:
+            try:
+                _no = _TC.problema_jornada(_TC._cached_records(), _usr, _nom_de.get(_usr, ""), grupo, _ent, _sal,
+                                           con_obra=True)
+            except Exception as e:
+                logger.warning("dia_olvidado_section: %s", e)
+        if _no:
+            st.warning(_no)
+        elif _usr:
+            st.caption(t(":material/schedule: **{h} h** on {d} — the workday and the job, both closed.",
+                         h=f"{(_sal - _ent).total_seconds() / 3600.0:.2f}", d=_fmt_fecha(_dia.isoformat())))
+            _nom = correcciones.nomina_que_cubre(grupo, _usr, _dia)
+            if _nom:
+                st.warning(t(":material/receipt_long: That day is already in payslip **{x}**: these hours will show in "
+                             "Finance → Payroll as clocked after their payslip, to settle there.", x=_nom))
+        if st.button(t(":material/more_time: Add the day"), key=f"gh_dia_ok_{_g}", type="primary",
+                     disabled=bool(_no or not _usr or not _pid or not str(_mot or "").strip())):
+            ok, msg, _nom = correcciones.anadir_dia_oficina(
+                grupo, _usr, _nom_de.get(_usr, ""), _ent, _sal, _nom_p.get(_pid, ""), _pid,
+                str((st.session_state.get("auth") or {}).get("usuario", "")), _mot)
+            if not ok:
+                st.error(msg)
+            else:
+                flash.exito(msg)
+                if _nom:
+                    flash.aviso(t("That day is in payslip {x}: settle these hours in Finance → Payroll.", x=_nom))
+                correcciones_ui.avisar_dia_anadido(_usr, _ent, _sal, _nom_p.get(_pid, ""), _mot)
+                st.session_state["_gh_dia_gen"] = _g + 1
+                st.rerun()
+
+
+def _to_time_ini(hhmm):
+    """«07:00» → time(7, 0) (el turno por defecto del tablero); 07:00 si no se lee."""
+    from datetime import time as _time
+    try:
+        hh, mm = str(hhmm).split(":")[:2]
+        return _time(int(hh), int(mm))
+    except Exception:
+        return _time(7, 0)
+
+
 def render_group_hours(grupo: str):
     """⏱ Horas del grupo (v577, probada acción por acción).
 
@@ -6849,6 +6949,7 @@ def render_group_hours(grupo: str):
 
     # v671 · las jornadas cerradas imposibles, con su arreglo (H27 del ciclo 2), sea cual sea el periodo
     jornadas_largas_section(grupo)
+    dia_olvidado_section(grupo)         # v677 · H9 del ciclo 3: un día que no se fichó del todo
 
     if not data:
         # ⚠️ v577 · un periodo sin fichajes dejaba la pantalla EN BLANCO (sin cifras ni
