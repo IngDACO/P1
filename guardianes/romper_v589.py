@@ -47,10 +47,11 @@ ROTURAS = [
     ("la casilla del Excel vuelve a la larga (se cortaba)", SU,
      [('        _imp_todo = sc2.checkbox(t("Also load its parameters"),\n',
        '        _imp_todo = sc2.checkbox(t("Also restore parameters and configuration from the Excel file"),\n')]),
+    # ⚠️ v685 · re-anclada: el título dice «before calculating» (también avisa de la matriz sin medir)
     ("vuelve «8 warning(s)»", SU,
-     [('            with st.expander(t(":material/warning: 1 warning in the parameters") if len(_iss0) == 1 else\n'
-       '                             t(":material/warning: {n} warnings in the parameters", n=len(_iss0)),\n',
-       '            with st.expander(f":material/warning: {len(_iss0)} warning(s) in the parameters",\n')]),
+     [('            with st.expander(t(":material/warning: 1 warning before calculating") if len(_iss0) == 1 else\n'
+       '                             t(":material/warning: {n} warnings before calculating", n=len(_iss0)),\n',
+       '            with st.expander(f":material/warning: {len(_iss0)} warning(s) before calculating",\n')]),
     ("⚠️ resultados sin cálculo vuelven a pintar las cuatro cabeceras", SU,
      [('                st.session_state["_fase_pending"] = _FASE_DATOS\n                st.rerun()\n            return\n',
        '                st.session_state["_fase_pending"] = _FASE_DATOS\n                st.rerun()\n')]),

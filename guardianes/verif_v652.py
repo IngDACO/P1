@@ -364,6 +364,13 @@ chk("y sin reescribir otra vez (nada cambió)", len(E["user"]) == 2, E["user"])
 chk("se puede descargar", any("Download the client report" in str(b.label) for b in at.get("download_button")))
 next(b for b in at.button if b.key == "sv_reescribir_ia").click()
 at.run()
+# ⚠️ v685 · CADUCADO A PROPÓSITO (visto cerrando el ciclo 4): la oficina CAMBIÓ el resumen («EDITED BY THE OFFICE») y
+# reescribir lo tiraba sin decirlo; ahora pregunta antes («Rewriting replaces what you changed in: Summary…»), y se
+# confirma con «Yes, rewrite it». Lo de preguntar lo vigila verif_v685.
+chk("v685 · con el resumen cambiado, pregunta antes de reescribir", len(at.session_state["_E"]["user"]) == 2
+    and any(b.key == "sv_rw_si" for b in at.button), len(at.session_state["_E"]["user"]))
+next(b for b in at.button if b.key == "sv_rw_si").click()
+at.run()
 E = at.session_state["_E"]
 chk("⚠️ C · «Rewrite the interpretation»: las dos de nuevo, sin recalcular ni correo", len(E["user"]) == 3 and len(E["admin"]) == 3
     and E["correo"] == 1 and "sv_iu_resumen_1_2" in cajas(at), (len(E["user"]), E["correo"], list(cajas(at))))

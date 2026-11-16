@@ -51,6 +51,99 @@ def validate_inputs(p: dict) -> list:
     return issues
 
 
+def niveles_sin_medir(filas, cols) -> list:
+    """Los niveles (1…NS) con sus seis medidas a 0 o vacías.
+
+    ⚠️ v685 · Una matriz SIN RELLENAR —la que deja «Duplicate for the next lift», o un Survey nuevo— se calculaba igual:
+    el chip decía «Matrix: 12 levels» en verde, salía el correo interno y se pagaban las dos interpretaciones de un
+    resultado sin una sola medida (visto cerrando el ciclo 4). Un nivel con las seis a 0 no se midió: ninguna pared toca
+    la línea del riel."""
+    out = []
+    for i, fila in enumerate(filas or [], start=1):
+        _vals = []
+        for c in cols:
+            try:
+                _v = float(fila.get(c) if isinstance(fila, dict) else fila[c])
+            except (TypeError, ValueError, KeyError, IndexError):
+                _v = 0.0
+            _vals.append(0.0 if _v != _v else _v)          # NaN (celda vacía) = sin medir
+        if all(abs(_v) < 1e-9 for _v in _vals):
+            out.append(i)
+    return out
+
+
+# Ninguna pared está sobre la línea del riel (WR, WL) ni el riel contra la pared frontal (FR, FL): a 0 es una medida
+# que falta. OR/OL sí pueden ser 0 (la apertura enrasada).
+SIN_CERO = ("WR", "WL", "FR", "FL")
+
+
+def celdas_a_cero(filas, cols) -> list:
+    """[(nivel, [columnas])] de los niveles medidos A MEDIAS: alguna de WR, WL, FR o FL a 0 (o vacía) en un nivel que no
+    está entero sin medir (de esos se ocupa `niveles_sin_medir`).
+
+    ⚠️ v685 · Lo destapó romper_v685: con dos niveles a 0 y el resto medido, el optimizador tardó 13,8 s y dio 18.755
+    «soluciones óptimas», y el informe de gestión no terminaba (el guardián pasó de los 5 min de su tope). Basta UNA
+    medida olvidada: el desfase que «corrige» ese 0 es de cientos de mm."""
+    _sin = set(niveles_sin_medir(filas, cols))
+    out = []
+    for i, fila in enumerate(filas or [], start=1):
+        if i in _sin:
+            continue
+        _c0 = []
+        for c in cols:
+            if c not in SIN_CERO:
+                continue
+            try:
+                _v = float(fila.get(c) if isinstance(fila, dict) else fila[c])
+            except (TypeError, ValueError, KeyError, IndexError):
+                _v = 0.0
+            if _v != _v or abs(_v) < 1e-9:
+                _c0.append(c)
+        if _c0:
+            out.append((i, _c0))
+    return out
+
+
+def _tramos(nums) -> str:
+    """[1, 2, 3, 5, 7, 8] → «1–3, 5, 7–8»."""
+    _t, _ini, _ant = [], None, None
+    for n in list(nums) + [None]:
+        if _ini is None:
+            _ini = _ant = n
+        elif n is not None and n == _ant + 1:
+            _ant = n
+        else:
+            _t.append(str(_ini) if _ini == _ant else "%d–%d" % (_ini, _ant))
+            _ini = _ant = n
+    return ", ".join(_t)
+
+
+def aviso_matriz(df, cols) -> list:
+    """El aviso de los niveles sin medir (o nada), en la forma de `validate_inputs`: el Survey lo suma a los de los
+    parámetros, ANTES de calcular (y de mandar el correo o pagar las interpretaciones)."""
+    from core.i18n import t
+    try:
+        _filas = df.to_dict("records") if hasattr(df, "to_dict") else list(df or [])
+    except Exception:
+        return []
+    _sin = niveles_sin_medir(_filas, cols)
+    out = []
+    if len(_sin) == 1:
+        out.append(t("Level {n} has no measurements yet (its six values are 0): enter them before calculating.", n=_sin[0]))
+    elif _sin:
+        out.append(t("{k} levels have no measurements yet ({lista}): enter them before calculating.",
+                     k=len(_sin), lista=_tramos(_sin)))
+    _med = celdas_a_cero(_filas, cols)
+    if len(_med) == 1:
+        _n, _cs = _med[0]
+        out.append(t("Level {n}: {cols} at 0 — enter it before calculating (WR, WL, FR and FL can't be 0).",
+                     n=_n, cols=", ".join(_cs)))
+    elif _med:
+        out.append(t("Measurements at 0 ({lista}): enter them before calculating (WR, WL, FR and FL can't be 0).",
+                     lista=" · ".join("%d: %s" % (n, ", ".join(cs)) for n, cs in _med)))
+    return out
+
+
 def calculate_limits(p: dict) -> dict:
     """
     Calcula todos los límites y valores derivados.

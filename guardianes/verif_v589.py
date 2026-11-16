@@ -121,8 +121,12 @@ def _txt(a):
 at = AppTest.from_string(G, default_timeout=600).run()
 chk("sin datos: sin excepción", not at.exception, [e.value for e in at.exception][:1])
 _ex = [str(e.label) for e in list(at.expander) + list(at.status)]
-chk("⚠️ «8 warnings in the parameters», con su plural (decía «8 warning(s)»)",
-    any("8 warnings in the parameters" in x for x in _ex), [x for x in _ex if "warning" in x])
+# ⚠️ v685 · CADUCADO A PROPÓSITO (visto cerrando el ciclo 4): sin datos, la matriz también está sin medir y eso es un
+# aviso más (8 de los parámetros + 1 de la matriz), y el título dice «before calculating», no «in the parameters».
+chk("⚠️ «9 warnings before calculating», con su plural (decía «8 warning(s)»)",
+    any("9 warnings before calculating" in x for x in _ex), [x for x in _ex if "warning" in x])
+chk("v685 · …y uno de ellos es la matriz sin medir (la del Survey nuevo: 2 niveles a 0)",
+    "2 levels have no measurements yet (1–2)" in _txt(at), "")
 chk("…y los avisos de dentro, en inglés",
     "BKS must be greater than 0" in _txt(at) and "debe ser" not in _txt(at))
 _ni = {str(x.label): x for x in at.number_input}

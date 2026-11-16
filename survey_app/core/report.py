@@ -259,15 +259,15 @@ def _diagram_block(title, lines, styles):
 def _dg_bc_calc(ts, tksw, tk, bc_calc):
     tk2 = tk / 2
     return [
-        "  Perfil longitudinal (vista lateral, no proporcional):",
+        "  Longitudinal profile (side view, not to scale):",   # v685 · en inglés (era «Perfil longitudinal…»)
         "",
-        "  PARED                                              FONDO",
-        "  FRONTAL                                            HUECO",
+        "  FRONT                                              SHAFT",
+        "  WALL                                               REAR",
         "    |                                                  |",
         "    |<-- TKSW -->@-- TK/2 --|-- ... --|<-- BC_CALC -->|",
         "    |          rail         |   car   |               |25|",
         "    +---------------------------------+---------------+--+",
-        "    |        BLOQUE CABINA = TL                       |  |",
+        "    |        CAR BLOCK = TL                           |  |",
         "    +-------------------------------------------------+--+",
         "",
         f"    TKSW    = {tksw:.0f} mm   (front wall -> rail centre)",
@@ -280,19 +280,22 @@ def _dg_bc_calc(ts, tksw, tk, bc_calc):
 
 def _dg_lateral_limits(lwl, lol, lwr, lor, bks, rail, offset_cabin, offset_side):
     return [
-        "  Seccion transversal (vista superior, no proporcional):",
+        # ⚠️ v685 · En inglés, y WL/WR hasta la LÍNEA del riel (la plomada), como decidió el usuario en H11 del ciclo 4:
+        # v681 corrigió los dibujos SVG y el glosario, y este seguía midiéndolos a la cara del bloque.
+        "  Cross-section (top view, not to scale):",
         "",
         f"  {_d('Car offset towards')}: {offset_side}   OFFSET_CABIN = {offset_cabin:.0f} mm",
         "",
-        "  PARED IZQ                                            PARED DER",
-        "    |<-- WL -->|<-RAIL-|<---- BKS ---->|-RAIL->|<-- WR -->|",
-        "    |          | Rail L              Rail R    |          |",
-        "    |          +------------------------------+           |",
-        "    |          |       BLOQUE CABINA          |           |",
-        "    |          |       (BKS + 2*RAIL)         |           |",
-        "    |          +------------------------------+           |",
-        "    |          |<-OL->|<- BT (puerta) ->|<-OR->|          |",
-        "    |          +------------------------------+           |",
+        "  LEFT WALL" + " " * 49 + "RIGHT WALL",
+        "    |<----- WL ----->@<-------- BKS + RAIL -------->@<----- WR ----->|",
+        "    |" + " " * 16 + "@" + " " * 30 + "@" + " " * 16 + "|",
+        "    |" + " " * 13 + "+" + "-" * 36 + "+" + " " * 13 + "|",
+        "    |" + " " * 13 + "|" + "  CAR BLOCK (BKS + 2*RAIL)".ljust(36) + "|" + " " * 13 + "|",
+        "    |" + " " * 13 + "|" + " <-OL->|<---- BT (door) ---->|<-OR->".ljust(36) + "|" + " " * 13 + "|",
+        "    |" + " " * 13 + "+" + "-" * 36 + "+" + " " * 13 + "|",
+        "",
+        "    @ = rail line (where the plumb line hangs): WL and WR are measured to it,",
+        "        and BKS + RAIL is the distance between the two rail lines.",
         "",
         f"    LIMIT WL = {lwl:.1f} mm   |   LIMIT WR = {lwr:.1f} mm",
         f"    LIMIT OL = {lol:.1f} mm   |   LIMIT OR = {lor:.1f} mm",
@@ -951,10 +954,11 @@ def generate_report(project_params, calculated, survey_original,
                     lbl   = _d("Minimum (mm)")
                     viols = [str(i+1) for i,v in enumerate(cv) if v < lim]
                 sol_sum.append({
-                    "Columna":       col,
-                    "Límite (mm)":   f"{lim:.2f}",
-                    "Fuera límite":  off,
-                    "Niveles":       ", ".join(viols) if viols else "—",
+                    # v685 · la cabecera de esta tabla salía en español en el informe de gestión
+                    _d("Column"):       col,
+                    _d("Limit (mm)"):   f"{lim:.2f}",
+                    _d("Out of limit"): off,
+                    _d("Levels"):       ", ".join(viols) if viols else "—",
                     lbl:             f"{ext:.2f}",
                     _d("Diff vs Limit"): f"{dif:.2f}",
                 })
@@ -1012,9 +1016,9 @@ def generate_report(project_params, calculated, survey_original,
                 f"{fstr('BS')} - {fstr('BSR')}", f"DIF BS = {dif_bs:.2f} mm",
                 styles, ok=False), sp(4),
             Paragraph(_d("Step search across the 3 ranges (0.5 mm step):"), styles["SubHead2"]),
-            _calc_block("Rango 1 — Zona ZB", _d("Cycles from 0 to LIMIT ZB"),
+            _calc_block(_d("Range 1 — Zone ZB"), _d("Cycles from 0 to LIMIT ZB"),           # v685 · era «Rango 1 — Zona ZB»
                 f"[0  ->  {lzb:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
-            _calc_block("Rango 2 — Zona OB", _d("Cycles from LIMIT ZB to (LIMIT ZB + LIMIT OB)"),
+            _calc_block(_d("Range 2 — Zone OB"), _d("Cycles from LIMIT ZB to (LIMIT ZB + LIMIT OB)"),
                 f"[{lzb:.2f}  ->  {lzb+lob:.2f}]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(3),
             _calc_block(_d("Range 3 — Extended zone"), _d("Cycles from (LIMIT ZB + LIMIT OB) to 1000"),
                 f"[{lzb+lob:.2f}  ->  1000]", _d("Looking for the step where the DIF BS subtraction reaches 0"), styles), sp(4),

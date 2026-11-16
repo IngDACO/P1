@@ -1,6 +1,6 @@
 """
 Notificación por correo cada vez que se ejecuta un cálculo en la app.
-Envía resumen técnico a diegoaco93@gmail.com via Gmail SMTP.
+Envía el resumen técnico a la dirección de `NOTIFY_TO` (secrets) via Gmail SMTP.
 """
 import html as _html          # v603 · los nombres tecleados, escapados en el correo
 import smtplib
@@ -41,7 +41,7 @@ def _matrix_html(df) -> str:
             )
             rows_html += f"<tr>{cells}</tr>"
         return f"""
-        <h3 style="color:#1a3a5c;margin-top:20px">Matriz SURVEY ingresada (mm)</h3>
+        <h3 style="color:#1a3a5c;margin-top:20px">SURVEY matrix entered (mm)</h3>
         <table style="border-collapse:collapse;font-size:13px;width:100%">
           <tr>{header}</tr>
           {rows_html}
@@ -71,7 +71,7 @@ def send_usage_notification(
         return False
 
     best = opt_result.get("best") if opt_result else None
-    ts   = clock.now().strftime("%d/%m/%Y  %H:%M")
+    ts   = clock.now().strftime("%d/%m/%Y %H:%M")
 
     # ── Construir cuerpo HTML ─────────────────────────────
     def row(label, value, highlight=False):
@@ -84,14 +84,21 @@ def send_usage_notification(
     if best:
         fb_ap  = best.get("fb_applied", best["fb"])
         extra  = abs(fb_ap - best["fb"]) > 0.01
-        fb_str = f"{fb_ap:.1f} mm" + (" ⚠️ (with extra push for the wall)" if extra else "")
+        # v685 · con su signo y su sentido, como la app (RL+ = izquierda, FB+ = hacia atrás)
+        from core.interpretation import _sentido_lateral, _sentido_frontal
+        _sl, _sf = _sentido_lateral(best["rl"]), _sentido_frontal(fb_ap)
+        rl_str = f"{best['rl']:+.1f} mm" + (f" (to the {_sl.upper()})" if _sl != "none" else "")
+        fb_str = (f"{fb_ap:+.1f} mm" + (f" (towards the {_sf.upper()})" if _sf != "none" else "")
+                  + (" ⚠️ (with extra push for the wall)" if extra else ""))
+        # v685 · «OFF per column» era el dict de Python tal cual («{'WR': 12, 'FR': 0, …}»)
+        _off_col = " · ".join(f"{c} {n}" for c, n in (best.get("off_by_col") or {}).items() if n) or "none"
         sol_html = f"""
         <h3 style="color:#1a3a5c;margin-top:20px">Optimal solution</h3>
         <table style="border-collapse:collapse;width:100%;font-size:14px">
-          {row("RL (lateral shift)", f"{best['rl']:+.1f} mm", True)}
-          {row("FB (front shift)", fb_str, True)}
+          {row("RL (lateral shift)", rl_str, True)}
+          {row("FB (front-back shift)", fb_str, True)}
           {row("Values out of limit",     str(best['total_off']), best['total_off'] > 0)}
-          {row("OFF per column",             str(best.get('off_by_col', {})))}
+          {row("OFF per column",             _off_col)}
         </table>"""
     else:
         sol_html = "<p style='color:red'>No valid solution was found.</p>"
@@ -102,10 +109,16 @@ def send_usage_notification(
             bs_html = row("BSR vs BS", "BSR ≥ BS — No adjustment required ✅")
         elif bs_result.get("step"):
             bs_html = row("BSR vs BS",
-                f"Paso: {bs_result['step']} mm — Zona: {bs_result.get('range_name')} ⚠️", True)
+                f"Step: {bs_result['step']} mm — Zone: {bs_result.get('range_name')} ⚠️", True)
         else:
             bs_html = row("BSR vs BS",
                 f"DIF = {bs_result.get('dif_original')} mm — Not found in any range ❌", True)
+
+    # v685 · lo que va adjunto, dicho entero (decía «Attachments: drawing PDF + Survey matrix included above.», sin el
+    # informe de gestión ni el CSV)
+    _adj = [x for x, si in (("the management report (PDF)", admin_report), ("the drawing (PDF)", pdf_bytes),
+                            ("the survey matrix (CSV)", survey_df is not None)) if si]
+    _adjuntos = ("Attached: " + ", ".join(_adj) + ". " if _adj else "") + "The survey matrix is also shown above."
 
     p = all_params
     html = f"""
@@ -113,7 +126,7 @@ def send_usage_notification(
 
     <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);padding:20px 28px;border-radius:8px">
         <div style="color:white;font-size:26px;font-weight:900;letter-spacing:0.15em">COPEX</div>
-        <div style="color:#b0c8e8;font-size:14px">Elevator Survey Analyzer — Notificación de uso</div>
+        <div style="color:#b0c8e8;font-size:14px">Elevator Survey Analyzer — Usage notification</div>
     </div>
 
     <div style="background:#e8f4f8;padding:10px 20px;border-left:4px solid #2e6da4;margin:16px 0">
@@ -158,8 +171,8 @@ def send_usage_notification(
 
     <div style="margin-top:24px;padding:10px 16px;background:#f0f7ff;
                 border-radius:6px;font-size:12px;color:#666">
-        Notificación automática generada por COPEX Survey Analyzer.<br>
-        {"Attachments: drawing PDF + " if pdf_bytes else ""}Survey matrix included above.
+        Automatic notification from COPEX Survey Analyzer.<br>
+        {_adjuntos}
     </div>
     </body></html>
     """
@@ -186,9 +199,10 @@ def send_usage_notification(
         # Adjunto: plano PDF del usuario
         if pdf_bytes:
             pdf_part = MIMEApplication(pdf_bytes, _subtype="pdf")
+            from core.num import nombre_archivo
             pdf_part.add_header(
                 "Content-Disposition", "attachment",
-                filename=pdf_name or "drawing.pdf"
+                filename=pdf_name or f"Drawing_{nombre_archivo(proyecto, 'project')}.pdf"   # v685 · era «drawing.pdf»
             )
             msg.attach(pdf_part)
 
@@ -196,11 +210,17 @@ def send_usage_notification(
         if survey_df is not None:
             try:
                 from core import csv_seguro          # v654
-                csv_bytes = csv_seguro.tabla(survey_df).to_csv(index_label="Stop").encode("utf-8")
+                from core.num import nombre_archivo
+                # ⚠️ v685 · «Stop» 1…NS, como la pantalla y los informes (salía 0–11: la H5 del ciclo 4, en el adjunto)
+                _tab = survey_df.reset_index(drop=True)
+                _tab.index = range(1, len(_tab) + 1)
+                csv_bytes = csv_seguro.tabla(_tab).to_csv(index_label="Stop").encode("utf-8")
                 csv_part  = MIMEApplication(csv_bytes, _subtype="octet-stream")
                 csv_part.add_header(
                     "Content-Disposition", "attachment",
-                    filename="survey_matrix.csv"
+                    # v685 · con la obra y la hora, como lo archivado en la obra (v682); era «survey_matrix.csv»
+                    filename=f"Survey_matrix_{nombre_archivo(proyecto, 'project')}_"
+                             f"{clock.now().strftime('%Y-%m-%d_%H%M')}.csv"
                 )
                 msg.attach(csv_part)
             except Exception:

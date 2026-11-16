@@ -21,6 +21,7 @@ from core import flash
 import pandas as pd
 from extractors.schindler import extract_from_pdf, PARAMS as PDF_PARAMS, PARAM_DESCRIPTIONS
 from core.calculations import calculate_limits, apply_offsets, analyze_matrix, validate_inputs
+from core.calculations import aviso_matriz, niveles_sin_medir, celdas_a_cero   # v685 · la matriz sin medir no se calcula
 from core.optimizer    import optimize
 from core.bs_logic     import find_bs_step
 from core.report       import generate_report
@@ -248,6 +249,18 @@ def _clave_iu(r, k) -> str:
     """Una caja por cálculo y por versión del texto: al reescribirlo nace OTRA (trampa 31: con la misma clave el
     navegador devolvería lo que tenía)."""
     return "sv_iu_%s_%s_%s" % (k, r.get("_n", 0), r.get("_iu_v", 0))
+
+
+def _cajas_editadas(r) -> list:
+    """v685 · Los títulos de las cajas del texto del cliente que la oficina CAMBIÓ: «Rewrite the interpretation» las
+    sustituye (nacen otras, `_clave_iu`) y antes lo tiraba sin decirlo."""
+    iu = r.get("interpretation_user") or {}
+    out = []
+    for k in USER_SCHEMA:
+        v = st.session_state.get(_clave_iu(r, k))
+        if v is not None and str(v).strip() != str(iu.get(k) or "").strip():
+            out.append(t(_IU_TITULOS[k]))
+    return out
 
 
 def _iu_final(r) -> dict:
@@ -906,7 +919,8 @@ def render_survey_tab(_ROL, _GRUPO):
             all_params[f"{col[0]}{col[1]}T"] = float(last[col])
 
         # ── Validación de inputs ─────────────────────────────
-        issues = validate_inputs(all_params)
+        # v685 · y la matriz: un nivel sin medir para aquí, antes del correo interno y de las interpretaciones
+        issues = validate_inputs(all_params) + aviso_matriz(survey_original_input, SURVEY_COLS)
         if issues:
             st.error(t(":material/warning: Problems in the parameters — check before calculating:"))
             for issue in issues:
@@ -1442,6 +1456,16 @@ def render_survey_tab(_ROL, _GRUPO):
              if _falt else t(":material/edit: Manual parameters")),
             t(":green[:material/check_circle:] Matrix: {n} levels", n=_nsv),
         ]
+        # v685 · En verde también con la matriz a ceros (la de «Duplicate for the next lift»): dice cuántos faltan
+        try:
+            _filas_sv = st.session_state.survey_df.to_dict("records")
+            _sin_med, _a_medias = niveles_sin_medir(_filas_sv, SURVEY_COLS), celdas_a_cero(_filas_sv, SURVEY_COLS)
+        except Exception:
+            _sin_med, _a_medias = [], []
+        if _sin_med or _a_medias:
+            _falta = ([t("{k} without measurements", k=len(_sin_med))] if _sin_med else []) \
+                + ([t("{k} incomplete", k=len(_a_medias))] if _a_medias else [])
+            _chips[-1] = t(":orange[:material/warning:] Matrix: {n} levels, {x}", n=_nsv, x=", ".join(_falta))
         st.markdown("  ·  ".join(_chips))
 
         # Validación temprana: avisar ANTES de pulsar Calcular
@@ -1456,13 +1480,13 @@ def render_survey_tab(_ROL, _GRUPO):
             _last0 = st.session_state.survey_df.iloc[-1]
             for _col in SURVEY_COLS:
                 _ap0[f"{_col[0]}{_col[1]}T"] = float(_last0[_col])
-            _iss0 = validate_inputs(_ap0)
+            _iss0 = validate_inputs(_ap0) + aviso_matriz(st.session_state.survey_df, SURVEY_COLS)   # v685
         except Exception:
             _iss0 = []
         if _iss0:
-            # v589 · con su plural (decía «8 warning(s)»)
-            with st.expander(t(":material/warning: 1 warning in the parameters") if len(_iss0) == 1 else
-                             t(":material/warning: {n} warnings in the parameters", n=len(_iss0)),
+            # v589 · con su plural (decía «8 warning(s)»). v685 · «before calculating»: también avisa de la matriz sin medir
+            with st.expander(t(":material/warning: 1 warning before calculating") if len(_iss0) == 1 else
+                             t(":material/warning: {n} warnings before calculating", n=len(_iss0)),
                              expanded=False):
                 for _x in _iss0:
                     st.warning(_x)
@@ -1556,6 +1580,16 @@ def render_survey_tab(_ROL, _GRUPO):
 
             if st.session_state.calc_results:
                 r          = st.session_state.calc_results
+                # v685 · «Rewrite the interpretation» (o su «Yes, rewrite it»), ANTES de pintar las cajas: el botón solo
+                # lo apunta (acción diferida, trampa 37), y al terminar se dice (antes no decía nada).
+                if st.session_state.get("_sv_rw_hacer") is not None:
+                    if st.session_state.pop("_sv_rw_hacer") == r.get("_n", 0):
+                        with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
+                            _reescribir_ia(r)
+                        if (r.get("interpretation_user") or {}).get("_ok"):
+                            flash.exito(t(":material/smart_toy: Interpretation rewritten for the active solution: "
+                                          "check the text before the PDF."))
+                        st.rerun()
                 # v652 · C: el texto es de la solución ACTIVA. Si se eligió otra, se reescribe antes de enseñarlo.
                 if _ia_vieja(r):
                     with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
@@ -1582,13 +1616,27 @@ def render_survey_tab(_ROL, _GRUPO):
                                          height=170 if _k in ("implementacion", "verificacion", "cortes") else 120)
                     _gen_cli = st.button(t(":material/description: Generate the client report"), width="stretch",
                                          key="sv_gen_informe_cliente")
+                # ⚠️ v685 · Con cambios de la oficina en las cajas, pregunta antes: reescribir los sustituye (y antes
+                # los tiraba sin decirlo). Sin cambios, reescribe sin más.
+                _edit_iu = _cajas_editadas(r) if interp_usr.get("_ok") else []
+                _rw_pide = bool(_edit_iu) and st.session_state.get("_sv_rw_pide") == r.get("_n", 0)
                 if st.button(t(":material/refresh: Rewrite the interpretation"), key="sv_reescribir_ia",
-                             type="tertiary",
+                             type="tertiary", disabled=_rw_pide,
                              help=t("Writes both interpretations again for the active solution, without recalculating "
                                     "or sending the internal email.")):
-                    with st.spinner(t(":material/smart_toy: Rewriting the interpretation for the active solution...")):
-                        _reescribir_ia(r)
+                    st.session_state["_sv_rw_pide" if _edit_iu else "_sv_rw_hacer"] = r.get("_n", 0)
                     st.rerun()
+                if _rw_pide:
+                    st.warning(t(":material/warning: Rewriting replaces what you changed in: {cajas}. Rewrite it anyway?",
+                                 cajas=", ".join(_edit_iu)))
+                    _rw1, _rw2 = st.columns(2)
+                    if _rw1.button(t(":material/refresh: Yes, rewrite it"), key="sv_rw_si", width="stretch"):
+                        st.session_state.pop("_sv_rw_pide", None)
+                        st.session_state["_sv_rw_hacer"] = r.get("_n", 0)
+                        st.rerun()
+                    if _rw2.button(t(":material/undo: Keep my changes"), key="sv_rw_no", width="stretch"):
+                        st.session_state.pop("_sv_rw_pide", None)
+                        st.rerun()
                 if _gen_cli:
                     with st.spinner(t("Generating the client report...")):
                         user_pdf = generate_user_report(
