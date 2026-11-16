@@ -922,7 +922,8 @@ def render_survey_tab(_ROL, _GRUPO):
         # v685 · y la matriz: un nivel sin medir para aquí, antes del correo interno y de las interpretaciones
         issues = validate_inputs(all_params) + aviso_matriz(survey_original_input, SURVEY_COLS)
         if issues:
-            st.error(t(":material/warning: Problems in the parameters — check before calculating:"))
+            # v686 · decía «Problems in the parameters» también cuando lo que falla es la matriz (v685)
+            st.error(t(":material/warning: To fix before calculating:"))
             for issue in issues:
                 st.error(f"  • {issue}")
             st.stop()

@@ -51,6 +51,9 @@ ROTURAS = [
      [("                    _d(\"Column\"):       col,", "                    \"Columna\":       col,")]),
     ("el rango 1 del BSR vs BS, en español", RP,
      [("            _calc_block(_d(\"Range 1 — Zone ZB\"),", "            _calc_block(\"Rango 1 — Zona ZB\",")]),
+    ("v686 · la cabecera del error vuelve a «Problems in the parameters»", SU,
+     [("            st.error(t(\":material/warning: To fix before calculating:\"))",
+       "            st.error(t(\":material/warning: Problems in the parameters — check before calculating:\"))")]),
     # ── «Rewrite the interpretation» ──
     ("⚠️ reescribe sin preguntar con cajas cambiadas", SU,
      [("                _edit_iu = _cajas_editadas(r) if interp_usr.get(\"_ok\") else []", "                _edit_iu = []")]),

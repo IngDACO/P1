@@ -208,6 +208,10 @@ at.run()
 E = at.session_state["_E"]
 chk("⚠️ «Calculate» se para con el error", any("6 levels have no measurements yet (1–6): enter them before calculating." in e
                                               for e in errores(at)), errores(at))
+# v686 · visto en producción con v685: la cabecera decía «Problems in the parameters» y el problema era la matriz
+chk("v686 · ...bajo «To fix before calculating:», no «Problems in the parameters»",
+    any(e.endswith("To fix before calculating:") for e in errores(at))
+    and not any("Problems in the parameters" in e for e in errores(at)), errores(at))
 chk("⚠️ ...sin correo interno ni interpretaciones (nada pagado)", E["correo"] == 0 and E["user"] == [] and E["admin"] == [], E)
 chk("⚠️ ...y el optimizador ni arranca (con la matriz a ceros no terminaba en 5 min)", E.get("opt", 0) == 0, E.get("opt"))
 chk("...y sin resultado", not at.session_state["calc_results"])
