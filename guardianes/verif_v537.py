@@ -151,9 +151,22 @@ if _m:
         _vf = type(e).__name__
     chk("la sonda VE el fallo de producción con la expresión vieja (ArrowInvalid/TypeError)",
         _vf is not None, _vf)
-_cut = re.findall(r"cut_o[rl]_vals\.append\((.+?)\)\n", _tsv)
-chk("las columnas CUT OR / CUT OL también son texto (vacío o «3.5»)",
-    len(_cut) == 2 and all(c.startswith("f'{") and ":.1f}'" in c for c in _cut), _cut)
+# ⚠️ v681 · CADUCADO A PROPÓSITO: las columnas salen ahora de `interpretation.cortes_por_piso` (H3 del ciclo 4: también
+# con muro, sin el muro), con una lista por comprensión. La regla de v537 es la misma: TEXTO (vacío o «3.5»), por AST.
+def _es_texto_cut(n):
+    if not (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "insert"
+            and len(n.args) == 3 and isinstance(n.args[1], ast.Constant) and n.args[1].value in ("CUT OR", "CUT OL")):
+        return None
+    lc = n.args[2]
+    if not (isinstance(lc, ast.ListComp) and isinstance(lc.elt, ast.IfExp)):
+        return False
+    _fmt = [v for v in ast.walk(lc.elt.body) if isinstance(v, ast.FormattedValue)]
+    return (isinstance(lc.elt.body, ast.JoinedStr) and bool(_fmt) and ".1f" in ast.unparse(_fmt[0])
+            and isinstance(lc.elt.orelse, ast.Constant) and lc.elt.orelse.value == "")
+
+
+_cut = [r for r in (_es_texto_cut(n) for n in ast.walk(ast.parse(_fuente("core/survey_ui.py")))) if r is not None]
+chk("las columnas CUT OR / CUT OL también son texto (vacío o «3.5»)", len(_cut) == 2 and all(_cut), _cut)
 
 # ═════════════════════════════════════════════════════════════════
 sec("3. El aviso «valor por defecto + Session State», apagado y solo ese")

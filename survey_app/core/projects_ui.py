@@ -1177,6 +1177,13 @@ def _cargar_en_survey(pid, prj, grupo, params, matriz):
     st.session_state["proyecto"]  = str(prj.get("Name", ""))
     st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
     st.session_state["_rebuilt_from"] = str(prj.get("Name", ""))
+    # ⚠️ v681 · H13 del ciclo 4: también la CONFIGURACIÓN (muro limitante, su parada y lado, omega, lado del
+    # desplazamiento, controlador). Sin ella el muro volvía a «N» y recalcular daba otro caso y otra solución. La aplica
+    # el Survey antes de crear sus controles (`_cfg_pendiente_sv`), con la misma equivalencia que el Excel.
+    from core.survey_calc import cfg_de_params
+    st.session_state["_cfg_pendiente_sv"] = cfg_de_params(params)
+    # v681 · H12: y la obra elegida en el Survey, para que lo regenerado lleve su identidad (antes quedaba «— no project —»)
+    st.session_state["pl_prj_sv"] = f"{prj.get('Name')} ({pid})"
 
 
 def _decidir_survey(pid, did, run):
@@ -1199,9 +1206,9 @@ def _decidir_survey(pid, did, run):
             st.error(t("It could not be read: {e}", e=ex))
             return
         _prj = P.get_project(pid) or {}
+        # La obra ya elegida (al guardar desde el Survey va aquí sin buscarla): desde v681 lo hace `_cargar_en_survey`,
+        # para los dos caminos (aquí estaba duplicado).
         _cargar_en_survey(pid, _prj, str(_prj.get("Group", "")), _params, _matriz)
-        # La obra ya elegida: al guardar desde el Survey va aquí sin buscarla
-        st.session_state["pl_prj_sv"] = f"{_prj.get('Name')} ({pid})"
         if pendiente:
             toolruns.decidir_survey(run, "loaded", _usr)
         st.session_state["_admin_nav_pending"] = ("herramientas", "📐 Survey")
@@ -3924,7 +3931,10 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                     st.error(t("This project has no saved parameters."))
                 else:
                     _cargar_en_survey(pid, prj, grupo, params, matriz)
-                    st.success(t(":material/check_circle: Loaded. Go to **:material/architecture: Survey** and press **Calculate** to regenerate everything."))
+                    # v681 · H12 del ciclo 4: decía «Go to Survey and press Calculate» y se quedaba aquí. Ahora lleva
+                    # (como el Survey de campo, `_decidir_survey`); allí lo dice «You loaded project…».
+                    st.session_state["_admin_nav_pending"] = ("herramientas", "📐 Survey")
+                    st.rerun()
         # ── Archivos del proyecto (buscable) ──
         _archivos_section(pid)
         # ── v506: el expediente de entrega, justo debajo de los archivos ──

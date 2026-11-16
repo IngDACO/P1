@@ -545,13 +545,14 @@ def generate_report(project_params, calculated, survey_original,
          Paragraph(esc_pdf(ns_),                        styles["Normal2"]),
          Paragraph(_d("Omega side"),                styles["Normal2"]),
          Paragraph(_side(p.get("OMEGA_SIDE")),      styles["Normal2"])],
-        [Paragraph("Lado offset cabina",            styles["Normal2"]),
+        # v681 · en el idioma base: salían en español en el informe interno (visto ejercitando el ciclo 4)
+        [Paragraph(_d("Car offset side"),           styles["Normal2"]),
          Paragraph(_side(p.get("OFFSET_SIDE")),     styles["Normal2"]),
-         Paragraph("Offset cabina (mm)",            styles["Normal2"]),
+         Paragraph(_d("Car offset (mm)"),           styles["Normal2"]),
          Paragraph(f"{p.get('OFFSET_CABIN', 0):.1f}", styles["Normal2"])],
-        [Paragraph("Pared limitante?",              styles["Normal2"]),
+        [Paragraph(_d("Limiting wall?"),            styles["Normal2"]),
          Paragraph(_yn(wall_lim),                   styles["Normal2"]),
-         Paragraph("Parada limitante / Lado pared", styles["Normal2"]),
+         Paragraph(_d("Limiting stop / Wall side"), styles["Normal2"]),
          Paragraph(f"{int(wall_stop_) if wall_stop_ is not None else '—'} / {_side(wall_side_)}", styles["Normal2"])],
         [Paragraph(_d("Controller in frame?"),         styles["Normal2"]),
          Paragraph(_yn(ctrl_fr),                    styles["Normal2"]),
@@ -640,11 +641,11 @@ def generate_report(project_params, calculated, survey_original,
             f"({fstr('BKS')}/2) + ({fstr('RAIL')}/2) - ({fstr('BT')}/2) - {fstr('FRAME')}",
             f"Base = {_base_ol:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OR",
-            f"LIMIT OR = Base {'+ OFFSET_CABIN' if _off_s=='L' else '- OFFSET_CABIN'}  (offset lado {_off_s})",
+            f"LIMIT OR = Base {'+ OFFSET_CABIN' if _off_s=='L' else '- OFFSET_CABIN'}  (offset side {_off_s})",
             f"{_base_ol:.2f} {'+' if _off_s=='L' else '-'} {fstr('OFFSET_CABIN')}",
             f"LIMIT OR = {lor:.2f} mm", styles), sp(3),
         _calc_block("LIMIT OL",
-            f"LIMIT OL = Base {'- OFFSET_CABIN' if _off_s=='L' else '+ OFFSET_CABIN'}  (offset lado {_off_s})",
+            f"LIMIT OL = Base {'- OFFSET_CABIN' if _off_s=='L' else '+ OFFSET_CABIN'}  (offset side {_off_s})",
             f"{_base_ol:.2f} {'-' if _off_s=='L' else '+'} {fstr('OFFSET_CABIN')}",
             f"LIMIT OL = {lol:.2f} mm", styles), sp(6),
         _diagram_block("Seccion transversal — Limites laterales",
@@ -664,7 +665,7 @@ def generate_report(project_params, calculated, survey_original,
             f"{fstr(zb_sf)} x 0.3",
             f"LIMIT ZB raw = {lzb_raw:.2f} mm", styles), sp(4),
         Paragraph(
-            f"<b>Omega lado {omega}  |  Z lado {z_side}:</b>  "
+            f"<b>Omega side {omega}  |  Z side {z_side}:</b>  "
             f"LIMIT OB = {lob:.2f} mm  |  LIMIT ZB = {lzb:.2f} mm  |  "
             f"LIMIT R = {lr:.2f} mm  |  LIMIT L = {ll:.2f} mm",
             styles["Normal2"]), sp(8),
@@ -779,20 +780,25 @@ def generate_report(project_params, calculated, survey_original,
     story += [
         Paragraph(_d("7.1  Optimiser parameters"), styles["SubHead"]),
         _calc_block(_d("RL search range"),
-            "RL ∈ [-MAX OFF RL, +MAX OFF RL]  paso 0.5 mm",
+            "RL ∈ [-MAX OFF RL, +MAX OFF RL]  step 0.5 mm",
             f"[{-max_rl:.2f}, {max_rl:.2f}]",
             f"{_d('Total RL steps evaluated')}: {int(max_rl*2/0.5)+1}", styles), sp(3),
         _calc_block(_d("FB search range"),
-            "FB ∈ [-MAX OFF FB, +MAX OFF FB]  paso 0.5 mm",
+            "FB ∈ [-MAX OFF FB, +MAX OFF FB]  step 0.5 mm",
             f"[{-max_fb:.2f}, {max_fb:.2f}]",
             f"{_d('Total FB steps evaluated')}: {int(max_fb*2/0.5)+1}", styles), sp(4),
         Paragraph(_d("Constraints applied at each step:"), styles["SubHead2"]),
-        Paragraph(f"  - Si RL < 0: |RL| <= LIMIT R = {lr:.2f} mm", styles["Normal2"]),
-        Paragraph(f"  - Si RL > 0: |RL| <= LIMIT L = {ll:.2f} mm", styles["Normal2"]),
-        Paragraph(f"  - Pared limitante: {'Si - Parada ' + str(p.get('WALL_STOP','?')) + ' lado ' + str(p.get('WALL_SIDE','?')) if wall_limiting else 'No aplica'}", styles["Normal2"]),
-        Paragraph(f"  - TSW={fstr('TSW')} vs FS={fstr('FS')} - FS-TSW={fv('FS')-fv('TSW'):.1f} mm - FB extra active: {'Si' if fv('FS') > fv('TSW') and wall_limiting else 'No'}", styles["Normal2"]),
+        # v681 · en el idioma base (salían «Si», «Pared limitante», «Parada», «lado», «No aplica», «ultimo nivel») y con la
+        # regla del muro que decidió el usuario (H3 del ciclo 4)
+        Paragraph(f"  - If RL < 0: |RL| <= LIMIT R = {lr:.2f} mm", styles["Normal2"]),
+        Paragraph(f"  - If RL > 0: |RL| <= LIMIT L = {ll:.2f} mm", styles["Normal2"]),
+        Paragraph("  - " + (_d("Limiting wall: stop {s}, side {l}. It is never cut: if it is over its limit at its stop, "
+                               "the car is pushed towards the rear to clear it (whichever way RL goes), or the step is "
+                               "discarded.", s=p.get('WALL_STOP', '?'), l=p.get('WALL_SIDE', '?'))
+                            if wall_limiting else _d("Limiting wall: not applicable")), styles["Normal2"]),
+        Paragraph(f"  - TSW={fstr('TSW')} vs FS={fstr('FS')} - FS-TSW={fv('FS')-fv('TSW'):.1f} mm - FB extra active: {'Yes' if fv('FS') > fv('TSW') and wall_limiting else 'No'}", styles["Normal2"]),
         Paragraph(
-            f"  - Controller in frame: {'Si - lado ' + str(p.get('CTRL_SIDE','?')) + ' -> ultimo nivel: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' - 70 mm' if rpt_ctrl else 'No'}",
+            f"  - Controller in frame: {'Yes - side ' + str(p.get('CTRL_SIDE','?')) + ' -> top level: LIMIT_O' + str(p.get('CTRL_SIDE','?')) + ' - 70 mm' if rpt_ctrl else 'No'}",
             styles["Normal2"]),
         sp(4),
         _diagram_block(_d("RL range diagram"),
@@ -828,7 +834,7 @@ def generate_report(project_params, calculated, survey_original,
     opt_pairs = {(s["rl"], s["fb"]) for s in all_solutions}
 
     hdr = [Paragraph(f"<b>{h}</b>", styles["Normal2"]) for h in
-           ["RL", "FB", "FB aplic.", "OFF", "WR", "FR", "OR", "WL", "FL", "OL", "Estado"]]
+           ["RL", "FB", "FB applied", "OFF", "WR", "FR", "OR", "WL", "FL", "OL", "Status"]]
     valid_rows = [hdr]
     for s in min_off_steps:
         obc        = s.get("off_by_col", {})
@@ -904,7 +910,7 @@ def generate_report(project_params, calculated, survey_original,
             is_best   = (sol["rl"], sol["fb"]) == best_pair_r
             prefix    = _d("SELECTED") + " - " if is_best else ""
             fb_ap     = sol.get("fb_applied", sol["fb"])
-            fb_suffix = f"  |  FB aplic. = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
+            fb_suffix = f"  |  FB applied = {fb_ap:.1f} mm" if abs(fb_ap - sol["fb"]) > 0.01 else ""
             story += [
                 _subheader(f"{prefix}Solution {idx_sol+1} of {n_sol} — RL = {sol['rl']} mm  |  FB = {sol['fb']} mm{fb_suffix}", styles),
                 sp(3),
@@ -913,26 +919,23 @@ def generate_report(project_params, calculated, survey_original,
             sol_df  = pd.DataFrame(sol["matrix"])
             sol_min = {f"MIN_{c}": min(sol_df[c]) for c in survey_cols}
             sol_max = {f"MAX_{c}": max(sol_df[c]) for c in survey_cols}
-            if not wall_limiting:
-                lor_v        = lim_map["OR"]
-                lol_v        = lim_map["OL"]
-                last_sol_idx = len(sol_df) - 1
-                cut_or_vals, cut_ol_vals = [], []
-                for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
-                    or_lim = lor_v - 70 if (rpt_ctrl and rpt_ctrl_side == "R" and i == last_sol_idx) else lor_v
-                    ol_lim = lol_v - 70 if (rpt_ctrl and rpt_ctrl_side == "L" and i == last_sol_idx) else lol_v
-                    cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")
-                    cut_ol_vals.append(f"{ol_v - ol_lim:.1f}" if ol_v - ol_lim > 0 else "")
-                sol_df.insert(3, "CUT OR", cut_or_vals)
-                sol_df.insert(7, "CUT OL", cut_ol_vals)
+            # ⚠️ v681 · H3 del ciclo 4: las columnas de corte en los DOS casos (con muro se corta todo menos el muro), con la
+            # MISMA definición que el informe del cliente y la pantalla (`interpretation.cortes_por_piso`).
+            from core.interpretation import cortes_por_piso as _cpp, muro_de as _mdf, texto_muro as _txm
+            _cps = {c["piso"]: c for c in _cpp({"LIMIT_OR": lim_map["OR"], "LIMIT_OL": lim_map["OL"]}, sol, p)}
+            sol_df.insert(3, "CUT OR", [f"{_cps[i + 1]['cortar_OR_mm']:.1f}" if _cps.get(i + 1, {}).get("cortar_OR_mm")
+                                        else "" for i in range(len(sol_df))])
+            sol_df.insert(7, "CUT OL", [f"{_cps[i + 1]['cortar_OL_mm']:.1f}" if _cps.get(i + 1, {}).get("cortar_OL_mm")
+                                        else "" for i in range(len(sol_df))])
             story  += [_survey_table(sol_df, lim_map, sol_min, styles,
                                      cut_cols=rpt_cut_cols, max_vals=sol_max,
                                      ctrl_in_frame=rpt_ctrl, ctrl_side=rpt_ctrl_side), sp(3)]
-            if not wall_limiting:
-                story += [Paragraph(
-                    _d("CUT OR = OR - LIMIT OR  /  CUT OL = OL - LIMIT OL  "
-                       "(amount to cut if it exceeds the limit; blank = within)"),
-                    styles["Note"]), sp(3)]
+            story += [Paragraph(
+                _d("CUT OR = OR - LIMIT OR  /  CUT OL = OL - LIMIT OL  "
+                   "(amount to cut if it exceeds the limit; blank = within)"),
+                styles["Note"]), sp(3)]
+            if wall_limiting and _mdf(p):
+                story += [Paragraph(esc_pdf(_txm(_mdf(p), sol)), styles["Note"]), sp(3)]
             sol_sum = []
             for col in survey_cols:
                 cv  = [r[col] for r in sol["matrix"]]

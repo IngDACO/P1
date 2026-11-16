@@ -166,7 +166,8 @@ ROTURAS = [
     ("⚠️ «Load» no carga", PU,
      [('        _cargar_en_survey(pid, _prj, str(_prj.get("Group", "")), _params, _matriz)\n', "")]),
     ("⚠️ «Load» no deja la obra elegida", PU,
-     [('        st.session_state["pl_prj_sv"] = f"{_prj.get(\'Name\')} ({pid})"\n', "")]),
+     # v681 · re-anclada: lo hace `_cargar_en_survey` (también al reabrir desde Files); aquí estaba duplicado
+     [('    st.session_state["pl_prj_sv"] = f"{prj.get(\'Name\')} ({pid})"\n', "")]),
     ("⚠️ «Load» no lleva al Survey", PU,
      [('        st.session_state["_admin_nav_pending"] = ("herramientas", "📐 Survey")\n        st.rerun()\n    if pendiente and',
        '        st.rerun()\n    if pendiente and')]),

@@ -61,8 +61,9 @@ ROTURAS = [
            "                     else v}")]),
 
     ("los cortes CUT OR vuelven a mezclar numeros y vacios",
-     SV, [('cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")',
-           'cut_or_vals.append(round(or_v - or_lim, 1) if or_v - or_lim > 0 else "")')]),
+     # v681 · re-anclada: las columnas salen de `cortes_por_piso` en una lista por comprensión (H3 del ciclo 4)
+     SV, [('sol_df.insert(3, "CUT OR", [f"{_cps[i + 1][\'cortar_OR_mm\']:.1f}"',
+           'sol_df.insert(3, "CUT OR", [round(_cps[i + 1][\'cortar_OR_mm\'], 1)')]),
 
     ("el aviso de Session State vuelve a los logs",
      CFG, [("disableWidgetStateDuplicationWarning = true",

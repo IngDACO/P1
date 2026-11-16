@@ -57,10 +57,12 @@ to those plumb lines. Nothing is moved after installation. A landing door openin
 cut on that side.
 
 Measurements per floor:
-- WR/WL: side clearance between the car block (BKS + 2×RAIL) and the right/left wall. Out of limit when BELOW its minimum.
+- WR/WL: distance from the right/left wall to the rail line (where the plumb line hangs). Out of limit when BELOW its
+  minimum.
 - FR/FL: distance from the front wall to the right/left rail centre. Out of limit when BELOW its minimum.
-- OR/OL: space at the right/left of the landing door opening. Out of limit when ABOVE its maximum: in Case 2 that side of
-  the opening is cut; in Case 1 (limiting wall) it counts against the solution.
+- OR/OL: space at the right/left of the landing door opening. Out of limit when ABOVE its maximum: that side of the
+  opening is cut, and the solution keeps cuts to a minimum. The only exception is a limiting wall (Case 1): it is NEVER
+  cut; at its stop the car is pushed towards the rear to clear it when needed.
 - Shifting the block to the LEFT increases WR and reduces WL; towards the REAR increases FR and FL.
 - BS = shaft width on the drawing, BSR = measured width; BT = landing door opening; FRAME = car door frame.
 
@@ -98,6 +100,8 @@ RULES:
 - The survey is done BEFORE installation. The solution is applied by setting out the plumb template and the plumb lines
   displaced as the report's final plumb setting shows; the rails and brackets are installed to those lines; the landing
   door openings listed are cut. Never describe moving an installed car, releasing rail brackets or jacking anything.
+- A limiting wall is NEVER cut. If FACTS gives one, say only what FACTS says about it (cleared by the extra push
+  towards the rear, or within its limit); never list it as a cut.
 - The FACTS block is the only truth: every number and every direction you write must be exactly as there. Say directions
   only as "to the LEFT", "to the RIGHT", "towards the REAR" or "towards the FRONT".
 - If FACTS lists anything still out of limit, say so plainly in the summary, with where; never claim that everything fits
@@ -193,9 +197,12 @@ def hechos(calc_results: dict, all_params: dict) -> dict:
     caso2 = not bool(p.get("WALL_LIMITING"))
     limite = {c: round(_num(lim.get("LIMIT_%s" % c)), 1) for c in _COLS}
     antes = _filas(r.get("survey_adj"))
+    # v681 · H3 del ciclo 4 (decidido por el usuario): el muro limitante no se corta NUNCA; el resto de aperturas sí
     f = {
         "case": ("Case 2: no limiting wall; a landing door opening over its maximum is cut on that side" if caso2
-                 else "Case 1: a limiting wall that cannot be cut; openings over their maximum count against the solution"),
+                 else "Case 1: a limiting wall that is NEVER cut (at its stop the car is pushed towards the rear to "
+                      "clear it when needed); every other landing door opening over its maximum is cut on that side, "
+                      "and the solution keeps cuts to a minimum"),
         "stops": int(_num(p.get("NS"))),
         "geometry_mm": {**{k: p.get(k) for k in ("BS", "BSR", "BKS", "RAIL", "SF1", "SF2", "BT", "FRAME", "TS", "TKSW", "FS", "TSW")
                            if p.get(k) is not None},
@@ -221,6 +228,11 @@ def hechos(calc_results: dict, all_params: dict) -> dict:
         quedan = []
         for c in _COLS:
             # ⚠️ Lo que CUENTA la solución (off_by_col) manda; en el Caso 2 OR/OL no cuentan: se cortan (`cuts`)
+            # v681 · Y en el Caso 1 tampoco son «lo que queda»: se cortan igual (están en `cuts`), salvo el muro, que se
+            # esquiva o queda dentro (`limiting_wall`). Salían DOS veces: «must be cut» y «still out of limit… the
+            # engineering office will confirm» (H3 del ciclo 4).
+            if c in _MAXIMO:
+                continue
             if int(_num(por_col.get(c))) <= 0:
                 continue
             pisos = _pisos_fuera(filas, limite[c], c)
@@ -239,9 +251,18 @@ def hechos(calc_results: dict, all_params: dict) -> dict:
         }
         if best.get("fb_extra_applied"):
             f["solution"]["front_back_shift_before_extra_push_mm"] = round(abs(_num(best.get("fb"))), 1)
+        _m = muro_de(p)
+        if _m:
+            _ev = bool(best.get("wall_evaded", best.get("fb_extra_applied")))
+            f["solution"]["limiting_wall"] = {
+                "stop": _m["stop"], "side": "RIGHT" if _m["side"] == "R" else "LEFT", "cut": False,
+                "cleared_by_extra_push_towards_rear_mm": empuje_extra(best) if best.get("fb_extra_applied") else 0.0,
+                # el piso del muro ya está lo bastante atrás: esquivado sin empujar (v681, el caso 3 del optimizador)
+                "already_clear_without_extra_push": _ev and not bool(best.get("fb_extra_applied")),
+                "within_its_limit": not _ev}
     else:
         f["solution"] = None
-    f["cuts"] = _cortes(cortes_por_piso(lim, best)) if best else []
+    f["cuts"] = _cortes(cortes_por_piso(lim, best, p)) if best else []
     f["bsr_vs_bs"] = {"bsr_mm": p.get("BSR"), "bs_mm": p.get("BS"),
                       "difference_mm": round(_num(p.get("BS")) - _num(p.get("BSR")), 1),
                       "adjustment_needed": bool(bs.get("needed")), "step_mm": bs.get("step"), "range": bs.get("range_name")}
@@ -255,8 +276,20 @@ def texto_desplazamientos(f) -> str:
         return "No positioning solution was found for this survey. Contact the engineering office before setting out."
     out = ["Set out the plumb template and the plumb lines with these shifts from the drawing position:",
            "• Lateral: %s." % s["lateral_shift"], "• Front-back: %s." % s["front_back_shift"]]
-    if s.get("extra_push_to_clear_limiting_wall"):
+    _w = s.get("limiting_wall")
+    if _w and s.get("extra_push_to_clear_limiting_wall"):
+        # v681 · H3: con su parada, su lado y los mm, y que NO se corta
+        out.append("• The front-back shift includes %.1f mm of extra push towards the REAR to clear the limiting wall "
+                   "at floor %d (%s side), which is not cut." % (_w["cleared_by_extra_push_towards_rear_mm"],
+                                                                 _w["stop"], _w["side"].lower()))
+    elif s.get("extra_push_to_clear_limiting_wall"):
         out.append("• The front-back shift includes the extra push needed to clear the limiting wall.")
+    elif _w and _w.get("already_clear_without_extra_push"):
+        out.append("• The limiting wall at floor %d (%s side) is not cut: at that floor the car is already far enough "
+                   "towards the rear to clear it." % (_w["stop"], _w["side"].lower()))
+    elif _w:
+        out.append("• The limiting wall at floor %d (%s side) stays within its limit with these shifts: it is not cut."
+                   % (_w["stop"], _w["side"].lower()))
     out.append("The rails and their brackets are then installed to those plumb lines; the final plumb setting in this "
                "report gives the exact positions.")
     for q in s.get("still_out_of_limit") or []:
@@ -466,18 +499,67 @@ def _fallback(reason: str) -> dict:
 # ⚠️ El informe del CLIENTE sale SIEMPRE en inglés, como el resto de documentos que
 # salen de la empresa (regla de `i18n.d`): su idioma no puede depender de cómo tenga
 # la pantalla quien lo genera.
-def cortes_por_piso(lim: dict, best: dict) -> list:
+def muro_de(params) -> dict:
+    """El muro limitante del Survey, `{stop, side}` (side = "R" | "L"), o None si no hay (Caso 2) o está mal puesto."""
+    p = params or {}
+    if not p.get("WALL_LIMITING") or str(p.get("WALL_SIDE", "")) not in ("R", "L"):
+        return None
+    try:
+        s = int(float(p.get("WALL_STOP")))
+    except (TypeError, ValueError):
+        return None
+    return {"stop": s, "side": str(p["WALL_SIDE"])} if s >= 1 else None
+
+
+def empuje_extra(best) -> float:
+    """Los mm de empuje EXTRA hacia atrás que esquivaron el muro (FB aplicado − FB del barrido)."""
+    b = best or {}
+    return round(abs(_num(b.get("fb_applied", b.get("fb"))) - _num(b.get("fb"))), 1)
+
+
+def texto_muro(muro, best) -> str:
+    """v681 · La nota del muro limitante bajo la matriz del cliente (H3 del ciclo 4): nunca es un corte."""
+    lado = "right" if muro["side"] == "R" else "left"
+    b = best or {}
+    if b.get("fb_extra_applied"):
+        return ("Floor %d, %s side: limiting wall. It is not cut: the car is pushed %.1f mm further towards the rear "
+                "to clear it." % (muro["stop"], lado, empuje_extra(b)))
+    if b.get("wall_evaded"):
+        return ("Floor %d, %s side: limiting wall. It is not cut: at that floor the car is already far enough towards "
+                "the rear to clear it." % (muro["stop"], lado))
+    return ("Floor %d, %s side: limiting wall. It is not cut, and with this solution it stays within its limit."
+            % (muro["stop"], lado))
+
+
+def cortes_por_piso(lim: dict, best: dict, params=None) -> list:
     """Los cortes que exige la solución: `[{piso, cortar_OR_mm, cortar_OL_mm}]`.
 
     ⚠️ Es la ÚNICA definición de «hay cortes»: el veredicto del informe del cliente lo deducía leyendo el texto de la IA,
     y un dato se saca de los datos (v437). Criterio: OR/OL por ENCIMA de su límite (la convención de v16), por piso.
+
+    v681 · Con los parámetros del Survey (`params`):
+    - ⚠️ el muro limitante (su parada, su lado) NO es un corte NUNCA (H3 del ciclo 4, decidido por el usuario: «un muro
+      limitante es aquel que no puede ser cortado»). Decía «Floor 4: cut 17.0 mm on the right side» justo en el muro;
+      el optimizador garantiza que ahí queda dentro o se esquiva empujando hacia atrás (`texto_muro`).
+    - con el controlador en el marco, el último piso de su lado se corta contra su límite REDUCIDO (−70 mm), el mismo
+      con el que cuenta el optimizador; aquí se medía contra el normal y el corte salía 70 mm corto.
     """
     lim_or = float(lim.get("LIMIT_OR", 0) or 0)
     lim_ol = float(lim.get("LIMIT_OL", 0) or 0)
+    muro = muro_de(params)
+    p = params or {}
+    ctrl = str(p.get("CTRL_SIDE", "")) if p.get("CTRL_IN_FRAME") else ""
+    filas = (best or {}).get("matrix", []) or []
     out = []
-    for i, row in enumerate((best or {}).get("matrix", []) or []):
-        c_or = round(float(row.get("OR", 0) or 0) - lim_or, 1)
-        c_ol = round(float(row.get("OL", 0) or 0) - lim_ol, 1)
+    for i, row in enumerate(filas):
+        _ult = i == len(filas) - 1
+        c_or = round(float(row.get("OR", 0) or 0) - (lim_or - (70 if _ult and ctrl == "R" else 0)), 1)
+        c_ol = round(float(row.get("OL", 0) or 0) - (lim_ol - (70 if _ult and ctrl == "L" else 0)), 1)
+        if muro and i + 1 == muro["stop"]:
+            if muro["side"] == "R":
+                c_or = 0.0
+            else:
+                c_ol = 0.0
         piso = {}
         if c_or > 0:
             piso["cortar_OR_mm"] = c_or
@@ -495,7 +577,8 @@ def _build_user_payload(calc_results: dict, all_params: dict) -> str:
     nombrado en el docstring lo seguía encontrando aunque se quitara la llamada (lo destapó romper_v437)."""
     r = calc_results or {}
     f = hechos(r, all_params)
-    f["cuts"] = _cortes(cortes_por_piso(r.get("limits") or {}, (r.get("optimizer_result") or {}).get("best") or {}))
+    f["cuts"] = _cortes(cortes_por_piso(r.get("limits") or {}, (r.get("optimizer_result") or {}).get("best") or {},
+                                        all_params))
     return ("FACTS (computed by the app; the only truth):\n" + json.dumps(f, ensure_ascii=False, indent=1)
             + "\n\nThe report already says, written by the app:\n" + texto_desplazamientos(f) + "\n" + texto_cortes(f)
             + "\n\nWrite the client report sections. Each value must be a string of professional ENGLISH text:\n"

@@ -20,6 +20,39 @@ from core.plumb import compute_plumb
 SURVEY_COLS = ["WR", "FR", "OR", "WL", "FL", "OL"]
 
 
+def _si(v) -> bool:
+    return v if isinstance(v, bool) else str(v).strip().lower() in ("true", "1", "yes", "y", "sí", "si")
+
+
+def cfg_de_params(cfg: dict) -> dict:
+    """La configuración guardada de un Survey (ParamsJSON de la obra, o la hoja del Excel) → las claves de sus controles.
+
+    ⚠️ v681 · UNA definición (H13 del ciclo 4): «Load this project into the Survey» cargaba medidas, NS y matriz pero NO
+    esto, y el muro limitante volvía a «N» (con omega, lado del desplazamiento y controlador por defecto): quien pulsaba
+    Calculate, como pedía el aviso, regeneraba los informes con OTRO caso y otra solución. La importación del Excel ya lo
+    hacía, con su propia copia de estas líneas."""
+    cfg = cfg or {}
+    out = {}
+    if cfg.get("OMEGA_SIDE") in ("R", "L"):
+        out["cfg_omega_side"] = cfg["OMEGA_SIDE"]
+    if cfg.get("OFFSET_SIDE") in ("R", "L"):
+        out["cfg_offset_side"] = cfg["OFFSET_SIDE"]
+    if cfg.get("WALL_LIMITING") is not None:
+        out["cfg_wall_yn"] = "Y" if _si(cfg["WALL_LIMITING"]) else "N"
+    if cfg.get("WALL_STOP") not in (None, ""):
+        try:
+            out["cfg_wall_stop"] = int(float(cfg["WALL_STOP"]))
+        except (TypeError, ValueError):
+            pass
+    if cfg.get("WALL_SIDE") in ("R", "L"):
+        out["cfg_wall_side"] = cfg["WALL_SIDE"]
+    if cfg.get("CTRL_IN_FRAME") is not None:
+        out["cfg_ctrl_yn"] = "Y" if _si(cfg["CTRL_IN_FRAME"]) else "N"
+    if cfg.get("CTRL_SIDE") in ("R", "L"):
+        out["cfg_ctrl_side"] = cfg["CTRL_SIDE"]
+    return out
+
+
 def recalcular(params: dict, matriz) -> dict | None:
     """params = ParamsJSON del proyecto; matriz = MatrizJSON (lista de dicts).
 

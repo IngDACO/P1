@@ -6,13 +6,21 @@ y un log detallado de cada paso evaluado.
 
 Flujo en cada paso (rl, fb):
   Paso 1: aplicar desplazamientos iniciales (rl, fb) a la matriz
-  Paso 2: si RL va hacia la pared Y OR/OL en WALL_STOP > LIMIT Y FS > TSW
+  Paso 2: si OR/OL en WALL_STOP (del lado del muro) > LIMIT Y FS > TSW, vaya RL hacia donde vaya (v681)
           → aplicar FB extra = FS − TSW (cabina evade el muro físicamente)
           → fb_extra_applied = True
-  Paso 2b: si fb_extra_applied Y |RL| > FRAME → SKIP
+  Paso 2b: si fb_extra_applied Y RL va hacia la pared Y |RL| > FRAME → SKIP
            (apertura de cabina quedaría tapada por la pared limitante)
   Paso 3: contar violaciones (excluye OR/OL del nivel evadido)
-  Paso 4: SKIP duro solo si va hacia pared, OR/OL > LIMIT y NO se pudo evadir
+  Paso 4: SKIP duro si OR/OL en WALL_STOP > LIMIT y NO se pudo evadir, vaya RL hacia donde vaya (v681)
+
+⚠️ v681 · H3 del ciclo 4, decidido por el usuario: «un muro limitante es aquel que no puede ser cortado… lo único que se
+puede hacer es empujar el elevador hacia atrás hasta que esquive el límite físico de esa pared; todos los demás niveles
+sí pueden ser cortados» y, cuando el muro YA está fuera en su nivel y la solución se aleja de él sin bastar, «se debe
+empujar hacia atrás» (opción a: ninguna solución deja el muro por encima de su límite; para librarlo vale alejarse lo
+suficiente o empujar si cabe; si no, se descarta; entre las válidas, la de menos cortes). Hasta v680 los pasos 2 y 4
+solo actuaban yendo HACIA el muro: con FS 120 la solución se alejó 18 mm, el muro (436 → 418, límite 401) quedó fuera
+sin empujar ni descartar, y el informe pedía cortarlo.
 """
 import numpy as np
 
@@ -133,7 +141,15 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             #   2) Otro piso más crítico ya empujó fb; wall_stop lleva ventaja → extra reducido
             #   3) Sin violación FR/FL (fb=0); wall_stop ya está sobre límite → extra reducido
             # Tras la evasión, el nivel WALL_STOP queda fuera del conteo OR/OL.
-            if toward_wall and 0 <= wall_stop_idx < len(modified):
+            # ⚠️ v681 · Vaya RL hacia donde vaya (ver el docstring): el muro no se corta nunca. Y «esquivado» (`wall_evaded`)
+            # es un hecho aparte del empuje (`fb_extra_applied`):
+            #   - con extra_needed = 0 (el piso del muro ya está FS−TSW o más por detrás de su límite frontal, el caso 3 de
+            #     arriba) el muro YA está esquivado sin empujar. Hasta v680 eso no se marcaba y, yendo hacia el muro, se
+            #     descartaba como choque; con los datos de PRJ-0045 (FS 120) la regla nueva se quedaba SIN solución.
+            #   - si el empuje entero no cabe detrás (FB_MAX_BACK), NO está esquivado: hasta v680 se empujaba lo que cupiera
+            #     y se daba por esquivado. El muro no se corta, así que esa solución no vale.
+            wall_evaded = False
+            if wall_active and 0 <= wall_stop_idx < len(modified):
                 if modified[wall_stop_idx][wall_check_col] > wall_lim_val:
                     if fs is not None and fs > tsw:
                         # Columna frontal del lado de la pared (FR si R, FL si L)
@@ -147,23 +163,26 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                         excess = fr_at_wall - fb_lim_val
 
                         # Push extra necesario para completar la evasión
-                        extra_needed   = max(0.0, (fs - tsw) - excess)
-                        new_fb_applied = min(fb + extra_needed, fb_max_back)
+                        extra_needed = max(0.0, (fs - tsw) - excess)
+                        objetivo     = fb + extra_needed
 
-                        if new_fb_applied > fb_applied + 1e-3:
-                            fb_applied       = float(new_fb_applied)
-                            modified         = _apply(rl, fb_applied)
-                            fb_extra_applied = True
+                        if objetivo <= fb_max_back + 1e-3:
+                            wall_evaded = True
+                            if objetivo > fb_applied + 1e-3:
+                                fb_applied       = float(objetivo)
+                                modified         = _apply(rl, fb_applied)
+                                fb_extra_applied = True
 
             # ── Paso 2b: restricción apertura de cabina ──────────
-            # Si la cabina evadió la pared con FB extra y el RL hacia la pared
+            # Si la cabina evadió la pared (empujando, o ya por detrás de ella: v681) y el RL hacia la pared
             # supera FRAME, la apertura de la cabina queda tapada → SKIP.
-            if fb_extra_applied and toward_wall and frame > 0 and abs(rl) > frame:
+            if wall_evaded and toward_wall and frame > 0 and abs(rl) > frame:
                 step_log.append({
                     "rl":               float(rl),
                     "fb":               float(fb),
                     "fb_applied":       float(fb_applied),
-                    "fb_extra_applied": True,
+                    "fb_extra_applied": fb_extra_applied,
+                    "wall_evaded":      True,
                     "status":           "SKIP",
                     # v589 · en el idioma base (decía «Apertura tapada»)
                     "reason":           t("Opening covered: |RL|={rl} > FRAME={f}",
@@ -194,8 +213,8 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                             eff_lim = lim - 70
                         elif col == "OL" and ctrl_side == "L":
                             eff_lim = lim - 70
-                    # Nivel de pared evadido por FB extra → no contar
-                    if fb_extra_applied and row_idx == wall_stop_idx and col == wall_check_col:
+                    # Nivel de pared evadido (con FB extra o ya por detrás, v681) → no contar
+                    if wall_evaded and row_idx == wall_stop_idx and col == wall_check_col:
                         continue
                     if col in ("OR", "OL"):
                         if v > eff_lim:
@@ -219,10 +238,11 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                         total_off += 1
 
             # ── Paso 4: chequeo duro de pared ────────────────────
-            # SKIP solo si va hacia la pared, OR/OL > LIMIT, y NO se pudo evadir.
+            # SKIP si OR/OL > LIMIT en la parada del muro y NO se pudo evadir: alejándose tampoco vale dejarlo fuera
+            # (v681: hasta entonces solo yendo HACIA la pared, y el informe pedía cortar el muro).
             wall_fail   = False
             wall_reason = ""
-            if toward_wall and not fb_extra_applied and 0 <= wall_stop_idx < len(modified):
+            if wall_active and not wall_evaded and 0 <= wall_stop_idx < len(modified):
                 stop_row = modified[wall_stop_idx]
                 if wall_side == "R" and stop_row["OR"] > full_lim_map["OR"]:
                     wall_fail   = True
@@ -238,6 +258,7 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 "fb":               float(fb),
                 "fb_applied":       float(fb_applied),
                 "fb_extra_applied": fb_extra_applied,
+                "wall_evaded":      wall_evaded,
                 "total_off":        total_off,
                 "off_by_col":       off_by_col.copy(),
                 "min_by_col":       min_by_col.copy(),
@@ -263,6 +284,7 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
                 "fb":               float(fb),
                 "fb_applied":       float(fb_applied),
                 "fb_extra_applied": fb_extra_applied,
+                "wall_evaded":      wall_evaded,
                 "total_off":        total_off,
                 "matrix":           modified,
                 "off_by_col":       off_by_col.copy(),

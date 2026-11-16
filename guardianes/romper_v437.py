@@ -22,11 +22,12 @@ ROTURAS = [
      IN, '"implementacion": "Concrete, ordered steps',
      '"implementacion": "Pasos concretos y ordenados para implementar la solución en obra'),
     ("el veredicto vuelve a deducirse del TEXTO de la IA",
-     UR, '_cortes = bool(cortes_por_piso(calculated or {}, best or {}))',
+     # v681 · re-anclada: la llamada lleva la configuración (el muro limitante no es un corte, H3 del ciclo 4)
+     UR, '_cortes = bool(cortes_por_piso(calculated or {}, best or {}, p))',
      '_cortes = "requiere cortes" in str(ia.get("cortes", "")).lower()'),
     ("el veredicto se cae al except (el fallo REAL de v437: `limits`)",
-     UR, 'cortes_por_piso(calculated or {}, best or {})',
-     'cortes_por_piso(limits or {}, best or {})'),
+     UR, 'cortes_por_piso(calculated or {}, best or {}, p)',   # v681 · re-anclada (ídem)
+     'cortes_por_piso(limits or {}, best or {}, p)'),
     ("el informe pasa a usar t() en vez de d() (idioma de la pantalla)",
      UR, 'd("TECHNICAL REPORT")', 't("TECHNICAL REPORT")'),
     ("un título de sección vuelve al español",
@@ -44,7 +45,9 @@ ROTURAS = [
      '        _fila_t.append(Paragraph(f"<b>{t}</b><br/><font size=8 color=\'#555555\'>{d}</font>",'),
     ("el payload de la IA deja de compartir la definición de cortes",
      # v652 · re-anclada: los cortes de los hechos, de `cortes_por_piso`
-     IN, 'f["cuts"] = _cortes(cortes_por_piso(r.get("limits") or {}, (r.get("optimizer_result") or {}).get("best") or {}))',
+     # v681 · re-anclada: la línea pasa también los parámetros y se parte en dos
+     IN, 'f["cuts"] = _cortes(cortes_por_piso(r.get("limits") or {}, (r.get("optimizer_result") or {}).get("best") or {},\n'
+         '                                        all_params))',
      'f["cuts"] = []'),
 ]
 

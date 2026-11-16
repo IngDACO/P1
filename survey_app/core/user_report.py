@@ -299,7 +299,8 @@ def generate_user_report(project_params, calculated, optimizer_result,
     # fallo que acabas de introducir (v323 · v338 · v344).
     try:
         from core.interpretation import cortes_por_piso
-        _cortes = bool(cortes_por_piso(calculated or {}, best or {}))
+        # v681 · con la configuración: el muro limitante no es un corte (H3 del ciclo 4)
+        _cortes = bool(cortes_por_piso(calculated or {}, best or {}, p))
     except Exception as e:
         logger.warning("user_report: no se pudieron calcular los cortes: %s", e)
         _cortes = False
@@ -374,12 +375,18 @@ def generate_user_report(project_params, calculated, optimizer_result,
             (d("Values out of limit"), f"{off}", "#1e8449" if off == 0 else "#c0392b"),
             (d("Stops"), str(meta["ns"]), None),
         ], styles), _sp(8)]
+        # ⚠️ v681 · H1 del ciclo 4: decía «18.0 mm to the RIGHT» con RL +18 y, debajo, el texto de la app «18.0 mm to
+        # the LEFT» (el bueno: el optimizador hace WR += rl, y el replanteo movía la plomada izquierda de 84 a 66). El
+        # sentido sale de la MISMA definición que el resto del informe (`interpretation._sentido_lateral/_frontal`).
+        # (por un dict y no comparando con «left»: verif_v436 prohíbe comparar con un texto que pasa por d()/t())
+        from core.interpretation import _sentido_lateral, _sentido_frontal
+        _SENT = {"left": d("left"), "right": d("right"), "rear": d("rear"), "front": d("front")}
         story += [_callout(
             d("<b>Main action:</b> shift the car block <b>{lat} mm</b> to the {dir_lat} "
               "and <b>{frt} mm</b> to the {dir_frt}, relative to the design position.",
               lat=f"{abs(rl):.1f}", frt=f"{abs(fb):.1f}",
-              dir_lat=d("right") if rl >= 0 else d("left"),
-              dir_frt=d("rear") if fb >= 0 else d("front")), styles), _sp(8)]
+              dir_lat=_SENT.get(_sentido_lateral(rl), d("right")),
+              dir_frt=_SENT.get(_sentido_frontal(fb), d("rear"))), styles), _sp(8)]
     else:
         story += [Paragraph(d("No valid solution was found."), styles["UBody"]), _sp(8)]
 
@@ -404,6 +411,12 @@ def generate_user_report(project_params, calculated, optimizer_result,
             ("LINEBELOW", (0, 0), (-1, 0), 0.8, C_COPEX),
             ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ]
+        # v681 · H3 del ciclo 4 (decidido por el usuario): el muro limitante NO se corta nunca. Su celda (la parada del
+        # muro, del lado del muro) no es «una apertura que hay que cortar»: o está dentro de su límite o se esquivó
+        # empujando la cabina hacia atrás, y se dice debajo.
+        from core.interpretation import muro_de, texto_muro
+        _muro = muro_de(p)
+        _col_muro = ("OR" if _muro["side"] == "R" else "OL") if _muro else None
         for i, mrow in enumerate(best["matrix"]):
             cells = [Paragraph(esc_pdf(i + 1), styles["UCell"])]
             for ci, c in enumerate(survey_cols, start=1):
@@ -412,6 +425,9 @@ def generate_user_report(project_params, calculated, optimizer_result,
                 lim = lim_map.get(c)
                 if lim is not None:
                     bad = (v > lim) if c in ("OR", "OL") else (v < lim)
+                    if _muro and i + 1 == _muro["stop"] and c == _col_muro:
+                        bad = False                     # el muro: ni rojo ni corte (nota de abajo)
+                        cmds.append(("BACKGROUND", (ci, i + 1), (ci, i + 1), colors.HexColor("#dce8f5")))
                     if bad:
                         cmds.append(("BACKGROUND", (ci, i + 1), (ci, i + 1), colors.HexColor("#f9d6d1")))
             rows.append(cells)
@@ -420,7 +436,10 @@ def generate_user_report(project_params, calculated, optimizer_result,
         t.setStyle(TableStyle(_zebra(cmds, len(rows))))
         story += [t, _sp(4),
                   Paragraph(d("Cells in red: values needing attention (clearance below the minimum, "
-                              "or an opening that requires cutting)."), styles["USmall"]), _sp(10)]
+                              "or an opening that requires cutting)."), styles["USmall"])]
+        if _muro:
+            story += [_sp(2), Paragraph(esc_pdf(texto_muro(_muro, best)), styles["USmall"])]
+        story += [_sp(10)]
 
     # ── Diagramas de planta por piso ────────────────────────
     if best and best.get("matrix"):
@@ -579,7 +598,8 @@ def generate_user_report(project_params, calculated, optimizer_result,
     _terms = [
         ("RL", d("Lateral shift of the car block relative to the design.")),
         ("FB", d("Front shift (towards the rear wall or towards the door).")),
-        ("WR / WL", d("Clearance between the car block and the right / left wall.")),
+        # v681 · H11: se miden hasta la línea del riel (la de la plomada), no hasta el bloque
+        ("WR / WL", d("Distance from the right / left wall to the rail line (where the plumb line hangs).")),
         ("FR / FL", d("Distance from the front wall to the right / left rail axis.")),
         ("OR / OL", d("Space to the right / left in the landing door opening.")),
         ("BS / BSR", d("Shaft width per drawing / width actually measured on site.")),

@@ -39,6 +39,15 @@ def validate_inputs(p: dict) -> list:
         fs, tsw = _mm(fs), _mm(tsw)
         issues.append(t("FS ({fs}) is smaller than TSW ({tsw}): there is no front safety clearance.",
                         fs=fs, tsw=tsw))
+    # ⚠️ v681 · H4 del ciclo 4: «Limiting stop» admitía 20 con 12 paradas y el optimizador ignoraba entonces el muro EN
+    # SILENCIO (`0 <= wall_stop_idx < len(modified)`): el resultado salía como si no hubiera muro.
+    if p.get("WALL_LIMITING") and p.get("WALL_STOP") is not None and p.get("NS"):
+        try:
+            _s, _n = int(float(p["WALL_STOP"])), int(float(p["NS"]))
+        except (TypeError, ValueError):
+            _s, _n = 0, 0
+        if _n and not 1 <= _s <= _n:
+            issues.append(t("The limiting stop ({s}) does not exist: the survey has {n} stops.", s=_s, n=_n))
     return issues
 
 

@@ -138,9 +138,13 @@ chk("⚠️ lo que SIGUE fuera, con sus pisos y su peor valor", _q == [{"column"
 chk("⚠️ en el Caso 2, OR/OL no «siguen fuera»: se cortan", f["cuts"] == [
     {"floor": 1, "cut_right_side_of_opening_mm": 13.0}, {"floor": 2, "cut_left_side_of_opening_mm": 4.0}], f["cuts"])
 _c1 = I.hechos(calc(off={"WR": 0, "FR": 0, "OR": 1, "WL": 0, "FL": 0, "OL": 0}), {**PAR, "WALL_LIMITING": True})
-chk("en el Caso 1 (pared), OR fuera cuenta, con su máximo", _c1["solution"]["still_out_of_limit"] == [
-    {"column": "OR", "how_many_floors": 1, "floors": [1], "worst_mm": 450.0, "limit_mm": 437.0, "rule": "maximum"}]
-    and "Case 1" in _c1["case"], _c1["solution"]["still_out_of_limit"])
+# ⚠️ v681 · CADUCADO A PROPÓSITO (H3 del ciclo 4, decidido por el usuario): «un muro limitante es aquel que no puede ser
+# cortado… todos los demás niveles sí pueden ser cortados». En el Caso 1 una apertura fuera YA NO «sigue fuera»: es un
+# corte (salía dos veces en el informe: «must be cut» y «still out of limit… the engineering office will confirm»). Solo
+# el muro no se corta nunca (aquí no hay parada del muro: `muro_de` da None). Antes exigía OR en «still_out_of_limit».
+chk("en el Caso 1 (pared), OR fuera NO «sigue fuera»: se corta, como en el Caso 2 (v681)",
+    _c1["solution"]["still_out_of_limit"] == [] and {"floor": 1, "cut_right_side_of_opening_mm": 13.0} in _c1["cuts"]
+    and "Case 1" in _c1["case"] and "NEVER cut" in _c1["case"], (_c1["solution"]["still_out_of_limit"], _c1["cuts"]))
 _ok0 = I.hechos(calc(off={"WR": 0, "FR": 0, "WL": 0, "FL": 0}), PAR)["solution"]
 chk("sin nada fuera, «everything within limits»", _ok0["everything_within_limits"] is True and _ok0["still_out_of_limit"] == [])
 chk("antes de desplazar, los pisos fuera de cada columna (de la matriz ajustada)",

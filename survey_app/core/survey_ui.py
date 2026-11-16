@@ -165,7 +165,7 @@ def _limpiar_survey():
     st.session_state["ns"]            = 2
     st.session_state["survey_df"]     = pd.DataFrame({c: [0.0] * 2 for c in SURVEY_COLS})
     st.session_state["calc_results"]  = None
-    for _k in ("proyecto", "cliente", "ubicacion", "ingeniero"):
+    for _k in ("proyecto", "cliente", "ubicacion", "ingeniero", "modelo"):
         st.session_state[_k] = ""
     # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
     for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
@@ -293,6 +293,12 @@ def render_survey_tab(_ROL, _GRUPO):
         st.success(t(":material/check_circle: Matrix, parameters and settings loaded from the Excel file.")
                    if _pend.get("todo") else
                    t(":green[:material/check_circle:] Matrix loaded from the Excel file (the drawing's parameters are kept)."))
+
+    # v681 · H13: la configuración guardada en la obra al reabrirla («Load this project into the Survey» y el Survey de
+    # campo, `projects_ui._cargar_en_survey`). Va AQUÍ, antes de crear los controles, como la del Excel (regla v111): las
+    # `cfg_*` son claves de controles que en la ficha de la obra no se pintan.
+    for _k, _v in (st.session_state.pop("_cfg_pendiente_sv", None) or {}).items():
+        st.session_state[_k] = _v
 
     if st.session_state.pop("_dup_msg", False):
         st.success(t(":material/summarize: Survey duplicated: parameters and configuration were kept. Enter the matrix for the next lift and calculate."))
@@ -640,26 +646,30 @@ def render_survey_tab(_ROL, _GRUPO):
                     sol_df  = pd.DataFrame(sol["matrix"])
                     sol_min = {f"MIN_{c}": min(sol_df[c]) for c in SURVEY_COLS}
                     sol_max = {f"MAX_{c}": max(sol_df[c]) for c in SURVEY_COLS}
-                    if not wall_limiting_:
-                        lor_v        = lim_map["OR"]
-                        lol_v        = lim_map["OL"]
-                        last_sol_idx = len(sol_df) - 1
-                        cut_or_vals, cut_ol_vals = [], []
-                        for i, (or_v, ol_v) in enumerate(zip(sol_df["OR"], sol_df["OL"])):
-                            or_lim = lor_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "R" and i == last_sol_idx) else lor_v
-                            ol_lim = lol_v - 70 if (ctrl_in_frame_ and ctrl_side_ == "L" and i == last_sol_idx) else lol_v
-                            # v537 · en texto, por lo mismo: «» y números mezclados.
-                            cut_or_vals.append(f"{or_v - or_lim:.1f}" if or_v - or_lim > 0 else "")
-                            cut_ol_vals.append(f"{ol_v - ol_lim:.1f}" if ol_v - ol_lim > 0 else "")
-                        sol_df.insert(3, "CUT OR", cut_or_vals)
-                        sol_df.insert(7, "CUT OL", cut_ol_vals)
+                    # ⚠️ v681 · H3 del ciclo 4 (decidido por el usuario): con muro limitante TAMBIÉN se cortan las
+                    # aperturas, todas menos la del muro. Las columnas de corte salen en los dos casos, con la MISMA
+                    # definición que el informe del cliente (`interpretation.cortes_por_piso`: el muro nunca, y el
+                    # último piso contra el límite reducido del controlador, como aquí antes).
+                    from core.interpretation import cortes_por_piso as _cpp
+                    _cps = {c["piso"]: c for c in _cpp(limits, sol, all_params)}
+                    # v537 · en texto, por lo mismo: «» y números mezclados.
+                    sol_df.insert(3, "CUT OR", [f"{_cps[i + 1]['cortar_OR_mm']:.1f}"
+                                                if _cps.get(i + 1, {}).get("cortar_OR_mm") else ""
+                                                for i in range(len(sol_df))])
+                    sol_df.insert(7, "CUT OL", [f"{_cps[i + 1]['cortar_OL_mm']:.1f}"
+                                                if _cps.get(i + 1, {}).get("cortar_OL_mm") else ""
+                                                for i in range(len(sol_df))])
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
                                                        ctrl_in_frame_, ctrl_side_)
                     st.dataframe(sol_df.style.apply(sol_highlighter, axis=None).format(precision=1),
                                  width="stretch", column_config=tabla.cfg())
                     _leyenda_matriz()
-                    if not wall_limiting_:
-                        st.caption(t("CUT OR / CUT OL: how much to cut if OR/OL exceeds the limit (OR/OL − LIMIT). Positive = a cut is needed. Blank = within the limit."))
+                    st.caption(t("CUT OR / CUT OL: how much to cut if OR/OL exceeds the limit (OR/OL − LIMIT). Positive = a cut is needed. Blank = within the limit."))
+                    if wall_limiting_:
+                        # v681 · H3: el muro, nunca como corte; lo que se hizo con él, dicho
+                        from core.interpretation import muro_de as _mdf, texto_muro as _txm
+                        if _mdf(all_params):
+                            st.caption(t(":material/block: {x}", x=_txm(_mdf(all_params), sol)))
                     sol_sum = []
                     for col in SURVEY_COLS:
                         col_vals = [x[col] for x in sol["matrix"]]
@@ -874,6 +884,8 @@ def render_survey_tab(_ROL, _GRUPO):
         all_params["INGENIERO"]     = st.session_state.get("ingeniero", "")
         all_params["CLIENTE"]       = st.session_state.get("cliente", "")
         all_params["UBICACION"]     = st.session_state.get("ubicacion", "")
+        # v681 · H12b del ciclo 4: el informe del cliente lee MODELO y nadie lo ponía («Model —» siempre)
+        all_params["MODELO"]        = st.session_state.get("modelo", "")
 
         # Totales = última fila de la matriz
         last = survey_original_input.iloc[-1]
@@ -1080,6 +1092,7 @@ def render_survey_tab(_ROL, _GRUPO):
             st.session_state["proyecto"]  = str(_prj_sv.get("Name", ""))
             st.session_state["cliente"]   = str(_prj_sv.get("Client", ""))
             st.session_state["ubicacion"] = str(_prj_sv.get("Location", ""))
+            st.session_state["modelo"]    = str(_prj_sv.get("Model", ""))      # v681 · H12b
             # ⚠️ El NOMBRE, no los login. La columna guarda «campo1;mchen» (v459) y
             # esta clave es la que pintan el informe del CLIENTE y el correo: sin
             # resolver, el documento que se le manda al cliente diría «campo1;mchen».
@@ -1095,8 +1108,8 @@ def render_survey_tab(_ROL, _GRUPO):
                 from core import maps as _maps
                 st.caption(":material/place: " + _maps.maps_link_md(_prj_sv.get("Location"), t("see on Maps")))
         else:
-            # Sin proyecto: cálculo suelto, el informe va sin identidad.
-            for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero"):
+            # Sin proyecto: cálculo suelto, el informe va sin identidad (al GUARDARLO en una obra, la de ella: v681).
+            for _kid in ("proyecto", "cliente", "ubicacion", "ingeniero", "modelo"):
                 st.session_state[_kid] = ""
         if _plano_sv:
             _mapa_sv = {f"params.{_p}": f"inp_{_p}" for _p in PDF_PARAMS}
@@ -1268,6 +1281,12 @@ def render_survey_tab(_ROL, _GRUPO):
             wc1, wc2 = st.columns(2)
             wc1.number_input(t("Limiting stop"), min_value=1, step=1, key="cfg_wall_stop")
             wc2.radio(t("Wall side"),        ["R", "L"], horizontal=True, key="cfg_wall_side")
+            # v681 · H4: dicho AQUÍ, junto al campo (también bloquea Calculate: `validate_inputs`). Sin `max_value`: con
+            # menos paradas después, el valor quedaría por encima del tope y Streamlit lanza una excepción.
+            _ns_ws = int(st.session_state.get("ns", 2) or 2)
+            if int(st.session_state.get("cfg_wall_stop", 1) or 1) > _ns_ws:
+                wc1.error(t(":material/error: Stop {s} does not exist: the survey has {n} stops.",
+                            s=int(st.session_state.get("cfg_wall_stop", 1)), n=_ns_ws))
 
         cc1, cc2 = st.columns(2)
         cc1.radio(t("Is the controller part of the frame?"), ["N", "Y"], horizontal=True, key="cfg_ctrl_yn")
@@ -1332,17 +1351,9 @@ def render_survey_tab(_ROL, _GRUPO):
                 # Nada se modifica hasta tener TODO parseado; se aplica en el próximo rerun.
                 _params = {k: float(v) for k, v in (imported.get("info") or {}).items()
                            if k in PDF_PARAMS or k in USER_ONLY}
-                cfg = imported.get("config", {})
-                _cfg = {}
-                if cfg.get("OMEGA_SIDE")  in ("R", "L"): _cfg["cfg_omega_side"]  = cfg["OMEGA_SIDE"]
-                if cfg.get("OFFSET_SIDE") in ("R", "L"): _cfg["cfg_offset_side"] = cfg["OFFSET_SIDE"]
-                if "WALL_LIMITING" in cfg:
-                    _cfg["cfg_wall_yn"] = "Y" if cfg["WALL_LIMITING"] else "N"
-                if cfg.get("WALL_STOP") is not None:     _cfg["cfg_wall_stop"] = int(cfg["WALL_STOP"])
-                if cfg.get("WALL_SIDE") in ("R", "L"):   _cfg["cfg_wall_side"] = cfg["WALL_SIDE"]
-                if "CTRL_IN_FRAME" in cfg:
-                    _cfg["cfg_ctrl_yn"] = "Y" if cfg["CTRL_IN_FRAME"] else "N"
-                if cfg.get("CTRL_SIDE") in ("R", "L"):   _cfg["cfg_ctrl_side"] = cfg["CTRL_SIDE"]
+                # v681 · la MISMA equivalencia que al reabrir el Survey desde la obra (`survey_calc.cfg_de_params`)
+                from core.survey_calc import cfg_de_params
+                _cfg = cfg_de_params(imported.get("config", {}))
 
                 st.session_state["_import_pending"] = {
                     "ns": len(imported["df"]),
@@ -1358,15 +1369,20 @@ def render_survey_tab(_ROL, _GRUPO):
                 sc2.error(t("Error importing the Excel file: {e}", e=e))
 
         st.caption(t("Enter or edit the measurements taken on site (mm)."))
+        # ⚠️ v681 · H5 del ciclo 4: las filas salían numeradas 0…NS−1 y «Limiting stop» y los pisos del resultado van
+        # 1…NS: quien veía el choque en la fila «3» marcaba el nivel equivocado. Se numeran como las paradas SOLO al
+        # pintar; la matriz guardada sigue con su índice de siempre (`reset_index` abajo).
+        _df_ed = st.session_state.survey_df.copy()
+        _df_ed.index = pd.RangeIndex(1, len(_df_ed) + 1, name=t("Stop"))
         edited_df = st.data_editor(
-            st.session_state.survey_df,
+            _df_ed,
             width="stretch",
             num_rows="fixed",
             # ⚠️ v542 · Clave con generación (`tabla_nueva`): con clave fija y filas fijas,
             # Streamlit re-aplica lo tecleado sobre la matriz que ponga el código.
             key=estado_vivo.clave_tabla("sv", "survey_editor")
         , column_config=tabla.cfg())
-        st.session_state.survey_df = edited_df.copy()
+        st.session_state.survey_df = edited_df.reset_index(drop=True)
 
         # Exportar Excel
         info_dict   = {p: st.session_state.get(f"inp_{p}", 0.0) for p in list(PDF_PARAMS) + list(USER_ONLY.keys())}
@@ -1692,6 +1708,13 @@ def render_survey_tab(_ROL, _GRUPO):
                                  width="stretch", key="sv_save_prj",
                                  disabled=(_prj is None)):
                         _pid = str(_prj.get("ID", ""))
+                        # ⚠️ v681 · H2 del ciclo 4: lo que se archiva en la obra lleva la identidad de ESA obra. Calculado
+                        # sin obra arriba (cálculo suelto) y guardado aquí, el informe del cliente archivado salía con
+                        # «Project / Client / Model —» y ParamsJSON con PROYECTO y CLIENTE vacíos.
+                        ap.update({"PROYECTO": str(_prj.get("Name", "")), "CLIENTE": str(_prj.get("Client", "")),
+                                   "UBICACION": str(_prj.get("Location", "")), "MODELO": str(_prj.get("Model", "")),
+                                   "INGENIERO": projects_data.head_installers_label(
+                                       _prj, str(_prj.get("Group", _GRUPO)))})
                         # v652 · C: lo que se guarda es de la solución ACTIVA (el campo no ve el informe del cliente,
                         # donde se reescribe; si eligió otra, aquí).
                         if _ia_vieja(r):
@@ -1731,7 +1754,9 @@ def render_survey_tab(_ROL, _GRUPO):
                                 toolruns.registrar(
                                     pid=_pid, grupo=str(_prj.get("Group", _GRUPO)),
                                     herramienta="survey", resumen=_resumen,
-                                    datos={"rl": _best.get("rl"), "fb": _best.get("fb"),
+                                    # v681 · H16: el FB APLICADO (el del resumen); guardaba el del barrido
+                                    datos={"rl": _best.get("rl"),
+                                           "fb": _best.get("fb_applied", _best.get("fb")),
                                            "total_off": _best.get("total_off"),
                                            "ns": ap.get("NS")},
                                     usuario=_usr)

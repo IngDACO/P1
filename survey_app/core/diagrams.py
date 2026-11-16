@@ -8,10 +8,11 @@ extensión y marcas diagonales, ejes de simetría y cajetín. El rojo se reserva
 para las cotas fuera de límite. Cuando una holgura es muy ajustada se añade un
 "DETALLE" ampliado con escala propia, porque a escala real no se distinguiría.
 
-  - Eje horizontal = ancho   (WL a la izquierda, WR a la derecha)
+  - Eje horizontal = ancho = WL + (BKS + RAIL) + WR: WL/WR van de la pared a la LÍNEA DEL RIEL (la de la plomada,
+    a RAIL/2 de su espalda), no al bloque (v681, decidido por el usuario)
   - Eje vertical   = profundidad (FRENTE abajo = puertas; FONDO arriba)
-  - Cabina = bloque rígido BKS + 2·RAIL (ancho) × TL (profundidad)
-  - Apertura de puerta (BT) centrada en su eje, con OL/OR a los lados
+  - Cabina = bloque rígido BKS + 2·RAIL (ancho, de espalda a espalda de riel) × TL (profundidad)
+  - Apertura de puerta (BT) con OL/OR medidos desde la línea del riel
   - FR/FL = distancia de la pared frontal al riel (frente de la cabina)
 
 `shaft_iso_svg` añade una isométrica del hueco completo para el informe: la
@@ -142,6 +143,12 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     rail  = _n(params.get("RAIL"), 12.0)
     bt    = _n(params.get("BT"), 900.0)
     cab_w = bks + 2 * rail
+    # ⚠️ v681 · H11 del ciclo 4 (decidido por el usuario): WL/WR y OL/OR se miden hasta la LÍNEA DEL RIEL, donde cuelga
+    # la plomada (a RAIL/2 de la espalda del riel): LIMIT_WL = SF1 + RAIL/2, LIMIT_OR = BKS/2 + RAIL/2 − BT/2 − FRAME, y
+    # la plomada cierra di + (BKS + RAIL) + dd = BSR (en la prueba, el piso de referencia: WL 66 = di, WR 112 = dd). El
+    # dibujo ponía el BLOQUE (BKS + 2·RAIL) entre WL y WR: un RAIL de más en el ancho («Shaft width 1902 mm» con un BSR
+    # de 1840) y los marcos de la puerta RAIL/2 más anchos de lo que son.
+    sep_rieles = bks + rail
 
     wl = _n(row.get("WL")); wr = _n(row.get("WR"))
     fl = _n(row.get("FL")); fr = _n(row.get("FR"))
@@ -160,7 +167,7 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     # Es decir: desde la pared frontal, TKSW (en obra = FL/FR) llega al EJE DE
     # RIELES, y ese eje está a MEDIA profundidad del cuerpo de cabina (TK/2), no
     # en su frente. Situar el frente de la cabina a (FL+FR)/2 la sacaba del hueco.
-    ancho_int = wl + cab_w + wr
+    ancho_int = wl + sep_rieles + wr               # v681 · entre líneas de riel, no el bloque
     tk        = _n(params.get("TK"), 0.0)
     eje_riel  = max(1.0, (fl + fr) / 2.0)          # pared frontal → eje de rieles
     bc        = _n(limits.get("BC_CALC"), 0.0)
@@ -193,7 +200,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
              f'fill="none" stroke="#1f2937" stroke-width="2.2"/>')
 
     # ── Cabina (posición real) ─────────────────────────────
-    cx0 = x0 + wl * esc
+    x_rl = x0 + wl * esc                           # línea del riel izquierdo (WL llega aquí)
+    x_rr = x_rl + sep_rieles * esc                 # línea del riel derecho (WR sale de aquí)
+    cx0 = x_rl - rail / 2 * esc                    # espalda del riel izquierdo = borde del bloque
     cw  = cab_w * esc
     ch  = tk * esc
     cy0 = y1 - (eje_riel + tk / 2) * esc           # fondo de la cabina
@@ -217,19 +226,18 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
     p.append(f'<text x="{cx0+cw/2:.1f}" y="{cy0+ch/2+11:.1f}" text-anchor="middle" '
              f'font-size="7.5" fill="#5b6472">BKS+2·RAIL = {cab_w:.0f} mm</text>')
 
-    # Rieles: sobre los laterales, a la profundidad medida en obra (FL / FR)
-    for rx, ry in ((cx0, y_rl), (cx0 + cw, y_rr)):
+    # Rieles: en su LÍNEA (la de la plomada, v681), a la profundidad medida en obra (FL / FR)
+    for rx, ry in ((x_rl, y_rl), (x_rr, y_rr)):
         p.append(f'<rect x="{rx-4:.1f}" y="{ry-5:.1f}" width="8" height="10" fill="#1a3a5c"/>')
         p.append(f'<line x1="{rx-13:.1f}" y1="{ry:.1f}" x2="{rx+13:.1f}" y2="{ry:.1f}" '
                  f'stroke="#1a3a5c" stroke-width="0.6" stroke-dasharray="7,2,1.5,2"/>')
 
     # ── Apertura de puerta — posicionada con los datos MEDIDOS ──
-    # OL/OR se miden desde el borde de la cabina hasta la apertura (ver
-    # LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME). Antes la apertura se
-    # centraba en un eje calculado y luego se rotulaba con OL/OR: el número
-    # no correspondía al tramo realmente dibujado.
+    # OL/OR se miden desde la LÍNEA DEL RIEL hasta la apertura (v681: LIMIT_OL/OR = BKS/2 + RAIL/2 − BT/2 − FRAME es
+    # justo esa distancia; desde el borde del bloque sobraba RAIL/2 a cada lado). Y antes la apertura se centraba
+    # en un eje calculado y luego se rotulaba con OL/OR: el número no correspondía al tramo realmente dibujado.
     eje_cab = cx0 + cw / 2
-    dx0, dx1 = cx0 + ol * esc, cx0 + (cab_w - orr) * esc
+    dx0, dx1 = x_rl + ol * esc, x_rr - orr * esc
     if dx1 - dx0 < 6:                      # datos incoherentes → apertura nominal
         dx0, dx1 = eje_cab - bt * esc / 2, eje_cab + bt * esc / 2
     eje_ap = (dx0 + dx1) / 2
@@ -262,9 +270,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         return "#c0392b" if ((v > lim) if es_max else (v < lim)) else "#1f2937"
 
     yd = y0 - mur - 16
-    p.append(_dim_h(x0, cx0, yd, f"WL {_mm(wl)}", tcolor=_c(wl, lim_wl),
+    p.append(_dim_h(x0, x_rl, yd, f"WL {_mm(wl)}", tcolor=_c(wl, lim_wl),
                     ext_desde=y0 - mur, hacia="izq"))
-    p.append(_dim_h(cx0 + cw, x1, yd, f"WR {_mm(wr)}", tcolor=_c(wr, lim_wr),
+    p.append(_dim_h(x_rr, x1, yd, f"WR {_mm(wr)}", tcolor=_c(wr, lim_wr),
                     ext_desde=y0 - mur, hacia="der"))
 
     xd = x0 - mur - 26
@@ -278,9 +286,9 @@ def floor_plan_svg(params: dict, limits: dict, row: dict, floor_idx: int,
         p.append(_dim_v(y0, cy0, xd - 20, f"BC {_mm(bc_dib)}", ext_desde=x0 - mur))
 
     yo = y1 + mur + 34
-    p.append(_dim_h(cx0, dx0, yo, f"OL {_mm(ol)}", tcolor=_c(ol, lim_ol, True),
+    p.append(_dim_h(x_rl, dx0, yo, f"OL {_mm(ol)}", tcolor=_c(ol, lim_ol, True),
                     ext_desde=y1 + mur, hacia="izq"))
-    p.append(_dim_h(dx1, cx0 + cw, yo, f"OR {_mm(orr)}", tcolor=_c(orr, lim_or, True),
+    p.append(_dim_h(dx1, x_rr, yo, f"OR {_mm(orr)}", tcolor=_c(orr, lim_or, True),
                     ext_desde=y1 + mur, hacia="der"))
 
     # Rótulos de orientación
@@ -479,7 +487,8 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
     r0 = rows[0] if rows else {}
     wl = _n(r0.get("WL"), 50.0); wr = _n(r0.get("WR"), 50.0)
     fl = _n(r0.get("FL"), 60.0); fr = _n(r0.get("FR"), 60.0)
-    W  = wl + cab_w + wr
+    # v681 · H11: WL/WR llegan a la LÍNEA del riel (ver `floor_plan_svg`): el ancho va entre líneas, BKS + RAIL
+    W  = wl + (bks + rail) + wr
     tl = _n(limits.get("TL"), 0.0) or 1400.0
     D  = _n(params.get("TS"), 0.0) or ((fl + fr) / 2 + tl + _n(limits.get("BC_CALC")))
     H  = ns * h_piso
@@ -536,7 +545,8 @@ def shaft_iso_svg(params: dict, limits: dict, solution: dict, ns: int,
     # media profundidad del cuerpo de cabina (TK/2), no en su frente.
     eje_riel = max(1.0, (fl + fr) / 2)
     cz0, cz1 = h_piso * 0.12, h_piso * 0.12 + h_piso * 0.72
-    cx_a, cx_b = wl, wl + cab_w
+    cx_a = wl - rail / 2                    # v681 · espalda del riel izquierdo = borde del bloque
+    cx_b = cx_a + cab_w
     _tk  = _n(params.get("TK"), 0.0) or tl
     cy_b = D - eje_riel + _tk / 2           # cara frontal de la cabina (lado acceso)
     cy_a = D - eje_riel - _tk / 2
