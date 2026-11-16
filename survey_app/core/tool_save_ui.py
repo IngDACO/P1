@@ -200,13 +200,18 @@ def render_guardar(herramienta: str, titulo_pdf: str, pdf_bytes: bytes,
         return bool(prj) and hecho.get("firma") == firma and hecho.get("pid") == str(prj.get("ID", ""))
 
     def _guardar(prj):
+        # ⚠️ v684 · Lo ARCHIVADO lleva también la hora, como los ficheros del Survey (v682): dos guardados el mismo día
+        # dejaban dos «Rail_cutting_case2_<obra>_2026-11-16.pdf» iguales en Files (lo vio el Management assistant)
+        from core import clock as _ck
+        _arch = (nombre_archivo[:-4] + _ck.now().strftime("_%H%M") + ".pdf"
+                 if nombre_archivo.lower().endswith(".pdf") else nombre_archivo)
         with st.spinner(t("Saving…")):
             res = toolruns.registrar(
                 pid=str(prj.get("ID", "")),
                 grupo=str(prj.get("Group", grupo)),
                 herramienta=herramienta, resumen=resumen,
                 datos={"entradas": _snapshot(herramienta), "resultados": datos},
-                usuario=usuario, pdf=pdf_bytes, filename=nombre_archivo)
+                usuario=usuario, pdf=pdf_bytes, filename=_arch)
         if res.get("ok"):
             # v592 · Se apunta y se relanza: el aviso se queda (antes era de UNA pasada) y el
             # botón pasa a «Saved» mientras el cálculo sea el mismo.

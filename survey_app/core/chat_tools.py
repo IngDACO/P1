@@ -1295,7 +1295,10 @@ def _calculos(entrada, ctx) -> dict:
         "calculation of each tool on this job. Rail cutting: in Case 2 a negative value means that top rail falls short "
         "(nothing to cut: check the measurement and the sub-case); in Case 1 negative = trim, positive = add. Buffers: "
         "a negative cut means the actual HKPR is greater than the drawing's HKP (nothing to cut, check on site). "
-        "Belting: positive DSTS = below the top floor level, negative = above it. Nothing saved = null.")
+        "Belting: positive DSTS = below the top floor level, negative = above it. Nothing saved = null. "
+        # v684 · leyó «within_its_limit: false» como «el muro sigue fuera» y contó los buffers como ascensores
+        "limiting_wall: how_it_is_handled says how the solution clears it; needs_attention false = nothing to check "
+        "about the wall. Buffer cutting lists buffers (a pit can have more than one per lift), not lifts.")
     return out
 
 

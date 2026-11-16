@@ -173,8 +173,9 @@ _reg = _ss(at, "_REG", [])
 chk("⚠️ el resumen «Lift 1: DSTS 21.0, Lift 2: DSTS -29.0» (decía «E1: DSTS 21.0»)",
     bool(_reg) and _reg[-1].get("resumen") == "Lift 1: DSTS 21.0, Lift 2: DSTS -29.0",
     _reg[-1].get("resumen") if _reg else "")
-chk("…el PDF «Belting_Lift_A_<fecha>.pdf» (era «belting.pdf»)",
-    bool(_reg) and re.fullmatch(r"Belting_Lift_A_\d{4}-\d{2}-\d{2}\.pdf",
+# v684 · CADUCADO A PROPÓSITO: lo ARCHIVADO lleva también la hora (dos guardados el mismo día salían iguales en Files)
+chk("…el PDF «Belting_Lift_A_<fecha>_<hora>.pdf» (era «belting.pdf»)",
+    bool(_reg) and re.fullmatch(r"Belting_Lift_A_\d{4}-\d{2}-\d{2}_\d{4}\.pdf",
                                 str(_reg[-1].get("filename", ""))) is not None,
     _reg[-1].get("filename") if _reg else "")
 chk("…y lo guardado sin la huella interna del cálculo",

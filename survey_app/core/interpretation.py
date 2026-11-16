@@ -254,12 +254,19 @@ def hechos(calc_results: dict, all_params: dict) -> dict:
         _m = muro_de(p)
         if _m:
             _ev = bool(best.get("wall_evaded", best.get("fb_extra_applied")))
+            # ⚠️ v684 · Visto verificando v683: el Management assistant leyó `within_its_limit: false` como «el muro SIGUE
+            # fuera tras el empuje: check that wall on site». Significaba «sin el empuje estaría fuera». Ahora lo dice en
+            # palabras y con `needs_attention: false` (este hecho lo lee también el modelo del informe del cliente).
+            _como = ("cleared by the %.1f mm shift towards the REAR (it includes %.1f mm of extra push for the wall)"
+                     % (abs(fb), empuje_extra(best)) if best.get("fb_extra_applied") else
+                     "already clear: at that floor the car is far enough towards the REAR" if _ev else
+                     "within its limit with these shifts")
             f["solution"]["limiting_wall"] = {
                 "stop": _m["stop"], "side": "RIGHT" if _m["side"] == "R" else "LEFT", "cut": False,
+                "how_it_is_handled": _como, "needs_attention": False,
                 "cleared_by_extra_push_towards_rear_mm": empuje_extra(best) if best.get("fb_extra_applied") else 0.0,
                 # el piso del muro ya está lo bastante atrás: esquivado sin empujar (v681, el caso 3 del optimizador)
-                "already_clear_without_extra_push": _ev and not bool(best.get("fb_extra_applied")),
-                "within_its_limit": not _ev}
+                "already_clear_without_extra_push": _ev and not bool(best.get("fb_extra_applied"))}
     else:
         f["solution"] = None
     f["cuts"] = _cortes(cortes_por_piso(lim, best, p)) if best else []
