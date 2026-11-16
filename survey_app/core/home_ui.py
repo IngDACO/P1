@@ -1514,7 +1514,10 @@ def _ultimos_usos(grupo, ids) -> dict:
         for _id in ids:
             r = ult.get(_CLAVE_HERR.get(_id, ""))
             if r:
-                _p = (P.get_project(str(r.get("ProjectID", ""))) or {}).get("Name") or r.get("ProjectID", "")
+                # v682 · con su ID (decía solo el nombre, que puede repetirse: regla «el ID es la identidad»)
+                _pid_u = str(r.get("ProjectID", ""))
+                _nm_u = (P.get_project(_pid_u) or {}).get("Name")
+                _p = f"{_nm_u} ({_pid_u})" if _nm_u else _pid_u
                 out[_id] = t("Last used {d} · {p}", d=dmy(str(r.get("Date", ""))[:10]), p=_p)
     except Exception as e:
         logger.warning("home_ui: último uso de las herramientas: %s", e)

@@ -156,7 +156,7 @@ def render_buffer_cut_tab():
         "Buffer":     d("Buffer {n}", n=b["n"]),
         "HKPR (mm)":  round(b["HKPR"], 1),
         d("Cut (mm)"): b["CutBuffer"],
-        d("Status"):   d("check") if b["warn"] else "OK",
+        d("Status"):   d("Check") if b["warn"] else "OK",      # v682 · con mayúscula, como los estados (v672)
     } for b in res["buffers"]]
     # v594 · los destinos de las cifras: cada bloque envuelve su TÍTULO (claves literales,
     # para que verif_v585 lo compruebe)

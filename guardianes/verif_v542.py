@@ -318,7 +318,9 @@ chk("Duplicate deja lo suyo para la siguiente obra y pone el selector del admin 
     and 'st.session_state["pl_prj_sv"] = plan_ui.SIN_PROYECTO' in _dup, _dup[:300])
 _g = ast.unparse(_ts)
 _tras = _g.split("projects_data.attach_survey(")[1] if "projects_data.attach_survey(" in _g else ""
-_ok_rama = _tras.split("else:", 1)[1][:4000] if "else:" in _tras else ""
+# v682 · 8000 (eran 4000): el archivado de los documentos creció (nombres con la obra y la fecha, el plano solo si
+# falta) y el «empezar de cero» quedó más abajo, en la misma rama
+_ok_rama = _tras.split("else:", 1)[1][:8000] if "else:" in _tras else ""
 chk("⚠️ guardado el survey en su proyecto, empieza de cero (y vuelve a los datos, con el "
     "selector en «sin proyecto»)",
     "st.session_state['_reset_survey'] = True" in _ok_rama

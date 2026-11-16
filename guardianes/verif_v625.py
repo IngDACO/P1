@@ -450,8 +450,12 @@ chk("⚠️ obra sin survey: se ADJUNTA (es el survey de la obra)", len(_at) == 
 _fi = [x[1] for x in _L if x[0] == "fila"]
 chk("…entra al historial de cálculos, sin marca de decisión",
     len(_fi) == 1 and "por_decidir" not in _fi[0][7], _fi)
-chk("…con los documentos de siempre", {x[1] for x in _L if x[0] == "drive"} >= {"survey_matrix.csv", "client_report.pdf"},
-    [x[1] for x in _L if x[0] == "drive"])
+# ⚠️ v682 · CADUCADO A PROPÓSITO (H9 del ciclo 4): los ficheros llevan la obra y la fecha («survey_matrix.csv» y
+# «client_report.pdf» eran iguales de nombre en cada guardado)
+_dv = [x[1] for x in _L if x[0] == "drive"]
+chk("…con los documentos de siempre (con la obra y la fecha en el nombre)",
+    any(n.startswith("Survey_matrix_Obra_uno_") and n.endswith(".csv") for n in _dv)
+    and any(n.startswith("Client_report_Obra_uno_") and n.endswith(".pdf") for n in _dv), _dv)
 chk("⚠️ …sin el botón «Open project ➜» (lleva a la ficha de la oficina)", _btn(a, "ir_al_proyecto") is None
     and "_prj_creado" not in a.session_state)
 chk("…y el survey empieza de cero", a.session_state["survey_fase"] == "📝 Survey data"
@@ -510,9 +514,12 @@ chk("sin ninguna: lo dice, sin el botón de la oficina",
     and _btn(a, "sv_save_prj") is None, _todo(a)[-300:])
 
 a = survey(OC, False, rol="administrator")
-chk("⚠️ la oficina, igual que siempre: elige en la lista y sin aviso",
-    [s for s in a.selectbox if s.key == "sv_prj_sel"] and "already has a saved survey" not in _todo(a)
-    and "Save the survey to this project" in str(_btn(a, "sv_save_prj").label))
+# ⚠️ v682 · CADUCADO A PROPÓSITO (ciclo 4): la oficina SÍ sustituye el Survey de la obra al guardar, y ahora se le dice
+# ANTES («…saving this one replaces it»); lo que no ve es el aviso del CAMPO («…this one will not replace it»).
+chk("⚠️ la oficina: elige en la lista, sin el aviso del campo y con el suyo (sustituye)",
+    [s for s in a.selectbox if s.key == "sv_prj_sel"] and "will not replace it" not in _todo(a)
+    and "already has a saved survey: saving this one replaces it" in _todo(a)
+    and "Save the survey to this project" in str(_btn(a, "sv_save_prj").label), _todo(a)[-400:])
 chk("…y con su informe del cliente", any("Client report" in str(x.value) for x in a.header)
     and _btn(a, "sv_gen_informe_cliente") is not None)
 _btn(a, "sv_save_prj").click()

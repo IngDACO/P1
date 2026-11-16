@@ -169,9 +169,9 @@ def por_herramienta(datos: dict) -> list:
     return [
         {"tool": t("Lift survey"),
          "items": [(t("Shaft parameters"), par), (t("No. of stops (NS)"), _v("ns")),
-                   ("Riel", riel)]},
+                   (t("Car guide rail"), riel)]},      # v682 · decía «Riel» (ciclo 4)
         {"tool": t("Plumb lines"),
-         "items": [(t("Shaft parameters"), par), ("RAIL (altura)", ralt_txt)]},
+         "items": [(t("Shaft parameters"), par), (t("RAIL (tooth height)"), ralt_txt)]},   # v682 · «RAIL (altura)»
         {"tool": t("Rail cutting"),
          "items": [("LFKK", _v("lfkk")), ("LFGK", _v("lfgk"))]},
         {"tool": t("Buffer cutting"),

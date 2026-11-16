@@ -103,8 +103,11 @@ if b120:
     chk("…y su apertura no cuenta como fuera (23, no 31: ya no se corta el muro)", b120["total_off"] == 23
         and b120["off_by_col"].get("OR") == 11, (b120["total_off"], b120["off_by_col"]))
 if b140:
-    chk("FS 140: empuja 19.0 mm EXTRA hacia atrás para esquivarlo", b140.get("fb_extra_applied") is True
-        and I.empuje_extra(b140) == 19.0 and b140.get("wall_evaded") is True, I.empuje_extra(b140))
+    # ⚠️ v682 · CADUCADO A PROPÓSITO: las soluciones equivalentes (misma posición) se agrupan y queda la de mayor fb del
+    # barrido, así que el empuje EXTRA es 13.0 (era 19.0, la de fb −3); la cabina, en el mismo sitio (16.0 hacia atrás).
+    chk("FS 140: empuja 13.0 mm EXTRA hacia atrás para esquivarlo (16.0 aplicados)", b140.get("fb_extra_applied") is True
+        and I.empuje_extra(b140) == 13.0 and b140["fb_applied"] == 16.0 and b140.get("wall_evaded") is True,
+        (I.empuje_extra(b140), b140.get("fb_applied")))
 chk("FS 100 (FS = TSW, sin sitio para empujar) y alejarse no basta (LIMIT_L 18 < 35): SIN solución",
     R100["best"] is None, R100["best"] and R100["best"]["rl"])
 chk("⚠️ …descartando también los pasos que se ALEJAN del muro (RL > 0): hasta v680 solo yendo hacia él",
@@ -148,14 +151,15 @@ for nom, R in (("FS 120", R120), ("FS 140", R140)):
     td = I.texto_desplazamientos(f)
     chk(f"{nom}: los desplazamientos no repiten las aperturas como «still out»", "the space at the" not in td, td)
     if nom == "FS 140":
-        chk("FS 140: «19.0 mm of extra push towards the REAR to clear the limiting wall at floor 4 (right side), which "
-            "is not cut»", "19.0 mm of extra push towards the REAR to clear the limiting wall at floor 4 (right side), "
-            "which is not cut" in td, td)
+        # v682 · CADUCADO A PROPÓSITO: los mm del desplazamiento hacia atrás, no la parte «extra» (cambiaba entre equivalentes)
+        chk("FS 140: «This front-back shift (16.0 mm towards the REAR) clears the limiting wall at floor 4 (right side), "
+            "which is not cut»", "This front-back shift (16.0 mm towards the REAR) clears the limiting wall at floor 4 "
+            "(right side), which is not cut." in td, td)
     else:
         chk("FS 120: «is not cut: at that floor the car is already far enough towards the rear»",
             "is not cut: at that floor the car is already far enough towards the rear to clear it" in td, td)
 chk("la nota del muro bajo la matriz, en los tres estados",
-    "pushed 19.0 mm further towards the rear" in I.texto_muro(I.muro_de(R140["p"]), b140)
+    "the 16.0 mm shift towards the rear clears it" in I.texto_muro(I.muro_de(R140["p"]), b140)   # v682
     and "already far enough towards the rear" in I.texto_muro(I.muro_de(R120["p"]), b120)
     and "stays within its limit" in I.texto_muro({"stop": 4, "side": "R"}, {"wall_evaded": False}))
 _lc = {"LIMIT_OR": 401.0, "LIMIT_OL": 401.0}
@@ -195,8 +199,8 @@ chk("⚠️ H1: con RL +18 → «18.0 mm to the left» (decía «to the right»)
     re.search(r"Main action: shift the car block 18\.0 mm to the left", tx18), re.findall(r"Main action:.{0,90}", tx18))
 chk("H3: ningún «Floor 4: cut … right side» en el PDF", not re.search(r"Floor 4: cut[^.]*right side", tx),
     re.findall(r"Floor 4: cut[^.]*\.", tx))
-chk("H3: la nota del muro bajo la matriz", "Floor 4, right side: limiting wall. It is not cut: the car is pushed 19.0 mm "
-    "further towards the rear to clear it." in tx, re.findall(r"Floor 4, right side[^.]*\.[^.]*\.", tx))
+chk("H3: la nota del muro bajo la matriz (v682: con el desplazamiento aplicado)", "Floor 4, right side: limiting wall. "
+    "It is not cut: the 16.0 mm shift towards the rear clears it." in tx, re.findall(r"Floor 4, right side[^.]*\.[^.]*\.", tx))
 chk("H11: el glosario, WR/WL hasta la línea del riel", "Distance from the right / left wall to the rail line" in tx)
 chk("H12b: el modelo en la cabecera (ES1_R2)", "ES1_R2" in tx)
 

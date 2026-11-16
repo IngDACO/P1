@@ -48,8 +48,9 @@ ROTURAS = [
        "            if int(_num(por_col.get(c))) <= 0:")]),
     ("los hechos sin el muro", INT, [("        _m = muro_de(p)\n        if _m:", "        _m = None\n        if _m:")]),
     ("el empuje sin decir que el muro no se corta", INT,
-     [('"• The front-back shift includes %.1f mm of extra push towards the REAR to clear the limiting wall "',
-       '"• The front-back shift includes %.1f mm of extra push towards the REAR to clear the wall "')]),
+     # v682 · re-anclada: el texto dice ahora los mm del desplazamiento aplicado
+     [('"• This front-back shift (%.1f mm towards the REAR) clears the limiting wall at floor %d (%s side), "',
+       '"• This front-back shift (%.1f mm towards the REAR) clears the wall at floor %d (%s side), "')]),
     ("esquivado sin empujar, sin decirlo", INT,
      [('    elif _w and _w.get("already_clear_without_extra_push"):', "    elif False:")]),
     ("el prompt: WR/WL vuelven al bloque", INT,

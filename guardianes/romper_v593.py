@@ -47,8 +47,9 @@ ROTURAS = [
      [("                           nombre_archivo=f\"Rail_cutting_case1_{_archivo(_pr, 'shaft')}_{_hoy}.pdf\",\n",
        '                           nombre_archivo="corte_rieles_caso1.pdf",\n')]),
     ("vuelve «(debajo) · N lift(s)»", RU,
-     [('                                    else d("Case 2 ({s}) · {n} lifts", s=_sub_doc, n=len(res))),\n',
-       "                                    else f\"Case 2 ({_e['subcaso']}) · {len(res)} lift(s)\"),\n")]),
+     # v682 · re-anclada: detrás va la marca de un corte negativo (H14 del ciclo 4)
+     [('                                    else d("Case 2 ({s}) · {n} lifts", s=_sub_doc, n=len(res)))\n',
+       "                                    else f\"Case 2 ({_e['subcaso']}) · {len(res)} lift(s)\")\n")]),
     ("el signo de los cortes deja de decirse junto a la tabla", RU,
      [('            st.caption(t("The cut goes on the 1st rail (the bottom one, first installed). "\n',
        '            (t("The cut goes on the 1st rail (the bottom one, first installed). "\n')]),

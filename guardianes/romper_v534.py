@@ -190,12 +190,14 @@ ROTURAS = [
             '        base = pd.DataFrame({"Elevador": [f"Elevador {i+1}" for i in range(n)],')]),
 
     ("⚠️ la matriz ajustada vuelve a seis decimales (codigo exacto de v533)",
-     SV, [("        st.dataframe(survey_adj_df.style.apply(highlight, axis=None).format(precision=1),",
-           "        st.dataframe(survey_adj_df.style.apply(highlight, axis=None),")]),
+     # v682 · re-anclada: la tabla se pinta numerada 1…NS (`_por_paradas`)
+     SV, [("        st.dataframe(_por_paradas(survey_adj_df).style.apply(highlight, axis=None).format(precision=1),",
+           "        st.dataframe(_por_paradas(survey_adj_df).style.apply(highlight, axis=None),")]),
 
     ("la matriz de cada solucion pierde el formato",
-     SV, [("st.dataframe(sol_df.style.apply(sol_highlighter, axis=None).format(precision=1),",
-           "st.dataframe(sol_df.style.apply(sol_highlighter, axis=None),")]),
+     # v682 · re-anclada (ídem)
+     SV, [("st.dataframe(_por_paradas(sol_df).style.apply(sol_highlighter, axis=None).format(precision=1),",
+           "st.dataframe(_por_paradas(sol_df).style.apply(sol_highlighter, axis=None),")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

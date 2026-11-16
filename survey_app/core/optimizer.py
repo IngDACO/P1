@@ -298,6 +298,19 @@ def optimize(survey_adjusted: list, limits: dict, params: dict) -> dict:
             elif total_off == best_total_off:
                 best_solutions.append(solution)
 
+    # ── Equivalentes: misma posición (rl, fb APLICADO) = la misma matriz ──
+    # ⚠️ v682 · Visto verificando v681 en producción: con el empuje extra del muro, varios fb del barrido acaban en el
+    # MISMO fb aplicado, y PRJ-0045 (FS 140) daba «143 optimal solutions» que eran 11 posiciones repetidas 13 veces. El
+    # selector de la solución activa tenía etiquetas idénticas y saltaba de una a otra, y la parte «extra» del empuje
+    # (19 o 13 mm) cambiaba sin que la cabina se moviera. Se queda UNA por posición: la de mayor fb del barrido (el
+    # empuje extra mínimo que hace falta), en el orden de siempre.
+    _una = {}
+    for s in best_solutions:
+        k = (round(s["rl"], 3), round(s["fb_applied"], 3))
+        if k not in _una or s["fb"] > _una[k]["fb"]:
+            _una[k] = s
+    best_solutions = [s for s in best_solutions if _una[(round(s["rl"], 3), round(s["fb_applied"], 3))] is s]
+
     # ── Desempate: menor desplazamiento total |rl| + |fb_applied| ──
     if best_solutions:
         best_selected = min(

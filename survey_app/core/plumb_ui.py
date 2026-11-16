@@ -75,6 +75,16 @@ def _se_puede(bks, rail, tksw, lt, bs, bsr_list) -> bool:
     return False
 
 
+def _survey_guardado(prj) -> dict:
+    """v682 · Los parámetros del Survey guardado en la obra (`ParamsJSON`), o {}."""
+    import json
+    try:
+        d = json.loads(str((prj or {}).get("ParamsJSON") or "{}") or "{}")
+    except Exception:
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
 def render_plumb_tab():
     st.markdown(t("### :material/straighten: Plumb line calculation"))
     st.caption(t("One **template** for the shaft; the **BSR is measured per lift**. The values from the drawing fill themselves in; RAIL comes from the catalogue."))
@@ -106,6 +116,23 @@ def render_plumb_tab():
             st.caption(t(":green[:material/check_circle:] The drawing fields come from the "
                          "project's drawing data. Check them and fill in the ones measured "
                          "on site."))
+
+    # ⚠️ v682 · Lo que el Survey de la obra ya midió (la plantilla y el BSR) se pedía otra vez a mano: la Plomada de
+    # PRJ-0045 salía con LengthTemplate 0 y el BSR a 0, con 600 y 1840 guardados (ciclo 4). Solo se rellena lo VACÍO.
+    _sv_prj = _survey_guardado(_prj)
+    if _sv_prj:
+        if float(st.session_state.get("plb_lt") or 0) <= 0 and float(_sv_prj.get("LengthTemplate") or 0) > 0:
+            st.session_state["plb_lt"] = float(_sv_prj["LengthTemplate"])
+        _bdf = st.session_state.get("plb_bsr_df")
+        if float(_sv_prj.get("BSR") or 0) > 0 and (_bdf is None
+                                                   or not any(float(x or 0) for x in _bdf["BSR (mm)"])):
+            # la tabla se rehace abajo, en su ÚNICO sitio (las filas «Lift N»), con este BSR de primero
+            st.session_state["plb_bsr_df"] = None
+            st.session_state["_plb_bsr_sv"] = float(_sv_prj["BSR"])
+        if float(_sv_prj.get("LengthTemplate") or 0) > 0 or float(_sv_prj.get("BSR") or 0) > 0:
+            st.caption(t(":material/architecture: From the project's survey (when empty): LengthTemplate {lt} mm · BSR of "
+                         "lift 1 {b} mm.", lt=f"{float(_sv_prj.get('LengthTemplate') or 0):g}",
+                         b=f"{float(_sv_prj.get('BSR') or 0):g}"))
 
     with st.expander(t("Does the project have no drawing? Upload it here"), icon=":material/description:", key="exp_plb_plano"):
         st.caption(t("BKS, TKSW, SF1, SF2, BS, SG and TG will be read from this PDF."))
@@ -163,6 +190,8 @@ def render_plumb_tab():
         # ⚠️ v593 · Cambiar el nº de ascensores CONSERVA los BSR tecleados (antes la tabla
         # nacía entera en 0) y estrena la tabla editable (v542).
         _prev = [float(x or 0) for x in (list(base["BSR (mm)"]) if base is not None else [])]
+        if not _prev and st.session_state.get("_plb_bsr_sv"):         # v682 · el BSR del Survey de la obra
+            _prev = [float(st.session_state.pop("_plb_bsr_sv"))]
         # v534 · «Elevador 1» salía en español; solo cambia lo que se lee (ver rail_cut_ui).
         base = pd.DataFrame({"Elevador": [t("Lift {n}", n=i + 1) for i in range(n)],
                              "BSR (mm)": (_prev + [0.0] * n)[:n]})

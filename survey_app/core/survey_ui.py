@@ -134,6 +134,15 @@ def init_state():
     st.session_state["ingeniero"]      = ""
     st.session_state["initialized"]    = True
 
+def _por_paradas(df):
+    """v682 · Una copia de la matriz con las filas numeradas como las PARADAS (1…NS), para pintarla. ⚠️ Solo para pintar:
+    lo guardado y lo calculado siguen con su índice de siempre. El resaltado (`make_highlighter`) recorre `df.index`,
+    así que vale con cualquier índice."""
+    v = df.copy()
+    v.index = pd.RangeIndex(1, len(v) + 1, name=t("Stop"))
+    return v
+
+
 def _limpiar_survey():
     """Empezar de cero: parámetros, configuración, matriz, resultados e identidad.
 
@@ -342,6 +351,9 @@ def render_survey_tab(_ROL, _GRUPO):
         st.caption(t("Clears the parameters, matrix, configuration and results of this session. It does not affect projects already saved."))
         if st.button(t(":material/cleaning_services: Clear everything and start over"), key="btn_reset_survey"):
             st.session_state["_reset_survey"] = True
+            # v682 · no decía nada al terminar (ciclo 4)
+            flash.info(t(":material/cleaning_services: Survey cleared: parameters, matrix, configuration and results "
+                         "start from zero."))
             st.rerun()
 
     # ══════════════════════════════════════════════════════
@@ -515,7 +527,8 @@ def render_survey_tab(_ROL, _GRUPO):
         st.subheader(t("Adjusted SURVEY matrix"))
         # v534 · Sin `format`, un Styler manda cada número con SEIS decimales («76.000000»): la
         # matriz no cabía y había que desplazarla de lado para leer un milímetro.
-        st.dataframe(survey_adj_df.style.apply(highlight, axis=None).format(precision=1),
+        # v682 · numerada como las paradas (1…NS), como la matriz de entrada (H5, visto verificando v681: decía 0…11)
+        st.dataframe(_por_paradas(survey_adj_df).style.apply(highlight, axis=None).format(precision=1),
                      width="stretch", column_config=tabla.cfg())
         _leyenda_matriz()
 
@@ -661,8 +674,8 @@ def render_survey_tab(_ROL, _GRUPO):
                                                 for i in range(len(sol_df))])
                     sol_highlighter = make_highlighter(lim_map, sol_min, sol_max, cut_cols,
                                                        ctrl_in_frame_, ctrl_side_)
-                    st.dataframe(sol_df.style.apply(sol_highlighter, axis=None).format(precision=1),
-                                 width="stretch", column_config=tabla.cfg())
+                    st.dataframe(_por_paradas(sol_df).style.apply(sol_highlighter, axis=None).format(precision=1),
+                                 width="stretch", column_config=tabla.cfg())        # v682 · 1…NS
                     _leyenda_matriz()
                     st.caption(t("CUT OR / CUT OL: how much to cut if OR/OL exceeds the limit (OR/OL − LIMIT). Positive = a cut is needed. Blank = within the limit."))
                     if wall_limiting_:
@@ -1689,6 +1702,11 @@ def render_survey_tab(_ROL, _GRUPO):
                                   "the office decides which one stays.",
                                   x=literal_md(_prj.get("Name"))))
 
+                    # v682 · La oficina SÍ sustituye el Survey de la obra al guardar: se dice antes (lo hacía en silencio)
+                    if not _es_campo and _prj is not None and projects_data.tiene_survey(_prj):
+                        st.info(t(":material/info: **{x}** already has a saved survey: saving this one replaces it. The "
+                                  "previous client report stays in Files.", x=literal_md(_prj.get("Name"))))
+
                     # NS del plano vs NS del proyecto: avisar, nunca pisar en silencio
                     # (protegido: _prj es None mientras no se elija destino)
                     try:
@@ -1777,22 +1795,31 @@ def render_survey_tab(_ROL, _GRUPO):
                                 # «matriz_survey», «informe_cliente») es la clave de permisos
                                 # y orden (`projects_ui._TIPO_*`): NO cambia.
                                 with st.spinner(t("Filing documents in Drive...")):
+                                    # ⚠️ v682 · H8/H9 del ciclo 4: con la obra y la fecha en el NOMBRE, como las
+                                    # herramientas: salían «drawing.pdf», «survey_matrix.csv» y «client_report.pdf», y al
+                                    # guardar otra vez quedaban DOS de cada sin forma de saber cuál vale. Y el plano, solo
+                                    # si la obra aún no tiene uno: guardar el Survey lo volvía a archivar.
+                                    _nom_f = nombre_archivo(_prj.get("Name"), _pid)
+                                    _marca_f = clock.now().strftime("%Y-%m-%d_%H%M")
+                                    try:
+                                        _ya_plano = any(str(_dd.get("Type", "")) == "plano"
+                                                        for _dd in projects_data.list_documents(_pid))
+                                    except Exception:
+                                        _ya_plano = False
                                     try:
                                         pb = st.session_state.get("pdf_bytes")
-                                        if pb:
-                                            fid = drive_store.upload(_pid, "drawing.pdf", pb,
-                                                                     "application/pdf")
-                                            projects_data.add_document(_pid, "drawing.pdf",
-                                                                       "plano", fid, _usr)
+                                        if pb and not _ya_plano:
+                                            _n_pl = f"Drawing_{_nom_f}.pdf"
+                                            fid = drive_store.upload(_pid, _n_pl, pb, "application/pdf")
+                                            projects_data.add_document(_pid, _n_pl, "plano", fid, _usr)
                                     except Exception:
                                         _fallos.append(t("the drawing"))
                                     try:
                                         from core import csv_seguro
                                         csv = csv_seguro.tabla(r["survey_orig"]).to_csv(index=False).encode("utf-8")   # v654
-                                        fid = drive_store.upload(_pid, "survey_matrix.csv", csv,
-                                                                 "text/csv")
-                                        projects_data.add_document(_pid, "survey_matrix.csv",
-                                                                   "matriz_survey", fid, _usr)
+                                        _n_mx = f"Survey_matrix_{_nom_f}_{_marca_f}.csv"
+                                        fid = drive_store.upload(_pid, _n_mx, csv, "text/csv")
+                                        projects_data.add_document(_pid, _n_mx, "matriz_survey", fid, _usr)
                                     except Exception:
                                         _fallos.append(t("the matrix"))
                                     try:
@@ -1805,10 +1832,9 @@ def render_survey_tab(_ROL, _GRUPO):
                                                 survey_cols=SURVEY_COLS,
                                                 interpretation_user=_iu_final(r),
                                                 schedule=r.get("schedule"), plumb=r.get("plumb"))
-                                            fid = drive_store.upload(_pid, "client_report.pdf",
-                                                                     pdfb, "application/pdf")
-                                            projects_data.add_document(_pid, "client_report.pdf",
-                                                                       "informe_cliente", fid, _usr)
+                                            _n_ic = f"Client_report_{_nom_f}_{_marca_f}.pdf"
+                                            fid = drive_store.upload(_pid, _n_ic, pdfb, "application/pdf")
+                                            projects_data.add_document(_pid, _n_ic, "informe_cliente", fid, _usr)
                                     except Exception:
                                         _fallos.append(t("the client report"))
                                 # v542 · Por `flash`: el guardado termina en `st.rerun()`

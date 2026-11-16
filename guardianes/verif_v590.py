@@ -378,8 +378,12 @@ _imp = import_survey_excel(_b)
 chk("…y un Excel viejo con «Parada» se sigue importando", list(_imp["df"]["WR"]) == [1.0, 2.0])
 _cad = cadenas(fuente("core/survey_ui.py")) + cadenas(fuente("core/email_notify.py")) \
     + cadenas(fuente("core/projects_ui.py"))
+# v682 · también por el PRINCIPIO: desde H9 del ciclo 4 los nombres llevan la obra y la fecha (f"Survey_matrix_{obra}_…"),
+# y un «matriz_survey_…» en español dejaba el trozo «matriz_survey_», que el nombre exacto no ve (escapó en romper_v590)
 _es = [c for c in _cad if c in ("plano.pdf", "matriz_survey.csv", "informe_cliente.pdf", "Nivel")
-       or c.startswith("informe_") and c.endswith((".pdf", "_"))]
+       or c.startswith("informe_") and c.endswith((".pdf", "_"))
+       # (con «_» o «.» detrás: «matriz_survey» e «informe_cliente» a secas son los TIPOS de documento, claves internas)
+       or c.startswith(("matriz_survey_", "matriz_survey.", "informe_cliente_", "informe_cliente."))]
 chk("⚠️ ningún archivo con nombre en español (plano.pdf, matriz_survey.csv, informe_…)", not _es, _es)
 from core.num import nombre_archivo                                   # noqa: E402
 chk("el nombre del PDF del cliente, sin la raya larga", nombre_archivo("Bondi Junction Tower — Lift 1")

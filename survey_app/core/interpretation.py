@@ -278,10 +278,10 @@ def texto_desplazamientos(f) -> str:
            "• Lateral: %s." % s["lateral_shift"], "• Front-back: %s." % s["front_back_shift"]]
     _w = s.get("limiting_wall")
     if _w and s.get("extra_push_to_clear_limiting_wall"):
-        # v681 · H3: con su parada, su lado y los mm, y que NO se corta
-        out.append("• The front-back shift includes %.1f mm of extra push towards the REAR to clear the limiting wall "
-                   "at floor %d (%s side), which is not cut." % (_w["cleared_by_extra_push_towards_rear_mm"],
-                                                                 _w["stop"], _w["side"].lower()))
+        # v681 · H3: con su parada, su lado y los mm, y que NO se corta. v682 · los mm del desplazamiento hacia atrás
+        # (lo que se replantea), no la parte «extra», que cambiaba entre soluciones equivalentes (19 o 13 mm)
+        out.append("• This front-back shift (%.1f mm towards the REAR) clears the limiting wall at floor %d (%s side), "
+                   "which is not cut." % (s["front_back_shift_mm"], _w["stop"], _w["side"].lower()))
     elif s.get("extra_push_to_clear_limiting_wall"):
         out.append("• The front-back shift includes the extra push needed to clear the limiting wall.")
     elif _w and _w.get("already_clear_without_extra_push"):
@@ -522,8 +522,9 @@ def texto_muro(muro, best) -> str:
     lado = "right" if muro["side"] == "R" else "left"
     b = best or {}
     if b.get("fb_extra_applied"):
-        return ("Floor %d, %s side: limiting wall. It is not cut: the car is pushed %.1f mm further towards the rear "
-                "to clear it." % (muro["stop"], lado, empuje_extra(b)))
+        # v682 · el desplazamiento hacia atrás que se replantea, no la parte «extra» (cambiaba entre equivalentes)
+        return ("Floor %d, %s side: limiting wall. It is not cut: the %.1f mm shift towards the rear clears it."
+                % (muro["stop"], lado, abs(_num(b.get("fb_applied", b.get("fb"))))))
     if b.get("wall_evaded"):
         return ("Floor %d, %s side: limiting wall. It is not cut: at that floor the car is already far enough towards "
                 "the rear to clear it." % (muro["stop"], lado))

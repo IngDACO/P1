@@ -352,6 +352,15 @@ def render_rail_cut_tab():
             st.dataframe(mat, width="stretch", column_config=_cfg_mm(_e["n"]))
             st.caption(t("The cut (mm) goes on the TOP rail of each line: car RZ, RO · "
                          "counterweight RF, RB."))
+            # ⚠️ v682 · H14 del ciclo 4: «CutRF Lift 2 = −290» salía sin una palabra (y así se guardaba, CAL-0019). En el
+            # Caso 2 un negativo es que el riel de arriba se queda CORTO: no hay nada que cortarle. Como en Buffers: se dice.
+            _neg = [(i + 1, k[3:], float(x.get(k) or 0)) for i, x in enumerate(res)
+                    for k in ("CutRZ", "CutRO", "CutRF", "CutRB") if float(x.get(k) or 0) < 0]
+            if _neg:
+                st.warning(t(":material/warning: A negative value means that top rail falls SHORT by that much: there "
+                             "is nothing to cut off it. Check the measurement on site, and the sub-case (above or "
+                             "below the FFL): {x}.", x=", ".join(t("lift {i} {r} {v} mm", i=i, r=r, v=f"{v:.1f}")
+                                                                  for i, r, v in _neg)))
 
             svg = rail_cut_svg({"elevadores": res}, caso=2, proyecto=_pr)
             _titulo_diagrama()
@@ -368,12 +377,17 @@ def render_rail_cut_tab():
                 meta={d("Project"): _pr or "—", d("Sub-case"): _sub_doc, d("Formula"): signo,
                       "LFKK / LFGK": f"{_lk:.0f} / {_lg:.0f} mm"},
                 svgs=[svg], tablas=[(d("Cuts per lift"), _filas)],
-                notas=[d("Case 2: the rail to cut is the last one installed (at the top).")])
+                notas=[d("Case 2: the rail to cut is the last one installed (at the top).")]
+                + ([d("A negative value means that top rail falls short by that much: there is nothing to cut off "
+                      "it. Check the measurement on site, and the sub-case (above or below the FFL).")] if _neg else []))
             render_guardar(herramienta="rieles", titulo_pdf=d("rail cutting"),
                            pdf_bytes=_pdf,
                            # v593 · en inglés y con su plural (decía «(encima) · 2 lift(s)»)
                            resumen=(d("Case 2 ({s}) · {n} lift", s=_sub_doc, n=len(res)) if len(res) == 1
-                                    else d("Case 2 ({s}) · {n} lifts", s=_sub_doc, n=len(res))),
+                                    else d("Case 2 ({s}) · {n} lifts", s=_sub_doc, n=len(res)))
+                           # v682 · H14: el aviso, también en lo guardado (lo lee el historial y el asistente)
+                           + (d(" · CHECK: negative cut on {x}", x=", ".join(
+                               d("lift {i} {r}", i=i, r=r) for i, r, _v in _neg)) if _neg else ""),
                            datos={"subcaso": _e["subcaso"], "elevadores": res},
                            nombre_archivo=f"Rail_cutting_case2_{_archivo(_pr, 'shaft')}_{_hoy}.pdf",
                            key="rc2", obra_id=str((_prj or {}).get("ID", "")),   # v592

@@ -90,8 +90,9 @@ ROTURAS = [
      [('               else _d("{n} values out of limit", n=off_c)),\n',
        '               else _d("{n} value(s) out of limit", n=off_c)),\n')]),
     ("vuelve «matriz_survey.csv» en Files", SU,
-     [('                                        fid = drive_store.upload(_pid, "survey_matrix.csv", csv,\n',
-       '                                        fid = drive_store.upload(_pid, "matriz_survey.csv", csv,\n')]),
+     # v682 · re-anclada: el nombre lleva ahora la obra y la fecha (H9 del ciclo 4)
+     [('                                        _n_mx = f"Survey_matrix_{_nom_f}_{_marca_f}.csv"\n',
+       '                                        _n_mx = f"matriz_survey_{_nom_f}_{_marca_f}.csv"\n')]),
     ("vuelve «— see the sidebar»", SU,
      [('            st.info(t(":material/description: Data from: **{f}**.", f=pdf_file.name))\n',
        '            st.info(t(":material/description: Data from: **{f}** — see the sidebar.", f=pdf_file.name))\n')]),
