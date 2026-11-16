@@ -166,8 +166,19 @@ def render_mi_ruta(usuario, grupo):
     from core import clock, projects as P
     _INACTIVOS = ("Completed", "Cancelled", "Archived")
     _hoy = clock.today(grupo)
+    # ⚠️ v683 · F1 (visto ensayando el ciclo 3): en sábado o domingo abría en ESE día («Nothing is planned for you on
+    # Sat 21/11»), cuando la ruta de la oficina y su tablero ya saltan al lunes (H3, v676). La misma regla: si ese día
+    # no tiene obras en su tablero, el lunes.
+    _ini = _hoy
+    if _hoy.weekday() >= 5:
+        try:
+            from core import roster as _R
+            if not obras_de_mi_dia(usuario, grupo, _hoy):
+                _ini = _R.semana_de_trabajo(_hoy)
+        except Exception:
+            pass
     c1, c2 = st.columns([1.3, 2], vertical_alignment="bottom")
-    _dia = c1.date_input(t("Day"), value=_hoy, key="miruta_dia", format="DD/MM/YYYY")
+    _dia = c1.date_input(t("Day"), value=_ini, key="miruta_dia", format="DD/MM/YYYY")
     _todas = c2.toggle(t("All my active sites"), key="miruta_todas",
                        help=t("Every active site you are assigned to, not only the ones on your board that day."))
     try:
@@ -184,8 +195,21 @@ def render_mi_ruta(usuario, grupo):
         else:
             from core.num import dmy as _dmy
             _dd = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[_dia.weekday()]
-            st.info(t(":material/event_busy: Nothing is planned for you on {d}. Pick another day, or see all your sites.",
-                      d=f"{t(_dd)} {_dmy(_dia)}"))
+            # ⚠️ v683 · F2: en su día de vacaciones decía «Nothing is planned for you», sin decir que está de vacaciones
+            # (la nota del tablero lo dice: «Annual leave · AUS-0007»)
+            _fuera = ""
+            try:
+                from core import roster as _R
+                _fuera = next((str(a.get("nota") or a.get("etiqueta") or "") for a in
+                               _R.asignaciones_dia(grupo, usuario, _dia) or [] if a.get("es_estado")), "")
+            except Exception:
+                _fuera = ""
+            if _fuera:
+                st.info(t(":material/beach_access: You are off on {d}: {x}. Pick another day, or see all your sites.",
+                          d=f"{t(_dd)} {_dmy(_dia)}", x=_fuera))
+            else:
+                st.info(t(":material/event_busy: Nothing is planned for you on {d}. Pick another day, or see all your sites.",
+                          d=f"{t(_dd)} {_dmy(_dia)}"))
         return
 
     paradas, sin_ubic = [], []

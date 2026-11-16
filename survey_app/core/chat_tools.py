@@ -1222,6 +1222,83 @@ PREPARAR = [
 ]
 TODAS = LECTURA + DIRECTAS + PREPARAR
 _DETALLE = next(h for h in LECTURA if h["name"] == "get_job_details")
+def _resultados_de(fila) -> dict:
+    """El bloque `resultados` de un cálculo guardado (o el dato entero, en las filas viejas)."""
+    from core import toolruns as TR
+    d = TR.datos_de(fila)
+    return d.get("resultados", d) if isinstance(d, dict) else {}
+
+
+def _calculos(entrada, ctx) -> dict:
+    """v683 · H15 del ciclo 4: lo que dieron el Survey y las herramientas técnicas de UNA obra. El Management assistant
+    contestaba «I can't give you the numbers. The job data only lists the saved files» y mandaba a abrir cada PDF (ni
+    veía el corte de riel de −290 mm). Solo lectura: el Survey se RECALCULA de lo guardado con la misma cadena que la
+    pantalla (`survey_calc.recalcular`) y los mismos hechos que el informe del cliente (`interpretation.hechos`); de
+    cada herramienta, su último cálculo guardado."""
+    from core import interpretation as I, projects as P, survey_calc as SC, toolruns as TR
+    prj = _obra(entrada, ctx)
+    pid = str(prj.get("ID", ""))
+    runs = TR.list_for(pid)                                     # del más reciente al más antiguo
+    out = {"project_id": pid, "name": prj.get("Name", "")}
+    full = P.get_project_full(pid) or {}
+    _par, _mat = full.get("params") or {}, full.get("matriz") or []
+    _sv = next((r for r in runs if str(r.get("Tool", "")) == "survey"), None)
+    if not _par or not _mat:
+        out["survey"] = None
+    else:
+        rc = SC.recalcular(_par, _mat)
+        if not rc:
+            out["survey"] = {"note": "A survey is saved, but with its data there is no valid solution: open it in the "
+                                     "Survey to see why."}
+        else:
+            b, lim = rc["best"], rc["limits"]
+            f = I.hechos({"limits": lim, "analysis": lim, "optimizer_result": {"best": b}}, rc["all_params"])
+            s = f.get("solution") or {}
+            pl = rc.get("plumb") or {}
+            out["survey"] = {
+                "saved_on": dmy(str(_sv.get("Date", ""))[:10]) if _sv else "",
+                "case": f.get("case"),
+                "lateral_shift": s.get("lateral_shift"), "front_back_shift": s.get("front_back_shift"),
+                "values_out_of_limit": s.get("values_out_of_limit"),
+                "still_out_of_limit": s.get("still_out_of_limit"),
+                "opening_cuts": f.get("cuts"),
+                "limiting_wall": s.get("limiting_wall"),
+                "plumb_lines": ({"left_real_wall_to_left_plumb_di_mm": round(_num((pl.get("verif") or {}).get("plomo_izq_pared_izq")), 1),
+                                 "right_plumb_to_right_real_wall_dd_mm": round(_num((pl.get("verif") or {}).get("plomo_der_pared_der")), 1),
+                                 "between_plumbs_dbp_mm": round(_num(pl.get("dbp")), 1),
+                                 "check": "di + DBP + dd = BSR %.1f" % _num(pl.get("bsr"))} if pl else None)}
+    herr = {}
+    for r in runs:                                              # el último de cada herramienta
+        k = str(r.get("Tool", ""))
+        if k == "survey" or k in herr:
+            continue
+        res, fila = _resultados_de(r), {"saved_on": dmy(str(r.get("Date", ""))[:10]), "summary": r.get("Summary", "")}
+        if k == "plomada":
+            fila.update({"template": res.get("plantilla"), "per_lift": res.get("elevadores")})
+        elif k == "rieles":
+            _ev = res.get("elevadores") or []
+            _cuts = _ev if isinstance(_ev, list) else []
+            fila["per_lift"] = _cuts
+            fila["negative_values"] = [
+                {"lift": i + 1, "rail": c[3:], "mm": _num(x.get(c))}
+                for i, x in enumerate(_cuts) if isinstance(x, dict)
+                for c in ("CutRZ", "CutRO", "CutRF", "CutRB", "CutRC", "CutRCW") if _num(x.get(c)) < 0]
+        elif k == "buffers":
+            fila.update({"HKP": res.get("HKP"), "per_buffer": res.get("buffers")})
+        elif k == "belting":
+            fila.update({"HGP": res.get("hgp"), "HQ": res.get("hq"), "per_lift": res.get("results")})
+        herr[k] = fila
+    out["site_tools"] = {TR.HERRAMIENTAS.get(k, k): v for k, v in herr.items()}
+    out["how_to_read"] = (
+        "survey = the solution saved on this job, recalculated now: the shifts, what stays out of limit, the landing door "
+        "openings to cut (a limiting wall is NEVER cut) and the plumb line check. site_tools = the LATEST saved "
+        "calculation of each tool on this job. Rail cutting: in Case 2 a negative value means that top rail falls short "
+        "(nothing to cut: check the measurement and the sub-case); in Case 1 negative = trim, positive = add. Buffers: "
+        "a negative cut means the actual HKPR is greater than the drawing's HKP (nothing to cut, check on site). "
+        "Belting: positive DSTS = below the top floor level, negative = above it. Nothing saved = null.")
+    return out
+
+
 LECTURA_OFICINA = [
     {"name": "get_portfolio", "fn": _cartera,
      "input_schema": {"type": "object", "additionalProperties": False,
@@ -1250,6 +1327,11 @@ LECTURA_OFICINA = [
                     "its status and what was collected) and what is pending to invoice. For the company: profit and loss for a period, "
                     "jobs by profit, over budget, pending to invoice, open invoices, and invoiced, collected, to collect and overdue by "
                     "client (all time). Call it for anything about costs, budget, invoices, payments or margin."},
+    {"name": "get_calculations", "fn": _calculos, "input_schema": _POR_OBRA,
+     "description": "What the lift survey and the site tools gave on one job (read only): the survey's shifts, what stays "
+                    "out of limit, the landing door openings to cut, the limiting wall and the plumb line check; and the "
+                    "latest plumb lines, rail cutting (negative values flagged), buffer cutting and belting results. Call it "
+                    "for anything about a job's survey, setting out, plumb lines or cuts."},
 ]
 _NOTA = {"type": "string", "description": "Optional. A short note the person sees."}
 PREPARAR_OFICINA = [

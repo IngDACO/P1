@@ -217,13 +217,16 @@ NUEVAS = ["prepare_absence_decision", "prepare_time_fix_decision", "prepare_clos
 # ═════════════════════════════════════════════════════════════════
 sec("1. ⚠️ Cada rol, lo suyo")
 _n = [h["name"] for h in CT.definiciones("administrator", "Admin2")]
-chk("la oficina: las cinco consultas, To-do y las cinco con tarjeta, en ese orden",
-    _n == ["get_portfolio", "get_job_details", "get_team", "get_inbox", "get_money", "add_todo", "mark_todo"] + NUEVAS, _n)
+# ⚠️ v683 · CADUCADO A PROPÓSITO: una consulta más, `get_calculations` (H15 del ciclo 4: el Survey y las herramientas de
+# una obra), de solo lectura. Las que cambian algo empiezan ahora en la 7ª (`_d[6:]`, abajo).
+chk("la oficina: las seis consultas, To-do y las cinco con tarjeta, en ese orden",
+    _n == ["get_portfolio", "get_job_details", "get_team", "get_inbox", "get_money", "get_calculations",
+           "add_todo", "mark_todo"] + NUEVAS, _n)
 _d = CT.definiciones("administrator", "Admin2")
 chk("a la API no le llega la función", all(set(h) == {"name", "description", "input_schema"} for h in _d) and bool(json.dumps(_d)))
 chk("cada una dice cuándo usarla", all("Call it" in h["description"] for h in _d))
 chk("⚠️ cada una que cambia algo dice si espera o no", all(("no confirmation" in h["description"]) or ("card" in h["description"] and "nothing yet" in h["description"])
-                                                         for h in _d[5:]), [h["name"] for h in _d[5:]])
+                                                         for h in _d[6:]), [h["name"] for h in _d[6:]])
 chk("⚠️ ninguna recibe quién la pide ni de qué empresa", all(not ({"usuario", "user", "grupo", "group", "rol", "role", "author"} & set(h["input_schema"].get("properties", {}))) for h in _d))
 _c = [h["name"] for h in CT.definiciones("field", "campo000")]
 chk("⚠️ el campo no recibe ninguna de la oficina", not (set(NUEVAS) & set(_c)), _c)
