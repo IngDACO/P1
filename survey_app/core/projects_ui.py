@@ -1177,6 +1177,7 @@ def _cargar_en_survey(pid, prj, grupo, params, matriz):
     st.session_state["proyecto"]  = str(prj.get("Name", ""))
     st.session_state["ingeniero"] = P.head_installers_label(prj, grupo)
     st.session_state["_rebuilt_from"] = str(prj.get("Name", ""))
+    st.session_state.pop("_rebuilt_campo", None)        # v688 · lo de la obra; el del campo lo pone `_decidir_survey`
     # ⚠️ v681 · H13 del ciclo 4: también la CONFIGURACIÓN (muro limitante, su parada y lado, omega, lado del
     # desplazamiento, controlador). Sin ella el muro volvía a «N» y recalcular daba otro caso y otra solución. La aplica
     # el Survey antes de crear sus controles (`_cfg_pendiente_sv`), con la misma equivalencia que el Excel.
@@ -1209,6 +1210,13 @@ def _decidir_survey(pid, did, run):
         # La obra ya elegida (al guardar desde el Survey va aquí sin buscarla): desde v681 lo hace `_cargar_en_survey`,
         # para los dos caminos (aquí estaba duplicado).
         _cargar_en_survey(pid, _prj, str(_prj.get("Group", "")), _params, _matriz)
+        # ⚠️ v688 · el Survey dice que lo cargado es el del CAMPO, de quién y de cuándo (decía «You loaded project C4 —…»,
+        # como al cargar el de la obra). El login se muestra con su nombre (`_nombres_de`, v544).
+        from core.num import dmy as _dmy
+        _fh = str(run.get("Date", "") or "")
+        st.session_state["_rebuilt_campo"] = {
+            "quien": (_nombres_de([str(run.get("User", ""))], str(_prj.get("Group", ""))) or [""])[0],
+            "cuando": _dmy(_fh) + (" " + _fh[11:16] if len(_fh) >= 16 else "")}
         if pendiente:
             toolruns.decidir_survey(run, "loaded", _usr)
         st.session_state["_admin_nav_pending"] = ("herramientas", "📐 Survey")

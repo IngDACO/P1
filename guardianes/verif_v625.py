@@ -472,8 +472,10 @@ _L = a.session_state["_LOG"]
 chk("sin excepción", not a.exception, [e.value for e in a.exception][:1])
 chk("⚠️⚠️ NO pisa: `attach_survey` no se llama", not [x for x in _L if x[0] == "attach"], [x[0] for x in _L])
 _dr = [x for x in _L if x[0] == "drive"]
+# ⚠️ v688 · CADUCADO A PROPÓSITO: el nombre lleva la obra, como lo demás de Files («Field_survey_<obra>_<fecha>.json»);
+# era «Survey_<fecha>_<cuenta>.json» (visto cerrando el ciclo 4). Quién lo guardó sigue en la fila. Lo vigila verif_v688.
 chk("⚠️ un solo archivo, en JSON (no el plano ni el informe)", len(_dr) == 1 and _dr[0][3] == "application/json"
-    and _dr[0][1].endswith("_installer.json"), [(x[1], x[3]) for x in _dr])
+    and _dr[0][1].startswith("Field_survey_Obra_uno_") and _dr[0][1].endswith(".json"), [(x[1], x[3]) for x in _dr])
 _j = json.loads(_dr[0][2].decode("utf-8")) if _dr else {}
 chk("⚠️ con TODO para cargarlo: parámetros y las 6 filas de la matriz",
     _j.get("params", {}).get("NS") == 6 and len(_j.get("matriz", [])) == 6 and _j["matriz"][0]["WR"] == 95.0,

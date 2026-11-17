@@ -179,7 +179,7 @@ def _limpiar_survey():
         st.session_state[_k] = ""
     # v530: la solución activa y los pisos ya no tienen clave fija (una por cálculo).
     for _k in ("last_excel_id", "_calc_sig", "ns_msg", "rail_ref_msg", "sched_rows",
-               "sched_start", "_rebuilt_from", "_diag_pdf", "_sv_ns_obra"):
+               "sched_start", "_rebuilt_from", "_rebuilt_campo", "_diag_pdf", "_sv_ns_obra"):
         st.session_state.pop(_k, None)
 
 
@@ -205,7 +205,9 @@ def _survey_para_la_oficina(prj, params, matriz, resumen, usuario, grupo) -> str
         datos={"por_decidir": True, "ns": params.get("NS")}, usuario=usuario,
         pdf=_json.dumps({"params": params, "matriz": matriz}, ensure_ascii=False,
                         default=str).encode("utf-8"),
-        filename=f"Survey_{_cuando}_{usuario}.json", mime="application/json")
+        # ⚠️ v688 · con la obra, como lo demás de Files (v682): era «Survey_2026-11-17_0601_campo000.json», con la
+        # cuenta y sin la obra. Quién lo guardó va en la fila (User) y en «Uploaded by».
+        filename=f"Field_survey_{nombre_archivo(prj.get('Name'), 'project')}_{_cuando}.json", mime="application/json")
     if not (res.get("ok") and res.get("drive_id")):
         st.error(t("It could not be saved: {e}", e=res.get("error") or t("the file did not "
                                                                          "reach Drive")))
@@ -290,7 +292,7 @@ def render_survey_tab(_ROL, _GRUPO):
         st.session_state["survey_df"]    = pd.DataFrame({c: [0.0] * _nsd for c in SURVEY_COLS})
         estado_vivo.tabla_nueva("sv")       # v542 · si no, las celdas tecleadas reaparecen
         st.session_state["calc_results"] = None
-        for _k in ("_calc_sig", "sched_rows", "sched_start", "_diag_pdf", "_rebuilt_from"):
+        for _k in ("_calc_sig", "sched_rows", "sched_start", "_diag_pdf", "_rebuilt_from", "_rebuilt_campo"):
             st.session_state.pop(_k, None)
         # v542 · Lo duplicado es para el SIGUIENTE ascensor: lo adopta la siguiente obra
         # (no empieza de cero al elegirla) y su plano manda. El selector del admin vuelve a
@@ -326,7 +328,15 @@ def render_survey_tab(_ROL, _GRUPO):
         st.success(t(":material/summarize: Survey duplicated: parameters and configuration were kept. Enter the matrix for the next lift and calculate."))
 
     # Aviso cuando se llega desde "Reconstruir proyecto" (Mi grupo → detalle)
-    if st.session_state.get("_rebuilt_from"):
+    # ⚠️ v688 · y si lo cargado es el Survey que guardó el CAMPO (Files → «Load it into the Survey»), lo dice: decía
+    # «You loaded project C4 — …», igual que al cargar el de la obra, con los dos en juego (visto cerrando el ciclo 4).
+    _campo_sv = st.session_state.get("_rebuilt_campo") if st.session_state.get("_rebuilt_from") else None
+    if _campo_sv:
+        st.info(t(":material/download: You loaded the survey that **{q}** saved from the field on **{c}** for **{x}**. "
+                  "Press **:material/play_arrow: Calculate** to see its results: the project's survey only changes "
+                  "if you then save this one.",
+                  q=_campo_sv.get("quien", ""), c=_campo_sv.get("cuando", ""), x=st.session_state['_rebuilt_from']))
+    elif st.session_state.get("_rebuilt_from"):
         st.info(t(":material/download: You loaded project **{x}**. Press "
                   "**:material/play_arrow: Calculate** to regenerate diagrams and reports.",
                   x=st.session_state['_rebuilt_from']))
@@ -1009,6 +1019,7 @@ def render_survey_tab(_ROL, _GRUPO):
         }
         st.session_state["_calc_sig"] = _survey_signature()
         st.session_state.pop("_rebuilt_from", None)
+        st.session_state.pop("_rebuilt_campo", None)
         # El nº de soluciones y los diagramas cambian: descartar lo derivado del cálculo previo.
         # ⚠️ v530 · La solución activa y los pisos NO se borran con `pop`: el navegador seguía
         # enseñando —y devolviendo— la selección anterior (el fallo de la caja del parte,
