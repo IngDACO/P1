@@ -14,12 +14,14 @@ TOPE_S = 300
 CA = "core/chat_agent.py"
 
 ROTURAS = [
+    # ⚠️ v687 · re-ancladas: el campo también lo recibe (`rol in ("administrator", "field")`)
     ("⚠️ la oficina no recibe el recordatorio", CA,
-     [("    _mas = _SOLO_LO_PEDIDO if rol == \"administrator\" else \"\"", "    _mas = \"\"")]),
+     [("    _mas = _SOLO_LO_PEDIDO if rol in (\"administrator\", \"field\") else \"\"",
+       "    _mas = _SOLO_LO_PEDIDO if rol == \"field\" else \"\"")]),
     ("⚠️ la llamada no le pasa el rol", CA,
      [("_idioma_tras_datos(ctx.get(\"pregunta\", \"\"), ctx.get(\"rol\", \"\"))", "_idioma_tras_datos(ctx.get(\"pregunta\", \"\"))")]),
-    ("el campo también lo recibe", CA,
-     [("    _mas = _SOLO_LO_PEDIDO if rol == \"administrator\" else \"\"", "    _mas = _SOLO_LO_PEDIDO")]),
+    ("sin rol también lo recibe", CA,
+     [("    _mas = _SOLO_LO_PEDIDO if rol in (\"administrator\", \"field\") else \"\"", "    _mas = _SOLO_LO_PEDIDO")]),
     ("sin el idioma por su nombre", CA,
      [("\"word, not in the language of your notes or of this data. Do not comment on the language.\" + _mas + \")\")",
        "\"word, not in the language of your notes or of this data. Do not comment on the language.)\")")]),

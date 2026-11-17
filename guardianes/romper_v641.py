@@ -104,10 +104,11 @@ ROTURAS = [
      [("""{"type": "base64", "media_type": "image/jpeg", "data": b}""", """{"type": "base64", "media_type": "image/png", "data": b}""")]),
     ("⚠️ se pierde el texto de la foto", A,
      [("""            {"type": "text", "text": user_message}]})\n""", """            ]})\n""")]),
+    # ⚠️ v687 · re-anclada: detrás va ahora la regla «Responde SOLO a lo que te pide ahora» (con su comentario)
     ("⚠️ no vuelve a mirar lo de hoy", A,
      [("""        "- La conversación puede venir de otros días, y lo que se dijo entonces puede estar viejo: para los datos de "
         "hoy vuelve a mirar, no repitas lo de antes.\\n"
-        "- Si te manda una foto""", """        "- Si te manda una foto""")]),
+        # v687 · visto con la sesión de campo""", """        # v687 · visto con la sesión de campo""")]),
     ("⚠️ adivina por una foto", A,
      [(""" No adivines medidas, ni des nada por seguro "
         "o conforme solo por una foto.""", """ "

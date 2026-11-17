@@ -4569,13 +4569,20 @@ def render_field_projects(usuario: str, grupo: str):
                     roster_ui.render_board_readonly(grupo, resaltar_usuario=usuario)
         except Exception:
             pass
-        # v616 · con clave, como todo desplegable (trampa 35; hoy no tiene controles dentro)
-        with st.expander(t(":material/route: My route (my sites on the map)"), key="exp_mi_ruta"):
-            try:
-                from core import route_ui
-                route_ui.render_mi_ruta(usuario, grupo)
-            except Exception:
-                st.caption(t("The route could not be loaded right now."))
+        # v616 · con clave, como todo desplegable (trampa 35).
+        # ⚠️ v687 · y con `on_change="rerun"`, para saber si está ABIERTO: el mapa se dibujaba con el desplegable cerrado
+        # (0 px), `fit_bounds` encuadraba con 0 px y al abrirlo salía el mundo entero con las obras en un punto sobre
+        # Sídney (visto con la sesión de campo el 17/11; al cambiar de día sí encuadraba, ya visible). Ahora la ruta se
+        # pinta solo abierta y el mapa nace con su tamaño; cerrado, ni se lee el tablero.
+        _exp_ruta = st.expander(t(":material/route: My route (my sites on the map)"), key="exp_mi_ruta",
+                                on_change="rerun")
+        with _exp_ruta:
+            if _exp_ruta.open:
+                try:
+                    from core import route_ui
+                    route_ui.render_mi_ruta(usuario, grupo)
+                except Exception:
+                    st.caption(t("The route could not be loaded right now."))
 
     # v423: **con las internas**. Quien trabaja en la oficina o el almacén tiene su sitio
     # asignado ahí (v422) y necesita lo mismo que en una obra: ver sus avisos, cargar

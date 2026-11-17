@@ -37,7 +37,9 @@ chk("…detrás de «la conversación puede venir de otros días» (las dos van 
     _of.find("La conversación puede venir de otros días") < _of.find("Responde SOLO a lo que te pide ahora") != -1)
 chk("…y sigue la de las notas «[I pressed Confirm…]»: lo que dicen pasó de verdad",
     "«[I pressed Confirm»" in _of and "lo que dicen pasó de verdad" in _of)
-chk("el campo no cambia (no se examinó con ella)", "Responde SOLO a lo que te pide ahora" not in _ca)
+# ⚠️ v687 · CADUCADO A PROPÓSITO: el campo también la tiene (el 17/11, con la sesión de campo, el Field assistant se
+# «corrigió» de una respuesta del domingo 15/11, cierta entonces). Lo vigila verif_v687.
+chk("v687 · el campo también la tiene, entera", REGLA in _ca, _ca[-1500:])
 # lo que de verdad le llega al modelo: el texto fijo que arma `get_chat_response` para la oficina
 _s = open(os.path.join(RAIZ, "core", "chat_agent.py"), encoding="utf-8").read()
 chk("la oficina recibe `office_tools` (y el campo, `field_tools`)",

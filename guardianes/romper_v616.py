@@ -117,8 +117,9 @@ ROTURAS = [
      [('format_func=lambda x: _TIPO_LABEL.get(x, x))', 'format_func=str)')]),
     ("el error de subida sin traducir", PU,
      [('st.error(t("It could not be uploaded: {e}", e=ex))', 'st.error(f"It could not be uploaded: {ex}")')]),
+    # ⚠️ v687 · re-anclada: tras la clave va `on_change="rerun"` (el mapa solo se pinta con el desplegable abierto)
     ("«My route» sin clave", PU,
-     [(', key="exp_mi_ruta"):', '):')]),
+     [(', key="exp_mi_ruta",', ',')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo",

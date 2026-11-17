@@ -37,8 +37,10 @@ chk("…y si la pregunta SÍ se refiere a algo anterior, que lo conteste con lo 
     "If the question itself refers to something earlier, answer it with today's data." in _of, _of)
 chk("…detrás de lo del idioma, que sigue igual", _of.index("Do not comment on the language.") < _of.index("Answer only"))
 chk("…también con el idioma por su nombre", "Answer only that question" in _es and "Spanish" in _es, _es)
-chk("el campo no cambia (no se examinó con él), ni sin rol", "Answer only" not in _ca and "Answer only" not in _sin
-    and _ca == _sin, (_ca, _sin))
+# ⚠️ v687 · CADUCADO A PROPÓSITO: el campo también lo recibe (en producción, el 17/11, se «corrigió» de una respuesta del
+# domingo 15/11, cierta entonces). Sin rol sigue sin él. Lo vigila verif_v687.
+chk("v687 · el campo también lo recibe; sin rol, no", "Answer only that question" in _ca and "Answer only" not in _sin,
+    (_ca, _sin))
 _s = open(os.path.join(RAIZ, "core", "chat_agent.py"), encoding="utf-8").read()
 chk("la llamada le pasa el rol de la sesión", '_idioma_tras_datos(ctx.get("pregunta", ""), ctx.get("rol", ""))' in _s)
 _ex = open(r"C:\Users\diego\P1\guardianes\sueltos\examen_asistente_oficina.py", encoding="utf-8").read()

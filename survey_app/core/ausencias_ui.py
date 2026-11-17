@@ -145,6 +145,19 @@ def registrar(grupo, usuario, nombre, tipo, desde, hasta, motivo="", incluir_fin
     return True, res, _aviso
 
 
+def _hasta_no_antes(clave_desde, clave_hasta):
+    """⚠️ v687 · Al llevar «From» más allá de «To», «To» va con él (visto con la sesión de campo, 17/11: elegido el
+    viernes en «From», «To» seguía en hoy y salía «The end date cannot be earlier than the start date.» con el botón
+    parado; en el móvil, un calendario más que abrir). Se ASIGNA antes de pintar (callback): el navegador lo recibe
+    (trampa 31). Llevar «To» hacia atrás sigue dando el aviso, que es lo que toca."""
+    try:
+        _d, _h = st.session_state.get(clave_desde), st.session_state.get(clave_hasta)
+        if _d and _h and _h < _d:
+            st.session_state[clave_hasta] = _d
+    except Exception:
+        pass
+
+
 def _pedir(grupo, usuario, nombre):
     """Pedir o avisar. ⚠️ v627 · Sin `st.form`: dentro de un formulario nada reacciona hasta
     enviar, y lo primero que hace falta saber —cuántos días gasta esto— no se veía. Y los campos
@@ -177,7 +190,8 @@ def _pedir(grupo, usuario, nombre):
         st.markdown(T.por_fila("cpx_aus_fechas", 2), unsafe_allow_html=True)
         with st.container(key="cpx_aus_fechas"):
             c1, c2 = st.columns(2)
-            desde = c1.date_input(t("From"), value=hoy, key=f"aus_desde_{_g}", format="DD/MM/YYYY")
+            desde = c1.date_input(t("From"), value=hoy, key=f"aus_desde_{_g}", format="DD/MM/YYYY",
+                                  on_change=_hasta_no_antes, args=(f"aus_desde_{_g}", f"aus_hasta_{_g}"))
             hasta = c2.date_input(t("To"), value=hoy, key=f"aus_hasta_{_g}", format="DD/MM/YYYY")
         findes = st.checkbox(t("Include weekends"), key=f"aus_findes_{_g}",
                              help=t("Tick this only if those days are worked. Otherwise they are not taken off your balance."))
@@ -451,7 +465,8 @@ def _registrar_oficina_form(grupo, quien):
         # ⚠️ nombres propios (`_hoy_of`, `_so`, `_vp`): con los de «My absences» las anclas de sus baterías salían repetidas
         _hoy_of = clock.today(grupo)
         c1, c2 = st.columns(2)
-        desde = c1.date_input(t("From"), value=_hoy_of, key=f"aus_of_d_{_g}", format="DD/MM/YYYY")
+        desde = c1.date_input(t("From"), value=_hoy_of, key=f"aus_of_d_{_g}", format="DD/MM/YYYY",
+                              on_change=_hasta_no_antes, args=(f"aus_of_d_{_g}", f"aus_of_h_{_g}"))
         hasta = c2.date_input(t("To"), value=_hoy_of, key=f"aus_of_h_{_g}", format="DD/MM/YYYY")
         findes = st.checkbox(t("Include weekends"), key=f"aus_of_f_{_g}",
                              help=t("Tick this only if those days are worked. Otherwise they are not taken off the balance."))

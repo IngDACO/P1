@@ -13,15 +13,19 @@ G = "verif_v679"
 TOPE_S = 300
 CA = "core/chat_agent.py"
 
+# ⚠️ v687 · re-ancladas: el campo tiene ahora la MISMA regla (texto idéntico), así que cada ancla empieza por el
+# comentario de v679, que solo va en la oficina.
+_P = "        # 2 de 2 comentó la aprobación de una ausencia de un turno anterior al pedirle solo una tarea\n"
+_L1 = "        \"- Responde SOLO a lo que te pide ahora. No comentes, repitas ni corrijas por tu cuenta lo que se dijo o se hizo \"\n"
+_L2 = "        \"en turnos anteriores, ni lo que la app contestó al confirmar (la persona ya lo ha visto): era cierto con los \"\n"
+_L3 = "        \"datos de entonces. Si te lo pregunta, contesta con lo de ahora.\\n\"\n"
 ROTURAS = [
     ("⚠️ la oficina pierde la regla", CA,
-     [("        \"- Responde SOLO a lo que te pide ahora. No comentes, repitas ni corrijas por tu cuenta lo que se dijo o se hizo \"\n",
-       "        \"- \"\n")]),
+     [(_P + _L1, _P + "        \"- \"\n")]),
     ("la regla deja fuera lo que la app contestó al confirmar", CA,
-     [("en turnos anteriores, ni lo que la app contestó al confirmar (la persona ya lo ha visto): era cierto con los \"",
-       "en turnos anteriores: era cierto con los \"")]),
+     [(_P + _L1 + _L2, _P + _L1 + "        \"en turnos anteriores: era cierto con los \"\n")]),
     ("la regla se queda sin «si te lo pregunta»", CA,
-     [("\"datos de entonces. Si te lo pregunta, contesta con lo de ahora.\\n\"", "\"datos de entonces.\\n\"")]),
+     [(_P + _L1 + _L2 + _L3, _P + _L1 + _L2 + "        \"datos de entonces.\\n\"\n")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", CA,
