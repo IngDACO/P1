@@ -1045,7 +1045,9 @@ def buscar(q: str, grupo) -> list:
             logger.warning("buscar: facturas falló: %s", e)
         try:
             from core import quotes as QT
-            for c in QT.list_cotizaciones(grupo):
+            _qcs = QT.list_cotizaciones(grupo)
+            _qvis = QT.vistas(_qcs)                    # v689 · el estado que se enseña («Superseded»)
+            for c in _qcs:
                 cid, num = str(c.get("ID", "")), str(c.get("Number", "")).strip()
                 r = 0 if _es_ese_documento(_doc, "cotizacion", num) else _rank(num, cid, c.get("ClientName"))
                 if r is None:
@@ -1054,7 +1056,10 @@ def buscar(q: str, grupo) -> list:
                 out.append({"tipo": "cotizacion", "icono": ":material/request_quote:", "orden": r,
                             "titulo": t("Quote No. {n}", n=num or cid) + (f" v{_v}" if _v and _v != "1" else ""),
                             "pie": " · ".join(x for x in [str(c.get("ClientName", "")).strip(),
-                                                          _estado_txt(str(c.get("Status", "")).strip())] if x),
+                                                          (t("Superseded") if _qvis.get(cid) == QT.SUSTITUIDA
+                                                           else t("Expired") if _qvis.get(cid) == QT.VENCIDA
+                                                           else _estado_txt(str(c.get("Status", "")).strip()))]
+                                                         if x),
                             "id": cid})   # v668 · el estado con su etiqueta («Accepted», no «accepted»)
         except Exception as e:
             logger.warning("buscar: cotizaciones falló: %s", e)
@@ -1222,6 +1227,23 @@ def _alertas_items(grupo) -> list:
                 out.append({"texto": _txt, "destino": ("archivos", _pid)})
         except Exception as e:
             logger.warning("campana: no se pudieron leer los surveys por decidir: %s", e)
+        # v689 · las cotizaciones que piden una llamada (ciclo 5, H21): enviadas sin respuesta a punto de vencer, o
+        # vencidas hace poco. Antes nadie se enteraba hasta abrir Quotes.
+        try:
+            from core import quotes as _QT
+            from core.maps import literal_md as _lmd         # el nombre del cliente es un DATO
+            for _q in _QT.seguimiento(grupo)[:8]:
+                _cq = _lmd(_q["cliente"]) or "—"
+                if "vencida" in _q:
+                    _txt = (t(":red[:material/request_quote:] **Quote No. {n}** · {c} — expired {d} d ago with no reply")
+                            .replace("{n}", _q["numero"]).replace("{c}", _cq).replace("{d}", str(_q["vencida"])))
+                else:
+                    _txt = (t(":orange[:material/request_quote:] **Quote No. {n}** · {c} — no reply yet, valid "
+                              "{d} more day(s)")
+                            .replace("{n}", _q["numero"]).replace("{c}", _cq).replace("{d}", str(_q["quedan"])))
+                out.append({"texto": _txt, "destino": ("cotizacion", _q["id"])})
+        except Exception as e:
+            logger.warning("campana: no se pudieron leer las cotizaciones por seguir: %s", e)
     try:
         from core import credentials as C
         if C.is_configured():
@@ -1277,6 +1299,10 @@ def _ir_alerta(destino, grupo):
             _nom = _u
         st.session_state["gp_fichasel"] = f"{_nom} ({_u})"     # pre-selecciona la persona
         navegar("planificacion", "👷 Usuarios")
+    elif destino[0] == "cotizacion":              # v689 · H21: a ESA cotización
+        st.session_state.pop("_cot_nueva", None)
+        st.session_state["_cot_open"] = str(destino[1])
+        navegar("finanzas", "📄 Cotizaciones")
     elif destino[0] == "activo":
         # v599 · abre la ficha de ESE activo (la alerta llevaba a la lista general)
         st.session_state.pop("_inv_nuevo", None)

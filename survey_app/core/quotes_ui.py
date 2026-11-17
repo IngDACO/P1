@@ -13,6 +13,7 @@ from core import catalogo as CAT
 from core import clock
 from core import clientes as C
 from core import quotes as Q
+from core import projects as _PR
 from core import tenant
 from core import theme as T
 from core.num import num as _num, dmy as _dmy
@@ -30,10 +31,11 @@ _EST_ICONO = {Q.BORRADOR: ":gray[:material/edit_note:]",
               Q.ENVIADA: ":blue[:material/send:]",
               Q.ACEPTADA: ":green[:material/check_circle:]",
               Q.RECHAZADA: ":gray[:material/block:]",
-              Q.VENCIDA: ":red[:material/schedule:]"}
+              Q.VENCIDA: ":red[:material/schedule:]",
+              Q.SUSTITUIDA: ":gray[:material/layers:]"}           # v689 · H3
 # v580 · el punto de color de la TABLA (el de Invoices, v569)
 _EST_PUNTO = {Q.BORRADOR: "⚪", Q.ENVIADA: "🔵", Q.ACEPTADA: "🟢", Q.RECHAZADA: "⚫",
-              Q.VENCIDA: "🔴"}
+              Q.VENCIDA: "🔴", Q.SUSTITUIDA: "◻️"}
 # Filtro de la lista: ID interno → (estados que entran, rótulo). Sin `t()` (se importa).
 _FILTROS = {"Todas": (None, "All"),
             "Borrador": ((Q.BORRADOR,), "Draft"),
@@ -48,6 +50,8 @@ def _est_txt(est) -> str:
     """El nombre del estado. ⚠️ v580 · una cotización VENCIDA es «expired»: `etiqueta` la da
     como «overdue» (el de las facturas) y la misma pantalla decía las dos cosas.
     v672 · con mayúscula (H5 del ciclo 2: la cabecera decía «accepted», «draft», «sent»)."""
+    if str(est) == Q.SUSTITUIDA:                     # v689 · H3: una versión que ya no habla por su trato
+        return t("Superseded")
     return t("Expired") if str(est) == Q.VENCIDA else _estado_txt(str(est))
 
 
@@ -56,11 +60,19 @@ def _est_fmt(est) -> str:
     return f"{_EST_ICONO.get(str(est), '')} {_est_txt(est)}".strip()
 
 
-def _est_celda(c) -> str:
+def _est_celda(c, vis=None) -> str:
     """El estado en una CELDA: punto de color + la palabra (fuera del dict de la fila:
-    verif_v452 mira que ninguna celda pinte en crudo un DATO de la hoja)."""
-    _e = Q.estado_de(c)
+    verif_v452 mira que ninguna celda pinte en crudo un DATO de la hoja).
+    v689 · el estado que se ENSEÑA (`Q.vistas`): una versión vieja dice «Superseded»."""
+    _e = (vis or {}).get(str(c.get("ID", ""))) or Q.vista(c)
     return f"{_EST_PUNTO.get(_e, '')} {_est_txt(_e)}"
+
+
+def _motivo_txt(clave) -> str:
+    """El motivo de un rechazo, en el idioma de la pantalla (v689, H16). La CLAVE es el dato."""
+    return {"price": t("Price"), "timing": t("Timing"), "competitor": t("Went with a competitor"),
+            "scope": t("Scope changed"), "no reply": t("No reply"), "other": t("Other"),
+            "unknown": t("No reason recorded")}.get(str(clave), str(clave))
 
 
 def _num_txt(c) -> str:
@@ -101,7 +113,10 @@ def render_cotizaciones(grupo):
           ("conv", t("Conversion"), f"{r['conversion']:.0f}%" if r["conversion"] is not None else "—",
            t("of those decided") if r["conversion"] is not None else t("none decided yet"),
            "Decididas"),
-          ("n", t("Quotes"), str(r["n"]), t("{v} expired", v=_ven), "Todas")]
+          # v689 · y cuántas versiones ya no cuentan (H3)
+          ("n", t("Quotes"), str(r["n"]),
+           (t("{v} expired · {s} superseded", v=_ven, s=r.get("sustituidas", 0)) if r.get("sustituidas")
+            else t("{v} expired", v=_ven)), "Todas")]
     _css = []
     if r["en_calle"] > 0:
         _css.append(f".st-key-cpxkpi_cot_calle button{{border-left-color:{T.AMBAR}!important}}")
@@ -128,9 +143,11 @@ def render_cotizaciones(grupo):
     if not cots:
         st.caption(t("No quotes yet. Start with «New quote» — the items come from :material/sell: Catalogue."))
         return
+    _vis = Q.vistas(cots)                        # v689 · H3: el estado que se enseña, una vez
 
     # v580 · cada vencida, un botón que la abre (antes, sus nombres como texto)
-    _venc = [c for c in cots if Q.estado_de(c) == Q.VENCIDA]
+    # v689 · solo la que habla por su trato: una versión vieja vencida ya no pide nada
+    _venc = [c for c in cots if _vis.get(str(c.get("ID", ""))) == Q.VENCIDA]
     if _venc:
         st.warning(t(":material/schedule: **{n} expired quote(s)** with no answer. Open one "
                      "to issue a new version if it still stands:", n=len(_venc)))
@@ -149,7 +166,13 @@ def render_cotizaciones(grupo):
                      horizontal=True, key="cpxseg_cot_filt", label_visibility="collapsed",
                      persist_state="session")
     _entran = _FILTROS.get(_filt or "Todas", (None, ""))[0]
-    _lista = [c for c in cots if _entran is None or Q.estado_de(c) in _entran]
+    _lista = [c for c in cots if _entran is None or _vis.get(str(c.get("ID", ""))) in _entran]
+    # v689 · H16: por qué se pierden, donde se miran las perdidas
+    if _filt in ("Rechazadas", "Decididas"):
+        _mot = Q.rechazos_por_motivo(grupo)
+        if _mot:
+            st.caption(t(":material/block: Lost, by reason: {x}", x=" · ".join(
+                f"{_motivo_txt(k)} {n}" for k, n in sorted(_mot.items(), key=lambda kv: -kv[1]))))
     with st.container(key="cpx_cot_tabla"):
         from core import projects_ui as _PU
         _PU._bajar_a("cpx_cot_tabla", "_cot_bajar")
@@ -163,7 +186,7 @@ def render_cotizaciones(grupo):
         _ev = st.dataframe(pd.DataFrame([{
             "Nº":      _num_txt(c),
             "Cliente": c.get("ClientName", "") or "—",
-            "Estado":  _est_celda(c),
+            "Estado":  _est_celda(c, _vis),
             "Total":   round(_num(c.get("Total")), 2),
             "Vence":   _dmy(c.get("ValidUntil")),
             "Fecha":   _dmy(c.get("Date")),
@@ -403,8 +426,10 @@ def _nueva(grupo):
     # borrada entretanto no se fuerza)
     if "cot_new_cli" not in st.session_state and _borr.get("cot_new_cli") in list(_map) + [_NUEVO]:
         st.session_state["cot_new_cli"] = _borr["cot_new_cli"]
+    # ⚠️ v689 · SIN preselección (la regla de v139, ciclo 5 H4): nacía con el primer cliente de la lista y era
+    # fácil cotizar al equivocado. Sin fichas, la única opción es «New client».
     _cli = st.selectbox(t("Client"), list(_map) + [_NUEVO], key="cot_new_cli",
-                        index=len(_map) if not fichas else 0)
+                        index=None if fichas else 0, placeholder=t("— choose the client —"))
     _nuevo_cli = {}
     if _cli == _NUEVO:
         with st.container(border=True):
@@ -470,8 +495,11 @@ def _nueva(grupo):
                     # crearla fallaba salía un clic tarde, en otra pantalla (trampa 41)
                     _aviso_cli = t(":material/info: A record already existed for **{n}**; "
                                    "the quote is linked to that one.", n=_nom)
-            else:
+            elif _cli in _map:
                 f = _map[_cli]
+            else:                                   # v689 · aún sin elegir
+                st.error(t("Choose who the quote is for."))
+                return
             ok, msg = Q.crear(grupo, f.get("ID", ""), f.get("Name", ""), lineas,
                               impuesto_pct=imp, nota=nota, creado_por=_creado_por(),
                               plano=st.session_state.get("new_plano"))      # v664
@@ -508,8 +536,16 @@ def _totales_html(_tot: dict, imp_pct):
 # ── Detalle ──────────────────────────────────────────────────────
 def _detalle(grupo, cid):
     if st.button(t(":material/arrow_back: Back to quotes"), key="cot_back"):
-        st.session_state.pop("_cot_open", None)
+        # ⚠️ v689 · en un BORRADOR primero se mira si hay cambios sin guardar (ciclo 5, H6: cambiado el impuesto,
+        # «Back to quotes» los tiraba sin avisar). Se sabe más abajo, al pintar el editor: se pregunta en
+        # `_aviso_salir`, justo bajo este botón.
+        _c0 = Q.get_cotizacion(cid)
+        if _c0 and Q.estado_de(_c0) == Q.BORRADOR:
+            st.session_state[f"_cot_salir_{cid}"] = True
+        else:
+            st.session_state.pop("_cot_open", None)
         st.rerun()
+    _aviso_salir = st.container()
     c = Q.get_cotizacion(cid)
     if not c:
         st.warning(t("Quote not found."))
@@ -521,6 +557,8 @@ def _detalle(grupo, cid):
         return
 
     est = Q.estado_de(c)
+    if est != Q.BORRADOR:
+        st.session_state.pop(f"_cot_salir_{cid}", None)
     st.markdown(f"## :material/request_quote: {t('Quote No.')} {_num_txt(c)}")
     # v580 · fechas DD/MM/YYYY, la emisión, y de qué versión sale (decía «from COT-0003»,
     # el ID interno, sin traducir)
@@ -530,6 +568,26 @@ def _detalle(grupo, cid):
                 f"  ·  {t('valid until')} {_dmy(c.get('ValidUntil'))}"
                 + (f"  ·  {t('new version of v{v}', v=int(_num(_orig.get('Version'), 1)))}"
                    if _orig else ""))
+
+    # ── v689 · ciclo 5 H3 / D1: lo que esta versión es dentro de su trato ──
+    _rep = Q.version_vigente(c)
+    _pid_t, _acep_t = Q.obra_del_trato(c)
+    _pnom_t = (str((_PR.get_project(_pid_t) or {}).get("Name") or _pid_t) if _pid_t else "")
+    if est == Q.RECHAZADA:
+        _mk, _mn = Q.motivo_de(c)
+        if _mk:
+            st.caption(t(":material/block: Reason: {m}", m=_motivo_txt(_mk))
+                       + (f" — {literal_md(_mn)}" if _mn else ""))
+    if Q.vista(c) == Q.SUSTITUIDA and _rep:
+        st.info(t(":material/layers: **Superseded** by v{v} ({e}): this version no longer counts in the figures.",
+                  v=Q._ver(_rep), e=_est_txt(Q.estado_de(_rep))))
+        if st.button(t(":material/open_in_new: Open v{v}", v=Q._ver(_rep)), key=f"cot_rep_{cid}", type="tertiary"):
+            st.session_state["_cot_open"] = str(_rep.get("ID", ""))
+            st.rerun()
+    elif est in (Q.ENVIADA, Q.VENCIDA, Q.BORRADOR) and _pid_t:
+        st.info(t(":material/change_circle: This is a **variation** of the accepted v{a}, which created **{p}**. If "
+                  "the client accepts it, {p} goes by this version's price and its quoted cost becomes the budget: "
+                  "no new project is created.", a=Q._ver(_acep_t), p=literal_md(_pnom_t)))
 
     _base = Q.lineas_de(c)
 
@@ -571,6 +629,39 @@ def _detalle(grupo, cid):
         nota = _e2.text_area(t("Notes for the client (optional)"), key=f"cot_nota_{cid}",
                              height=68, help=t("They appear on the quote PDF."))
         _cambia = nuevas != _base or _num(imp) != _imp0 or str(nota) != _nota0
+        # v689 · H6: «Back to quotes» con cambios sin guardar pregunta (bajo el propio botón)
+        if st.session_state.get(f"_cot_salir_{cid}"):
+            if not _cambia:
+                st.session_state.pop(f"_cot_salir_{cid}", None)
+                st.session_state.pop("_cot_open", None)
+                st.rerun()
+            with _aviso_salir.container(border=True, key=f"cpx_cot_salir_{cid}"):
+                st.warning(t(":material/warning: This draft has **changes that are not saved**. Going back "
+                             "without saving throws them away."))
+                _g1, _g2, _g3 = st.columns(3)
+                if _g1.button(t(":material/save: Save and go back"), key=f"cot_salir_g_{cid}",
+                              type="primary", width="stretch"):
+                    ok, msg = Q.guardar_lineas(cid, nuevas, impuesto_pct=imp, nota=nota)
+                    if ok:
+                        st.session_state.pop(f"{_k}_lineas", None)
+                        st.session_state[f"{_k}_edgen"] = st.session_state.get(f"{_k}_edgen", 0) + 1
+                        st.session_state.pop(f"_cot_salir_{cid}", None)
+                        st.session_state.pop("_cot_open", None)
+                        flash.exito(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+                if _g2.button(t(":material/undo: Discard and go back"), key=f"cot_salir_d_{cid}",
+                              width="stretch"):
+                    st.session_state.pop(f"{_k}_lineas", None)
+                    st.session_state[f"{_k}_edgen"] = st.session_state.get(f"{_k}_edgen", 0) + 1
+                    st.session_state[f"_cot_desc_{cid}"] = True
+                    st.session_state.pop(f"_cot_salir_{cid}", None)
+                    st.session_state.pop("_cot_open", None)
+                    st.rerun()
+                if _g3.button(t(":material/close: Stay"), key=f"cot_salir_q_{cid}", width="stretch"):
+                    st.session_state.pop(f"_cot_salir_{cid}", None)
+                    st.rerun()
         if _cambia:
             _s1, _s2 = st.columns(2)
             if _s1.button(t(":material/save: Save changes"), key=f"cot_save_{cid}",
@@ -645,12 +736,11 @@ def _detalle(grupo, cid):
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
+        # v689 · H16: rechazar pide el MOTIVO (abajo), que es lo que deja leer la conversión
         if a2.button(t(":material/block: They rejected it"), key=f"cot_no_{cid}",
                      width="stretch"):
-            ok, msg = Q.set_estado(cid, Q.RECHAZADA)
-            (flash.exito if ok else st.error)(msg)
-            if ok:
-                st.rerun()
+            st.session_state[f"_cot_rech_{cid}"] = True
+            st.rerun()
     elif est in (Q.ACEPTADA, Q.RECHAZADA) and not str(c.get("ProjectID", "")).strip():
         # ⚠️ v580 · la vuelta atrás: un toque la aceptaba o rechazaba y no había forma de
         # deshacerlo (con obra ya creada, no: el motor lo impide)
@@ -660,10 +750,37 @@ def _detalle(grupo, cid):
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
+    if est in (Q.ENVIADA, Q.VENCIDA) and st.session_state.get(f"_cot_rech_{cid}"):
+        with st.container(border=True, key=f"cpx_cot_rech_{cid}"):
+            st.markdown(t("**Why did they reject it?** It is what lets you read the conversion."))
+            _rm = st.selectbox(t("Reason"), list(Q.MOTIVOS_RECHAZO), index=None, format_func=_motivo_txt,
+                               placeholder=t("— choose the reason —"), key=f"cot_rech_mot_{cid}")
+            _rn = st.text_input(t("Note (optional)"), key=f"cot_rech_nota_{cid}",
+                                placeholder=t("e.g. their budget was $10,000"))
+            _r1, _r2 = st.columns(2)
+            if _r1.button(t(":material/block: Record the rejection"), key=f"cot_rech_ok_{cid}", type="primary",
+                          width="stretch", disabled=not _rm):
+                ok, msg = Q.set_estado(cid, Q.RECHAZADA, motivo=_rm, nota_motivo=_rn)
+                if ok:
+                    for _kk in (f"_cot_rech_{cid}", f"cot_rech_mot_{cid}", f"cot_rech_nota_{cid}"):
+                        st.session_state.pop(_kk, None)
+                    flash.exito(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+            if _r2.button(t(":material/close: Cancel"), key=f"cot_rech_no_{cid}", width="stretch"):
+                st.session_state.pop(f"_cot_rech_{cid}", None)
+                st.rerun()
     if est != Q.BORRADOR:
+        # v689 · D1: de una ACEPTADA con obra, la versión nueva es una VARIACIÓN de esa obra
+        _con_obra_v = _con_obra or (est == Q.ACEPTADA and bool(_pid_t))
+        _pv = str(c.get("ProjectID") or _pid_t or "")
+        _pnv = str((_PR.get_project(_pv) or {}).get("Name") or _pv) if _con_obra_v else ""
         if a3.button(t(":material/content_copy: New version"), key=f"cot_v2_{cid}",
                      width="stretch",
-                     help=t("Clones this quote as a draft so you can change it. The current one is kept.")):
+                     help=(t("Clones this quote as a draft: a variation of {p}. When the client accepts it, {p} goes "
+                             "by its price — no new project is created.", p=_pnv) if _con_obra_v else
+                           t("Clones this quote as a draft so you can change it. The current one is kept."))):
             ok, msg = Q.nueva_version(cid, creado_por=_creado_por())
             if ok:
                 st.session_state["_cot_open"] = msg
@@ -685,10 +802,25 @@ def _detalle(grupo, cid):
                            mime="application/pdf", key=f"cot_pdf_{cid}")
     except Exception as e:
         st.warning(t(":material/warning: The PDF could not be generated: {e}", e=e))
+    # v689 · H5: sin razón social el PDF sale con el identificador interno de la empresa (como avisa la factura, v672)
+    try:
+        from core import contable as _CB
+        if not str(_CB.identidad(grupo).get("legal") or "").strip():
+            st.caption(t(":material/warning: This PDF shows «{g}» as the issuer: the company has no legal name yet. "
+                         "The account owner sets it in Administration → Groups → «Tax identity and payment terms».",
+                         g=str(grupo)))
+    except Exception as e:
+        logger.warning("quotes_ui: no se pudo leer la identidad de %s: %s", grupo, e)
 
     # ── Fase 3: de cotización ganada a obra ──────────────────────
     if est == Q.ACEPTADA and not _con_obra and not _perdida:
-        _crear_proyecto(grupo, c, _tot)
+        if _pid_t:
+            # ⚠️ v689 · D1: otra versión ya creó la obra; esta no crea otra (H3b: ofrecía el formulario entero)
+            st.warning(t(":material/link: Another version of this quote already created **{p}**: this one does not "
+                         "create another project. Undo it back to sent and accept it again to update {p} with its "
+                         "price.", p=literal_md(_pnom_t)))
+        else:
+            _crear_proyecto(grupo, c, _tot)
     elif _con_obra:
         _comparacion(cid, c)
 

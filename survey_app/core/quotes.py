@@ -50,12 +50,20 @@ HEADERS = ["ID", "Group", "ClientID", "ClientName", "Number", "Date", "ValidUnti
            # ⚠️ v664 · los datos del PLANO con que se cotizó (los de `plan_data.extraer_todo`):
            # viajan a la obra al aceptar. Ciclo 1: la obra nacía sin ellos y había que subir el
            # plano otra vez (y sin modelo, y con NS = 2). Al final → migra sola.
-           "DrawingJSON"]
+           "DrawingJSON",
+           # v689 · por qué la rechazó el cliente (ciclo 5, H16): `MOTIVOS_RECHAZO` + « — nota». Al final → migra sola.
+           "RejectReason"]
 
 BORRADOR, ENVIADA, ACEPTADA, RECHAZADA = "draft", "sent", "accepted", "rejected"
 VENCIDA = "vencida"                       # ⚠️ derivado, nunca se guarda
+# ⚠️ v689 · derivado, nunca se guarda (ciclo 5, H3): una versión que ya no habla por su trato
+SUSTITUIDA = "superseded"
 ESTADOS = (BORRADOR, ENVIADA, ACEPTADA, RECHAZADA)
 VALIDEZ_DIAS = 30
+# v689 · el motivo de un rechazo: la CLAVE se guarda (dato canónico) y la pantalla la traduce
+MOTIVOS_RECHAZO = ("price", "timing", "competitor", "scope", "no reply", "other")
+# v689 · la campana avisa de una enviada sin respuesta a la que le quedan estos días, o vencida hace estos
+AVISO_DIAS_QUEDAN, AVISO_DIAS_VENCIDA = 7, 14
 
 _COL = {h: i + 1 for i, h in enumerate(HEADERS)}
 
@@ -322,8 +330,94 @@ def get_cotizacion(cid) -> dict:
     return next((c for c in _records() if str(c.get("ID", "")) == str(cid)), {})
 
 
+def _ver(c) -> int:
+    return int(_num((c or {}).get("Version"), 1)) or 1
+
+
+def _trato(c) -> tuple:
+    """La CLAVE del trato de una cotización: su grupo y su número (todas sus versiones son un trato).
+    Sin número (no debería pasar), la cotización es un trato ella sola."""
+    _n = str((c or {}).get("Number", "") or "").strip()
+    return (str((c or {}).get("Group", "")), _n or "#" + str((c or {}).get("ID", "")))
+
+
+def representante(versiones) -> dict:
+    """La versión que habla por el TRATO (v689, ciclo 5 H3).
+
+    La aceptada más alta si hay alguna (con D1, una variación aceptada sustituye a la anterior); si no, la más
+    alta que salió de la oficina; y si todas son borradores, la más alta. Las cifras de Quotes cuentan UN trato
+    por número con esta versión: contaban cada versión, y la 0007 sumaba 186.811 «en la calle» con sus v1, v2 y
+    v4 viejas, la 0008 salía ganada dos veces y rechazar la v3 de un trato ganado bajaba la conversión."""
+    vs = list(versiones or [])
+    if not vs:
+        return {}
+    _ac = [c for c in vs if estado_de(c) == ACEPTADA]
+    if _ac:
+        return max(_ac, key=_ver)
+    _fuera = [c for c in vs if estado_de(c) != BORRADOR]
+    return max(_fuera or vs, key=_ver)
+
+
+def _por_trato(cs) -> dict:
+    out = {}
+    for c in cs:
+        out.setdefault(_trato(c), []).append(c)
+    return out
+
+
+def vistas(cs) -> dict:
+    """{ID: el estado que se ENSEÑA} (v689). Un borrador es borrador; la versión que habla por su trato y las
+    posteriores a ella (una variación pendiente o rechazada) dicen su estado; las ANTERIORES, «superseded»."""
+    out = {}
+    for _vs in _por_trato(cs).values():
+        rep = representante(_vs)
+        for c in _vs:
+            e = estado_de(c)
+            if (e == BORRADOR or str(c.get("ID", "")) == str(rep.get("ID", ""))
+                    or _ver(c) > _ver(rep)):
+                out[str(c.get("ID", ""))] = e
+            else:
+                out[str(c.get("ID", ""))] = SUSTITUIDA
+    return out
+
+
+def vista(c, todas=None) -> str:
+    """El estado que se enseña de UNA cotización (v689): mira sus versiones hermanas."""
+    if not c:
+        return BORRADOR
+    _vs = [x for x in (todas if todas is not None else _records()) if _trato(x) == _trato(c)]
+    if not any(str(x.get("ID", "")) == str(c.get("ID", "")) for x in _vs):
+        _vs.append(c)
+    return vistas(_vs).get(str(c.get("ID", "")), estado_de(c))
+
+
+def version_vigente(c) -> dict:
+    """La versión que habla por el trato de `c` (v689): la que cuentan las cifras."""
+    return representante([x for x in _records() if _trato(x) == _trato(c)]) if c else {}
+
+
+def obra_del_trato(c) -> tuple:
+    """`(ID de la obra, versión aceptada que la creó o la lleva)` de OTRA versión del mismo trato, o ("", {}) (v689).
+
+    D1 del usuario (ciclo 5): una versión nueva de una cotización ya aceptada es una VARIACIÓN; aceptarla
+    actualiza esa obra y nunca crea otra (la 0008 v3 ofrecía «Turn it into a project» con PRJ-0046 viva)."""
+    if not c:
+        return "", {}
+    from core import projects as P
+    _hs = sorted((x for x in _records() if _trato(x) == _trato(c) and str(x.get("ID", "")) != str(c.get("ID", ""))
+                  and estado_de(x) == ACEPTADA and str(x.get("ProjectID", "") or "").strip()),
+                 key=_ver, reverse=True)
+    for x in _hs:
+        _pid = str(x.get("ProjectID", "")).strip()
+        if P.get_project(_pid):
+            return _pid, x
+    return "", {}
+
+
 def cotizacion_de_proyecto(pid) -> dict:
     """La cotización ACEPTADA que generó este proyecto, o {} si no nació de una.
+
+    ⚠️ v689 · con una VARIACIÓN aceptada (D1), la de versión más alta: es el precio que vale ahora.
 
     ⚠️ v370. El enlace existía solo en un sentido: al aceptar, la cotización guarda su
     `ProyectoID` (v354), pero el proyecto no guarda de qué cotización viene. Así que
@@ -338,31 +432,81 @@ def cotizacion_de_proyecto(pid) -> dict:
     pid = str(pid or "").strip()
     if not pid:
         return {}
-    for c in _records():
-        if str(c.get("ProjectID", "")).strip() == pid and estado_de(c) == ACEPTADA:
-            return c
-    return {}
+    _acs = [c for c in _records()
+            if str(c.get("ProjectID", "")).strip() == pid and estado_de(c) == ACEPTADA]
+    return max(_acs, key=_ver) if _acs else {}
 
 
 @st.cache_data(ttl=120, show_spinner=False)
 def resumen(grupo) -> dict:
-    """Lo que importa de un cotizador: cuánto hay en la calle y cuánto se gana."""
+    """Lo que importa de un cotizador: cuánto hay en la calle y cuánto se gana.
+
+    ⚠️ v689 · por TRATO (un número), con la versión que habla por él (`representante`): por versión, la 0007
+    sumaba en la calle sus versiones viejas y la 0008 salía ganada dos veces (ciclo 5, H3). `n` sigue siendo el
+    número de cotizaciones de la lista; `sustituidas`, cuántas ya no cuentan."""
     cs = [c for c in _records() if str(c.get("Group", "")) == str(grupo)]
     por_estado, en_calle, ganado = {}, 0.0, 0.0
-    for c in cs:
-        e = estado_de(c)
+    for _vs in _por_trato(cs).values():
+        rep = representante(_vs)
+        e = estado_de(rep)
         por_estado[e] = por_estado.get(e, 0) + 1
         if e in (ENVIADA, VENCIDA):
-            en_calle += _num(c.get("Total"))
+            en_calle += _num(rep.get("Total"))
         elif e == ACEPTADA:
-            ganado += _num(c.get("Total"))
+            ganado += _num(rep.get("Total"))
     decididas = por_estado.get(ACEPTADA, 0) + por_estado.get(RECHAZADA, 0)
-    return {"n": len(cs), "por_estado": por_estado,
+    _sus = sum(1 for v in vistas(cs).values() if v == SUSTITUIDA)
+    return {"n": len(cs), "por_estado": por_estado, "sustituidas": _sus,
             "en_calle": round(en_calle, 2), "ganado": round(ganado, 2),
             # ⚠️ None, no 0: sin cotizaciones decididas la tasa NO es "0%", es que
             # todavía no se puede calcular (la trampa de v320 con «sin asignar»).
             "conversion": (round(100.0 * por_estado.get(ACEPTADA, 0) / decididas, 1)
                            if decididas else None)}
+
+
+def seguimiento(grupo) -> list:
+    """Los tratos que piden una llamada al cliente (v689, ciclo 5 H21): la versión que habla por el trato está
+    enviada y le quedan ≤ `AVISO_DIAS_QUEDAN` días de validez, o venció hace ≤ `AVISO_DIAS_VENCIDA`, sin respuesta.
+    [{id, numero, cliente, total, quedan (≥0) | vencida (días)}], lo más urgente primero. Para la campana."""
+    hoy = clock.today(grupo)
+    cs = [c for c in _records() if str(c.get("Group", "")) == str(grupo)]
+    out = []
+    for _vs in _por_trato(cs).values():
+        rep = representante(_vs)
+        e = estado_de(rep)
+        _v = _parse_date(rep.get("ValidUntil"))
+        if e not in (ENVIADA, VENCIDA) or not _v:
+            continue
+        _d = (_v - hoy).days
+        _base = {"id": str(rep.get("ID", "")), "cliente": str(rep.get("ClientName", "") or ""),
+                 "numero": str(rep.get("Number", "")) + (f" v{_ver(rep)}" if _ver(rep) > 1 else ""),
+                 "total": _num(rep.get("Total"))}
+        if e == ENVIADA and 0 <= _d <= AVISO_DIAS_QUEDAN:
+            out.append({**_base, "quedan": _d, "orden": _d})
+        elif e == VENCIDA and 0 < -_d <= AVISO_DIAS_VENCIDA:
+            out.append({**_base, "vencida": -_d, "orden": -100 + _d})
+    return sorted(out, key=lambda x: x["orden"])
+
+
+def motivo_de(c) -> tuple:
+    """`(clave, nota)` del rechazo guardado (v689), o ("", "")."""
+    _r = str((c or {}).get("RejectReason", "") or "").strip()
+    if not _r:
+        return "", ""
+    _k, _, _n = _r.partition(" — ")
+    return _k.strip(), _n.strip()
+
+
+def rechazos_por_motivo(grupo) -> dict:
+    """{clave: nº de TRATOS perdidos por ese motivo} (v689, H16): solo los tratos rechazados (su representante)."""
+    cs = [c for c in _records() if str(c.get("Group", "")) == str(grupo)]
+    out = {}
+    for _vs in _por_trato(cs).values():
+        rep = representante(_vs)
+        if estado_de(rep) == RECHAZADA:
+            _k = motivo_de(rep)[0] or "unknown"
+            out[_k] = out.get(_k, 0) + 1
+    return out
 
 
 # ── Escrituras ───────────────────────────────────────────────────
@@ -459,7 +603,8 @@ def crear(grupo, cliente_id, cliente_nombre, lineas, impuesto_pct=0.0,
                       str(int(_num(version, 1)) or 1),
                       str(origen), str(nota), str(creado_por),
                       clock.now(grupo).strftime("%Y-%m-%d %H:%M"),
-                      _plano_json(plano)],                         # v664
+                      _plano_json(plano),                          # v664
+                      ""],                                         # v689 · RejectReason (H16)
                      value_input_option="RAW")
     except Exception as e:
         return False, f"{t('Error saving the quote')}: {e}"
@@ -522,9 +667,18 @@ def guardar_lineas(cid, lineas, impuesto_pct=None, nota=None) -> tuple:
     return True, t("Quote updated.")
 
 
-def set_estado(cid, estado) -> tuple:
+def set_estado(cid, estado, motivo="", nota_motivo="") -> tuple:
+    """Cambia el estado. v689 · un rechazo guarda su MOTIVO (`MOTIVOS_RECHAZO`, ciclo 5 H16) y volver a «sent» lo
+    borra; y ACEPTAR una versión de un trato que ya tiene obra es aceptar una VARIACIÓN (D1): `aceptar_variacion`."""
     if estado not in ESTADOS:
         return False, f"{t('Invalid status')}: {estado}."
+    if estado == RECHAZADA and motivo and motivo not in MOTIVOS_RECHAZO:
+        return False, f"{t('Invalid reason')}: {motivo}."
+    if estado == ACEPTADA:
+        _c0 = get_cotizacion(cid)
+        if (_c0 and estado_de(_c0) in (ENVIADA, VENCIDA) and not str(_c0.get("ProjectID", "") or "").strip()
+                and obra_del_trato(_c0)[0]):
+            return aceptar_variacion(cid)
     w = _ws()
     if w is None:
         return False, timeclock.motivo_sin_hoja()   # v510: no mientas, puede ser un 429
@@ -536,18 +690,73 @@ def set_estado(cid, estado) -> tuple:
         return False, (t("This quote already created project") + " "
                        + f"{c.get('ProjectID')}: "
                        + t("its status cannot be changed."))
-    ok, err = _set(w, row, {"Status": estado})
+    _campos = {"Status": estado}
+    if estado == RECHAZADA:
+        _n = " ".join(str(nota_motivo or "").split())
+        _campos["RejectReason"] = (str(motivo or "") + (f" — {_n}" if _n else "")).strip()
+    elif str(c.get("RejectReason", "") or "").strip():
+        _campos["RejectReason"] = ""
+    ok, err = _set(w, row, _campos)
     if not ok:
         return False, err
     _invalidate()
     # ⚠️ FUERA del try del guardado y DESPUÉS de invalidar (v342/v344).
     try:
         from core import auditoria
-        auditoria.registrar("cotizacion", cid, {"Status": [antes, estado]},
-                            grupo=str(c.get("Group", "")))
+        _aud = {"Status": [antes, estado]}
+        if "RejectReason" in _campos:
+            _aud["RejectReason"] = [str(c.get("RejectReason", "") or ""), _campos["RejectReason"]]
+        auditoria.registrar("cotizacion", cid, _aud, grupo=str(c.get("Group", "")))
     except Exception as e:
         logger.warning("quotes: no se pudo auditar el estado de %s: %s", cid, e)
     return True, t("Quote marked as {e}.", e=_etq(estado))
+
+
+def aceptar_variacion(cid) -> tuple:
+    """Acepta una VERSIÓN de un trato que ya tiene obra (v689, D1 del usuario): la enlaza a esa obra, que pasa a
+    valer su precio (`cotizacion_de_proyecto` coge la versión aceptada más alta) y a tener su COSTO cotizado de
+    presupuesto (la regla de `aceptar_y_crear_proyecto`). Nunca crea otra obra. Idempotente."""
+    c = get_cotizacion(cid)
+    if not c:
+        return False, t("Quote not found.")
+    if estado_de(c) not in (ENVIADA, VENCIDA):
+        return False, t("Only a sent quote can be accepted.")
+    pid, prev = obra_del_trato(c)
+    if not pid:
+        return False, t("No other version of this quote has a project to update.")
+    lineas = lineas_de(c)
+    if not lineas:
+        return False, t("The quote has no lines.")
+    _tot = totales(lineas, _num(c.get("TaxPct")))
+    w = _ws()
+    if w is None:
+        return False, timeclock.motivo_sin_hoja()
+    row, _r = _fila(w, cid)
+    if row is None:
+        return False, t("Quote not found.")
+    if str((_r or {}).get("ProjectID", "") or "").strip():        # un 2º toque
+        return False, t("This version is already linked to {p}.", p=str(_r.get("ProjectID")))
+    ok, err = _set(w, row, {"Status": ACEPTADA, "ProjectID": pid})
+    if not ok:
+        return False, err
+    _invalidate()
+    from core import projects as P
+    _ok_p, _msg_p = P.update_project(pid, {"Budget": str(_tot["costo"])})   # ⚠️ el COSTO, como al crearla
+    if not _ok_p:
+        logger.warning("quotes.aceptar_variacion: el presupuesto de %s no se actualizó: %s", pid, _msg_p)
+    try:
+        from core import auditoria
+        auditoria.registrar("cotizacion", cid, {"Status": [estado_de(c), ACEPTADA], "ProjectID": ["", pid]},
+                            grupo=str(c.get("Group", "")))
+    except Exception as e:
+        logger.warning("quotes: no se pudo auditar la variación %s: %s", cid, e)
+    _p = P.get_project(pid) or {}
+    _msg = t("Version {v} accepted as a variation of v{a}: {p} now goes by its price ({price}) and has its quoted "
+             "cost ({cost}) as budget.", v=_ver(c), a=_ver(prev), p=str(_p.get("Name") or pid),
+             price=f"${_tot['subtotal']:,.2f}", cost=f"${_tot['costo']:,.2f}")
+    if not _ok_p:
+        _msg += " " + t("The project's budget could not be updated: change it in its Data.")
+    return True, _msg
 
 
 def nueva_version(cid, creado_por="") -> tuple:
@@ -650,6 +859,10 @@ def aceptar_y_crear_proyecto(cid, nombre="", tipo="Installation", fecha_inicio=N
     if str(c.get("ProjectID", "")).strip():
         return False, (t("This quote already created project")
                        + f" {c.get('ProjectID')}.")
+    # ⚠️ v689 · otra versión de este trato ya tiene obra (D1): una segunda obra para el mismo trabajo no
+    _pid_t = obra_del_trato(c)[0]
+    if _pid_t:
+        return False, t("This job already exists: {p}. Accepting this version updates it instead.", p=_pid_t)
     lineas = lineas_de(c)
     if not lineas:
         return False, t("The quote has no lines.")

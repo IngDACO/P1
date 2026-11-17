@@ -41,7 +41,8 @@ ROTURAS = [
      [('ubic = st.text_input(t("Location (optional)"), value=_dir0,',
        'ubic = st.text_input(t("Location (optional)"), value="",')]),
     ("⚠️ la fila de la cotización ya no guarda el plano", Q,
-     [("_plano_json(plano)],", '""],')]),
+    # v689 · re-anclada: detrás va el valor de RejectReason (H16 del ciclo 5). La misma rotura
+     [("_plano_json(plano),", '"",')]),
     ("una versión nueva pierde el plano", Q,
      [('plano=str(c.get("DrawingJSON") or ""))', 'plano=""))')]),
     ("⚠️ la obra vuelve a nacer sin modelo", Q,

@@ -81,7 +81,10 @@ chk("el plano viaja a Q.crear y se limpia con el resto del alta",
 sec("2. El plano de la cotización llega a la obra")
 from core import quotes as Q                                               # noqa: E402
 
-chk("Quotes tiene la columna DrawingJSON, al FINAL (migra sola)", Q.HEADERS[-1] == "DrawingJSON", Q.HEADERS[-3:])
+# v689 · CADUCADA «la ÚLTIMA»: detrás va `RejectReason` (H16 del ciclo 5). El principio sigue: columnas nuevas al
+# final, en orden de llegada, para que migren solas.
+chk("Quotes tiene la columna DrawingJSON, al final con solo RejectReason detrás (migran solas)",
+    Q.HEADERS[-2:] == ["DrawingJSON", "RejectReason"], Q.HEADERS[-3:])
 
 
 class _WS:

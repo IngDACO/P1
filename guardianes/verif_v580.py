@@ -489,6 +489,9 @@ chk("⚠️ «Version 2 of No. 0003 created.»", any("Version 2 of No. 0003 crea
 at = _app(pre={"_cot_nueva": True, "new_lineas": json.loads(_L1)})
 chk("el alta se pinta sin excepción", not at.exception, [e.value for e in at.exception][:1])
 chk("«➕ New client» traducible", "➕ New client" in [o for s in at.selectbox for o in s.options])
+# v689 · el cliente ya NO viene elegido (H4 del ciclo 5, la regla de v139): se elige antes de crear
+at.selectbox(key="cot_new_cli").set_value("Cli")
+at.run()
 at.button(key="cot_new_save").click()
 at.run()
 chk("⚠️ crear AVISA: «Quote No. 0009 created.»",

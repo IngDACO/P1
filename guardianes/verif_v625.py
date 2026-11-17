@@ -736,10 +736,15 @@ C.is_configured = lambda: False
 I.is_configured = lambda: False
 TR.survey_por_decidir = lambda g: [{"ID": "CAL-7", "ProjectID": "PRJ-1"}]
 P.get_project = lambda pid: {"Name": "Obra uno"}
+# v689 · la campana avisa también de las cotizaciones (H21 del ciclo 5): sin esto leería las de verdad
+from core import quotes as _Q
+_Q.seguimiento = lambda g: []
 home_ui.navegar = lambda *a: st.session_state.__setitem__("_NAV", a)
 st.session_state["_AL"] = home_ui._alertas_items("cliente1")
 if st.session_state.get("_IR"):
-    home_ui._ir_alerta(st.session_state["_AL"][-1]["destino"], "cliente1")
+    # v689 · la del Survey de campo, por su TEXTO (era la última; detrás pueden ir las de cotizaciones)
+    home_ui._ir_alerta([x for x in st.session_state["_AL"] if "survey from the field" in x["texto"]][-1]["destino"],
+                       "cliente1")
 '''
 a = AppTest.from_string(GC, default_timeout=60).run()
 _al = [x for x in a.session_state["_AL"] if "survey from the field" in x["texto"]]

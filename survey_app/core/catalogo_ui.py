@@ -275,7 +275,7 @@ def _usos(grupo, cid):
                 else t("**:material/request_quote: Used in {n} quotes**", n=len(cots)))
     for c in cots[:8]:
         if st.button(f":material/open_in_new: {t('No.')} {QU._num_txt(c)} · "
-                     f"{c.get('ClientName', '') or '—'} · {QU._est_txt(Q.estado_de(c))} · "
+                     f"{c.get('ClientName', '') or '—'} · {QU._est_txt(Q.vista(c))} · "
                      f"{T.dinero(c.get('Total'), 0)}",
                      key=f"cat_uso_{c.get('ID')}", type="tertiary"):
             # ⚠️ v583 · el ALTA de cotización, si seguía abierta (p. ej. tras «Set it in

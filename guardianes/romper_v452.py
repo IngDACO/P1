@@ -24,7 +24,8 @@ ROTURAS = [
      '"Status": _etq(P.derive_estado(0, est, tipo)),',
      "⚠️ se traduce el estado que se ESCRIBE en la hoja (guardaria ingles en Sheets)"),
     # v580 · re-anclada: la celda pasa por `_est_celda` (punto de color + `_est_txt`)
-    ("quotes_ui.py", '"Estado":  _est_celda(c),', '"Estado":  Q.estado_de(c),',
+    # v689 · re-anclada: la celda recibe además el estado que se enseña (`_vis`, H3 del ciclo 5)
+    ("quotes_ui.py", '"Estado":  _est_celda(c, _vis),', '"Estado":  Q.estado_de(c),',
      "la celda de Cotizaciones vuelve al crudo"),
     # v570 · re-anclada: `clientes_ui` ya no usa `_etq` (su tabla de facturas es la de
     # Invoices) y quitarle el import no rompería nada. La misma rotura, en un módulo que

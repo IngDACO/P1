@@ -34,7 +34,8 @@ ROTURAS = [
      [('_estado_txt(str(a.get("Status", "")).strip())] if x)   # v668 · v672', 'str(a.get("Status", "")).strip()] if x)   # v668')]),
     ("el estado de la cotización vuelve en crudo", H,
     # v672 · re-anclada: la mayúscula es la de `i18n.estado` (H5). La misma rotura
-     [('_estado_txt(str(c.get("Status", "")).strip())] if x),', 'str(c.get("Status", "")).strip()] if x),')]),
+     # v689 · re-anclada: la línea dice además «Superseded» y «Expired» (H3 del ciclo 5). La misma rotura
+     [('else _estado_txt(str(c.get("Status", "")).strip()))]', 'else str(c.get("Status", "")).strip())]')]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", SC,

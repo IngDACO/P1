@@ -114,7 +114,9 @@ for fn, frag in [("invoices_ui.py", "_estado_txt(I.estado_cobro(f))"),
                  ("quotes_ui.py", "_estado_txt(str(est))")]:
     chk(frag in (CORE / fn).read_text(encoding="utf-8"), f"{fn}: {frag}")
 _qcel = (CORE / "quotes_ui.py").read_text(encoding="utf-8")
-chk('"Estado":  _est_celda(c),' in _qcel and "_est_txt(_e)" in _qcel,
+# v689 · CADUCADA la forma `_est_celda(c)`: la celda recibe el estado que se ENSEÑA de toda la lista
+# (`Q.vistas`, H3 del ciclo 5: una versión vieja dice «Superseded»). El principio sigue: pasa por `_est_txt`.
+chk('"Estado":  _est_celda(c, _vis),' in _qcel and "_est_txt(_e)" in _qcel,
     "quotes_ui.py: la celda de estado pasa por `_est_celda` → `_est_txt`")
 # v570 · CADUCADA la de `clientes_ui` («_etq(INV.estado_cobro(x))»): la tabla de facturas
 # de la ficha del cliente era una COPIA que se quedó atrás, y ahora es LA de Invoices
