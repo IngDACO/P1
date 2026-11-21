@@ -23,6 +23,8 @@ from core.num import num as _num
 from core import tabla
 from core import theme as _T0
 from core.maps import literal_md
+import logging
+logger = logging.getLogger(__name__)
 
 
 def _creado_por() -> str:
@@ -498,6 +500,12 @@ def avisos_de_mas(lineas, grupo, pend_de=None, prjs=None) -> list:
 
 
 # ── Nueva factura ────────────────────────────────────────────────
+def _cot_num(c) -> str:
+    """«0008», o «0008 v2» (v690)."""
+    _v = int(_num(c.get("Version"), 1))
+    return str(c.get("Number", "")) + (f" v{_v}" if _v > 1 else "")
+
+
 def _nueva_factura(grupo):
     if st.button(t(":material/arrow_back: Cancel"), key="fac_new_back"):
         st.session_state.pop("_fac_nueva", None)
@@ -625,6 +633,28 @@ def _nueva_factura(grupo):
     # el 100 % del contrato con la obra al 0 %, sin decirlo).
     _pre, _notas = [], []
     _pend_de = {}                       # v669 · {ID: lo que queda por facturar}, para el aviso de facturar de más
+    # ⚠️ v690 · ciclo 5, H19: UNA obra cotizada sin nada facturado se puede facturar con las LÍNEAS de la cotización
+    # aceptada (el desglose que el cliente aceptó) o con un DEPÓSITO en %; antes, solo una línea con todo el precio.
+    _modo, _dep, _cot1, _pid1 = "resto", 0.0, {}, ""
+    if len(_scope_prjs) == 1:
+        _p1 = _scope_prjs[0]
+        _pid1 = str(_p1.get("ID", ""))
+        try:
+            from core import quotes as _Q
+            if I.es_cotizada(_pid1) and _num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) <= 0.005:
+                _cot1 = _Q.cotizacion_de_proyecto(_pid1) or {}
+        except Exception as e:
+            logger.warning("invoices_ui: la cotización de %s no se pudo leer: %s", _pid1, e)
+            _cot1 = {}
+        if _cot1 and I.por_certificar(_pid1, grupo, _p1)["pendiente"] > 0:
+            _modo = st.radio(t("Invoice it as"), ["resto", "lineas", "deposito"], horizontal=True,
+                             key=f"fac_modo_{_pid1}",
+                             format_func=lambda o: {"resto": t("The price still to invoice"),
+                                                    "lineas": t("The quote's lines"),
+                                                    "deposito": t("A deposit (%)")}[o])
+            if _modo == "deposito":
+                _dep = float(st.number_input(t("Deposit %"), min_value=1.0, max_value=100.0, value=30.0, step=5.0,
+                                             key=f"fac_dep_{_pid1}"))
     for p in _scope_prjs:
         _c = I.por_certificar(str(p.get("ID", "")), grupo, p)
         pend = _c["pendiente"]
@@ -643,12 +673,34 @@ def _nueva_factura(grupo):
             continue
         # ⚠️ v669 · el aviso de ADELANTO mira lo certificable, no el avance: en una obra por horas lo trabajado
         # ya está ganado aunque el avance sea 0 (ciclo 2, H23: «$0.45 in advance» de 0.01 h trabajadas)
+        # v690 · H19: las líneas de la cotización aceptada, o un depósito, en vez de una línea con todo el precio
+        if _modo == "lineas" and str(p.get("ID", "")) == _pid1:
+            from core import quotes as _Q
+            for _l in _Q.lineas_de(_cot1):
+                _cant = _num(_l.get("cantidad"))
+                _pre.append({"Concepto": str(_l.get("concepto", "")) + (f" × {_cant:g}" if _cant and _cant != 1 else ""),
+                             "Importe": round(_num(_l.get("precio_total")), 2),
+                             "Project": _lbl.get(str(p.get("ID", "")), "")})
+            _notas.append(t(":material/request_quote: The lines of the accepted quote **No. {n}**, as the client "
+                            "accepted them ({x} before tax).", n=_cot_num(_cot1),
+                            x=_T0.dinero(_num(_cot1.get("Subtotal")))))
+            continue
+        if _modo == "deposito" and str(p.get("ID", "")) == _pid1:
+            _pre.append({"Concepto": f"{d('Deposit')} {_dep:g}% — {p.get('Name', '')}",
+                         "Importe": round(pend * _dep / 100.0, 2), "Project": _lbl.get(str(p.get("ID", "")), "")})
+            _notas.append(t(":material/savings: A deposit of **{p}%** of the {x} still to invoice.",
+                            p=f"{_dep:g}", x=_T0.dinero(pend)))
+            continue
         if _c["certificable"] <= 0.005:
             imp = pend
             if _c["avance"] <= 0:
                 _notas.append(t(":material/warning: **{p}** has no progress yet: its line invoices the whole "
                                 "price still to invoice ({x}) **in advance**. For a deposit, type its amount.",
-                                p=_nom_p, x=_T0.dinero(pend)))
+                                p=_nom_p, x=_T0.dinero(pend))
+                              if not _cot1 else
+                              t(":material/warning: **{p}** has no progress yet: its line invoices the whole "
+                                "price still to invoice ({x}) **in advance**. For a deposit or the quote's lines, "
+                                "choose it above.", p=_nom_p, x=_T0.dinero(pend)))
             else:
                 _notas.append(t(":material/warning: **{p}** is at {a}% and what it has earned is already invoiced: "
                                 "its line ({x}) would be invoiced **in advance**.",
@@ -671,8 +723,10 @@ def _nueva_factura(grupo):
     st.caption(t("Invoice lines — edit, add or remove. The «Project» links the line so it is not invoiced twice."))
     # ⚠️ v664 · el IMPORTE de segunda columna: tras «Item» (ancho) y «Project», a 1024 px quedaba fuera
     # de la vista y había que desplazar la tabla para ver cuánto se factura.
+    # v690 · otra CLAVE por modo: un data_editor con clave conserva sus filas aunque cambien los datos (trampa 31)
     _ed = st.data_editor(
-        pd.DataFrame(_pre), num_rows="dynamic", width="stretch", key="fac_lineas",
+        pd.DataFrame(_pre), num_rows="dynamic", width="stretch",
+        key="fac_lineas" if _modo == "resto" else f"fac_lineas_{_modo}_{_dep:g}",
         column_config=tabla.cfg(None, {
             "Concepto": st.column_config.TextColumn(t("Item"), width="medium"),
             "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),

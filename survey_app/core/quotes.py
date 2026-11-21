@@ -391,6 +391,32 @@ def vista(c, todas=None) -> str:
     return vistas(_vs).get(str(c.get("ID", "")), estado_de(c))
 
 
+def renombrar_cliente_borradores(grupo, cliente_id, nombre) -> int:
+    """v690 · El nombre nuevo de un cliente en sus cotizaciones en BORRADOR (las enviadas conservan el suyo: son el
+    documento que el cliente tiene). Una escritura. Devuelve cuántas cambiaron."""
+    w = _ws()
+    if w is None:
+        return 0
+    try:
+        recs = valores.canonizar(columnas.canonizar(w.get_all_records(numericise_ignore=["all"])), SHEET)
+    except Exception as e:
+        logger.warning("quotes.renombrar_cliente_borradores: %s", e)
+        return 0
+    lote = [{"range": f"{_col_letter(_COL['ClientName'])}{i + 2}", "values": [[str(nombre)]]}
+            for i, r in enumerate(recs)
+            if str(r.get("Group", "")) == str(grupo) and str(r.get("ClientID", "")) == str(cliente_id)
+            and estado_de(r) == BORRADOR and str(r.get("ClientName", "")) != str(nombre)]
+    if not lote:
+        return 0
+    try:
+        w.batch_update(lote, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("quotes.renombrar_cliente_borradores: %s", e)
+        return 0
+    _invalidate()
+    return len(lote)
+
+
 def version_vigente(c) -> dict:
     """La versión que habla por el trato de `c` (v689): la que cuentan las cifras."""
     return representante([x for x in _records() if _trato(x) == _trato(c)]) if c else {}

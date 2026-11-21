@@ -4529,6 +4529,33 @@ def _ir_avance_campo():
     st.session_state["cpxseg_fld_sec"] = "🏗 Avance"
 
 
+def _contacto_cliente_campo(prj) -> None:
+    """La persona de contacto del cliente y su teléfono (con «call»), de su ficha en Contacts (v690, D2 del usuario:
+    el campo veía solo el nombre del cliente). Solo por el `ClientID` de la obra: sin ficha enlazada no se adivina."""
+    _cid = "" if P.es_interno(prj) else str(prj.get("ClientID", "") or "").strip()
+    if not _cid:
+        return
+    try:
+        from core import clientes as _CL
+        _f = _CL.get_cliente(_cid) or {}
+    except Exception as e:
+        logger.warning("projects_ui: la ficha del cliente %s no se pudo leer: %s", _cid, e)
+        return
+    import html as _h
+    _nom = str(_f.get("ContactName", "") or "").strip()
+    _tel = str(_f.get("Phone", "") or "").strip()
+    _partes = []
+    if _nom:
+        _partes.append(_h.escape(_nom))
+    if _tel and _CL.solo_digitos(_tel):
+        _n = ("+" if _tel.startswith("+") else "") + _CL.solo_digitos(_tel)
+        _partes.append(f'<a href="tel:{_n}">{_h.escape(_tel)}</a>')
+    if _partes:
+        # ⚠️ en HTML: el markdown de Streamlit no deja pasar un enlace `tel:` (v602, `clientes_ui._contactar`)
+        st.markdown(":material/contact_phone: " + f'<span style="font-size:0.875rem">{_h.escape(t("Client contact"))}: '
+                    + " · ".join(_partes) + "</span>", unsafe_allow_html=True)
+
+
 def render_field_projects(usuario: str, grupo: str):
     st.markdown(t("### :material/assignment: My projects"))
     if not P.is_configured():
@@ -4680,6 +4707,7 @@ def render_field_projects(usuario: str, grupo: str):
              ([":material/place: " + maps.maps_link_md(_ub, _ub)] if _ub else [])
     if _linea:
         st.caption("  ·  ".join(_linea))
+    _contacto_cliente_campo(prj)                     # v690 · D2 del usuario (ciclo 5, H23)
 
     # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
     # ⚠️ v423: una localización interna NO tiene actividades, así que «Avance» sería una

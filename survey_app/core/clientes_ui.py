@@ -366,6 +366,11 @@ def _detalle_cliente(grupo, key):
         st.markdown(t("#### :material/contact_page: Contact record"))
         # v602 · Enter NO envía (mandaba la ficha a medias, como el alta)
         with st.form(f"cli_form_{key}", enter_to_submit=False):
+            # v690 · el NOMBRE se corrige aquí (ciclo 5, H2: no se podía); sin ficha aún, se crea con el de sus obras
+            _nom_f = (st.text_input(t("Client name *"), value=f.get("Name", ""),
+                                    help=t("Corrects it on the record, its projects and its draft quotes. Quotes "
+                                           "already sent and invoices keep the name they were issued with."))
+                      if cid else disp)
             _con = st.text_input(t("Contact person"), value=f.get("ContactName", ""))
             cc = st.columns(2)
             _tel  = cc[0].text_input(t("Phone"), value=f.get("Phone", ""))
@@ -376,13 +381,20 @@ def _detalle_cliente(grupo, key):
         if _save:
             campos = {"ContactName": _con, "Phone": _tel, "Email": _mail,
                       "Address": _dir, "Notes": _notas}
+            _ren = None
             if cid:
                 ok, msg = C.update_cliente(cid, campos)
+                # v690 · H2: el nombre, DESPUÉS de lo demás (si el resto no se puede guardar, tampoco se renombra)
+                if ok and " ".join(str(_nom_f or "").split()) != str(f.get("Name", "") or ""):
+                    ok, msg = C.renombrar(cid, _nom_f, grupo)
+                    _ren = msg if ok else None
             else:
                 ok, msg = C.create_cliente(grupo, disp, _con, _tel, _mail, _dir,
                                            _notas, creado_por=_creado_por())
             if ok:
-                flash.exito(t("Record saved."))
+                flash.exito(_ren or t("Record saved."))
+                if cid:
+                    st.session_state["_cli_open"] = cid       # v690 · por su ID: abierta por el nombre viejo se perdía
                 st.rerun()
             else:
                 st.error(msg)
@@ -407,7 +419,10 @@ def _detalle_cliente(grupo, key):
             _ficha = C.get_cliente(cid)
             _archivado = str(_ficha.get("Active", "SI")).upper() in ("NO", "FALSE", "0")
             if _archivado:
-                st.warning(t(":material/archive: This record is **archived**: it does not show in the list unless you tick «Show archived ones too»."))
+                # v690 · H18: decía «it does not show in the list» y un cliente con obras SÍ sale (por ellas)
+                st.warning(t(":material/archive: This record is **archived**: it is hidden from the list and from new "
+                             "quotes and invoices. A client with jobs still shows in the list through them, marked "
+                             "«Archived»."))
                 if st.button(t(":material/restore: Restore this record"),
                              key=f"cli_rest_{cid}", type="primary"):
                     ok, msg = C.set_activo(cid, True)
@@ -416,8 +431,17 @@ def _detalle_cliente(grupo, key):
                         st.rerun()
             else:
                 with st.expander(t(":material/archive: Archive client"), key=f"exp_cli_arch_{cid}"):
-                    st.caption(t("It stops being listed; its projects are untouched. To see it again, tick «Show archived ones too» in the list."))
-                    if st.button(t("Archive this record"), key=f"cli_arch_{cid}"):
+                    # ⚠️ v690 · ciclo 5, H18: archivaba al primer clic con una obra en curso y una cotización
+                    # esperando respuesta, y su texto («It stops being listed») era falso para un cliente con obras
+                    st.caption(t("Its record is hidden from the list and from new quotes and invoices. A client with "
+                                 "jobs still shows in the list through them, marked «Archived». Its projects, quotes "
+                                 "and invoices are untouched. To see it again, tick «Show archived ones too»."))
+                    _ab = C.abierto(grupo, cid, proys)
+                    if _ab:
+                        st.warning(t(":material/warning: This client still has: {x}.", x=" · ".join(_ab)))
+                    _conf = (st.checkbox(t("I confirm I want to archive this client"), key=f"cli_arch_conf_{cid}")
+                             if _ab else True)
+                    if st.button(t("Archive this record"), key=f"cli_arch_{cid}", disabled=not _conf):
                         ok, msg = C.set_activo(cid, False)
                         if ok:
                             flash.exito(msg)          # v602 · avisa (volvía a la lista sin decir nada)
@@ -462,6 +486,10 @@ def _detalle_cliente(grupo, key):
                     else:
                         st.warning(t("Choose at least one project."))
 
+    # ── v690 · ciclo 5, H17: sus COTIZACIONES (la ficha enseñaba obras y facturas, nada de la 0008) ──
+    if cid:
+        _cotizaciones_del_cliente(grupo, f, cid)
+
     # ── Estado de cuenta: facturas del cliente (v259) ──
     from core import invoices as INV
     if cid and INV.is_configured():
@@ -488,6 +516,46 @@ def _detalle_cliente(grupo, key):
             st.session_state["_fac_nueva"] = True
             st.session_state["fac_cli"] = disp   # preselecciona el cliente en el form de factura
             st.session_state["_admin_nav_pending"] = ("finanzas", "🧾 Facturas")
+            st.rerun()
+
+
+def _cotizaciones_del_cliente(grupo, f, cid):
+    """Un botón por TRATO (número de cotización), con la versión que habla por él (v690, H17) y cuántas versiones
+    tiene; lleva a esa cotización. Y «New quote for this client», con el cliente ya elegido (si no está archivado)."""
+    from core import quotes as Q
+    from core import quotes_ui as QU
+    from core import theme as _T
+    st.markdown(t("#### :material/request_quote: Quotes"))
+    try:
+        _qs = Q.list_cotizaciones(grupo, cliente_id=cid)
+    except Exception as e:
+        st.caption(t("The quotes could not be read: {e}", e=e))
+        return
+    if not _qs:
+        st.caption(t("No quotes for this client yet."))
+    else:
+        _vis = Q.vistas(_qs)
+        _tratos = sorted(Q._por_trato(_qs).values(), key=lambda vs: str(Q.representante(vs).get("Number", "")),
+                         reverse=True)
+        cols = st.columns(2)
+        for i, _vs in enumerate(_tratos):
+            rep = Q.representante(_vs)
+            _rid = str(rep.get("ID", ""))
+            _lbl = (f"**{t('No.')} {QU._num_txt(rep)}** · {QU._est_txt(_vis.get(_rid, Q.estado_de(rep)))} · "
+                    f"{_T.dinero(rep.get('Total'), 0)}"
+                    + (" · " + t("{n} versions", n=len(_vs)) if len(_vs) > 1 else ""))
+            if cols[i % 2].button(_lbl, key=f"cli_cot_{_rid}", width="stretch"):
+                st.session_state.pop("_cot_nueva", None)
+                st.session_state["_cot_open"] = _rid
+                st.session_state["_admin_nav_pending"] = ("finanzas", "📄 Cotizaciones")
+                st.rerun()
+    if str(f.get("Active", "SI")).upper() not in ("NO", "FALSE", "0"):
+        if st.button(t(":material/add_circle: New quote for this client"), key=f"cli_newcot_{cid}"):
+            st.session_state.pop("_cot_open", None)
+            st.session_state.pop("_cot_borrador", None)
+            st.session_state["_cot_nueva"] = True
+            st.session_state["cot_new_cli"] = str(f.get("Name", ""))   # el alta la elige por su nombre (único)
+            st.session_state["_admin_nav_pending"] = ("finanzas", "📄 Cotizaciones")
             st.rerun()
 
 
