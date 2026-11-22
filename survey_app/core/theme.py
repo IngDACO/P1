@@ -463,7 +463,9 @@ body:has([data-testid="stStatusWidget"])::before {{
 }}
 .st-key-cpx_flash {{
   position: fixed !important; top: 58px; right: 16px; left: auto !important;
-  width: min(560px, calc(100vw - 32px)) !important; z-index: 999990;
+  /* v697 · a 800 px con el menú abierto, 560 px empezaban DEBAJO del menú (`z-index` 999991) y se leía «ask
+     added.»: más estrecho y por ENCIMA del menú (medido en producción) */
+  width: min(480px, calc(100vw - 32px)) !important; z-index: 1000000;
   pointer-events: none; background: #fff; border-radius: 10px;
   box-shadow: 0 6px 22px rgba(0, 0, 0, .18);
   animation: cpxFlashFuera 9s ease forwards;

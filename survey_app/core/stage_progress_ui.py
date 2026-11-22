@@ -178,11 +178,14 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
         with st.expander(_tit, expanded=False, key="%s_exp_%s_%d" % (key_prefix, pid, e["orden"])):
             st.progress(min(1.0, _pct / 100.0))
             _marcas = {}
+            # v697 · H7 del ciclo 6: el peso DENTRO de esta obra (las condicionales que no lleva no cuentan): los de Set Up
+            # sumaban 94 % y cinco marcadas «por 48 %» daban 51,1 %
+            _tot_e = sum(_num(x["peso_en_etapa"]) for x in e["actividades"]) or 1.0
             for i, a in enumerate(e["actividades"]):
                 _k = "%s_%s_%d_%d" % (key_prefix, pid, e["orden"], i)
                 _sv = _num(a["pct"]) >= 100
                 _marcas[a["nombre"]] = st.checkbox(
-                    "%s  ·  %.1f%%" % (a["nombre"], _num(a["peso_en_etapa"]))
+                    "%s  ·  %.1f%%" % (a["nombre"], 100.0 * _num(a["peso_en_etapa"]) / _tot_e)
                     + _parcial(_cred, e["orden"], a["nombre"], a["pct"]),            # v695 · D2
                     value=_pend.get(f"{e['orden']}|{a['nombre']}", _sv), key=_k,
                     disabled=not editable, help=_ayuda(_cred, e["orden"], a["nombre"], a["pct"]),

@@ -34,10 +34,12 @@ ROTURAS = [
 
     # v564 · el ancla lleva ahora `select_all=False` (barrido de «Select all»): la rotura
     # es la misma de siempre.
+    # v697 · re-anclada: la lista es `_hi` (la cuadrilla primero, H2 del ciclo 6) y la etiqueta marca «not in the crew»
     ("projects_ui.py",
      '''            ing = c1.multiselect(
-                t("Head installer/s"), campos,
-                format_func=lambda u: _etq_us(campos).get(u, u),
+                t("Head installer/s"), _hi,
+                format_func=lambda u: _etq_us(campos).get(u, u) + ("" if (not asg or u in asg)
+                                                                   else "  · " + t("not in the crew")),
                 key=f"np_ing_{key}", select_all=False,
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))''',

@@ -95,8 +95,9 @@ ROTURAS = [
     ("vuelve «18.0 d behind»",
      HU, [("str(int(round(dl)))", "str(dl)")]),
 
+    # v697 · re-anclada: la lista dice ahora «{n}d behind» (H18 del ciclo 6); la rotura es la misma, el float crudo
     ("vuelve «18.0d» en la lista",
-     HU, [("{int(round(_dl))}d\"", "{_dl}d\"")]),
+     HU, [("n=int(round(_dl)))", "n=_dl)")]),
 
     ("las fechas del resumen de obra vuelven a ISO",
      HU, [("    _fi = _fmt_fecha(prj.get(\"StartDate\")) or \"—\"\n",

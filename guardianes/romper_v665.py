@@ -54,7 +54,8 @@ ROTURAS = [
      [('{"alert_id": str(r.get("ID", "")), "note": nota})', '{"alert_id": str(r.get("ID", ""))})')]),
     # ── H39 · el hito ──
     ("⚠️ vuelve el hito de una actividad ya hecha", PU,
-     [('if proximo is None and a["inicio"] > hoy and pct < 100:', 'if proximo is None and a["inicio"] > hoy:')]),
+     # v697 · re-anclada: la condición es ahora `pct <= 0` (H19 del ciclo 6: tampoco una ya empezada)
+     [('if proximo is None and a["inicio"] > hoy and pct <= 0:', 'if proximo is None and a["inicio"] > hoy:')]),
     # ── H40 · la lista de cierre ──
     ("⚠️ la pestaña Status no enseña la lista de cierre", PU,
      [("    _cierre_section(pid, grupo, prj)                 # v665", "    pass                 # v665")]),

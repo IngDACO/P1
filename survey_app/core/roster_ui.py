@@ -592,14 +592,22 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
             (ocupados if choca else libres).append(
                 {"usr": usr, "nom": nom, "cumple": comp["cumple"], "estado": estado,
                  "dias": ", ".join(R.DIAS_LABEL[d] for d in _dias_choque)})
-        libres.sort(key=lambda f: (0 if f["cumple"] else 1, f["nom"]))
+        # v697 · H3 del ciclo 6: la CUADRILLA de la obra primero (marcada), luego quien cumple
+        _crew = {x.strip() for x in str((prj or {}).get("FieldAssigned", "")).split(";") if x.strip()}
+        libres.sort(key=lambda f: (0 if f["usr"] in _crew else 1, 0 if f["cumple"] else 1, f["nom"]))
+        # …y si NADIE de la empresa tiene en vigor lo que exige, se dice antes de elegir
+        _nadie = [c for c in certs if not any(credentials.compliance(u["User"], [c])["cumple"] for u in staff)]
+        if _nadie:
+            st.warning(t(":material/badge: Nobody in the company holds a valid {c}: whoever you assign will not meet "
+                         "what this job requires.", c=" · ".join(_nadie)))
         _cuando = ", ".join(_fmt_d(d) for d in _dsel_l)
 
         if not libres:
             st.warning(t(":material/warning: Nobody free on {d} at {a}–{b}.", d=_cuando, a=ini, b=fin))
         else:
-            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — " + t("not compliant")): f["usr"]
-                     for f in libres}                  # v564 · «not compliant» con `t()`
+            _opts = {f"{f['estado']} {f['nom']}" + ("" if f["cumple"] else " — " + t("not compliant"))
+                     + ("  · " + t("crew") if f["usr"] in _crew else ""): f["usr"]
+                     for f in libres}                  # v564 · «not compliant» con `t()` · v697 · «crew»
             # v564 · sin «Select all»: asignaría a TODA la gente libre de un clic
             _pick = st.multiselect(t("Suggested (free) — choose who to assign:"),
                                    list(_opts), key="ai_pick", select_all=False)
@@ -624,6 +632,11 @@ def _asignacion_inteligente(grupo, lunes, staff, tidx, dias=None):
                 if _hechos:
                     flash.exito(t("{who} → «{p}» on {d}, {a}–{b}.", who=", ".join(_hechos), p=_nom_prj, d=_cuando,
                                   a=ini, b=fin))
+                # v697 · H3: asignar a quien NO cumple se dice (antes, sin más aviso)
+                _sin = [_et.get(_opts[x]) or _opts[x] for x in _pick
+                        if not next((f["cumple"] for f in libres if f["usr"] == _opts[x]), True)]
+                if _sin and certs:
+                    flash.aviso(t("Assigned without {c}: {who}.", c=" · ".join(certs), who=", ".join(_sin)))
                 if _mal:
                     flash.error(t("Could not save the board of: {who}.", who=", ".join(_mal)))
                 st.rerun()

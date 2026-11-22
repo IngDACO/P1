@@ -294,7 +294,9 @@ def _kpis(grupo=None) -> dict:
         "total":   len(proys),
         "activos": len(activos),
         "avg":     round(sum(avances) / len(avances)) if avances else 0,
-        "riesgo":  len(P.delays_of_group(grupo)),
+        # v697 · H18 del ciclo 6: solo las ACTIVAS. Contaba una obra que no lo es (Newtown) y decía «all 12 behind»
+        # con una de las 12 adelantada
+        "riesgo":  len({str(p.get("ID", "")) for p in activos} & set(P.delays_of_group(grupo))),
         "alarmas": sum(v for k, v in alarmas.items() if k in ids),
         "horas":   round(sum(horas.get(str(p.get("ID", "")), 0.0) for p in proys)),
     }
@@ -402,6 +404,10 @@ def render_group_header(grupo: str):
         return None
     # v647 · devuelve el sitio de la lectura de la IA, que `render_home` rellena al final
     return _resumen_del_dia(grupo)
+
+
+# v697 · H23 del ciclo 6: por debajo de este avance (%) no se proyecta el coste al terminar
+AVANCE_MIN_PROYECCION = 10
 
 
 def _kpi_pies(k: dict) -> tuple:
@@ -1503,9 +1509,12 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             # ⚠️ De LISTA, no texto libre (decisión del usuario): el head installer es
             # una persona del equipo, y escribir su nombre a mano permitía erratas que
             # no casan con nadie. Se guardan los LOGIN; el nombre se resuelve al mostrar.
+            # v697 · H2 del ciclo 6: la CUADRILLA elegida arriba primero, y los demás marcados
+            _hi = [u for u in campos if u in (asg or [])] + [u for u in campos if u not in (asg or [])]
             ing = c1.multiselect(
-                t("Head installer/s"), campos,
-                format_func=lambda u: _etq_us(campos).get(u, u),
+                t("Head installer/s"), _hi,
+                format_func=lambda u: _etq_us(campos).get(u, u) + ("" if (not asg or u in asg)
+                                                                   else "  · " + t("not in the crew")),
                 key=f"np_ing_{key}", select_all=False,
                 help=(t("Field users of this company.") if campos else
                       t("No field users yet: create them in Planning → Users.")))
@@ -1863,9 +1872,10 @@ def _cumplimiento_equipo(pid, grupo, prj):
     # pinta: dos textos contándose cosas distintas a dos centímetros. `i18n.VALORES`
     # ya sabe que vigente/por_vencer/vencido/falta son valid/expiring/expired/missing.
     filas = []
+    _nm_c = _etq_us(asign)                 # v697 · H20 del ciclo 6: por NOMBRE (las horas, al lado, ya lo iban)
     for u in asign:
         comp = credentials.compliance(u, req)
-        fila = {"User": u, "Compliant": t("Yes") if comp["cumple"] else t("No")}
+        fila = {"User": _nm_c.get(u, u), "Compliant": t("Yes") if comp["cumple"] else t("No")}
         for _c in req:
             _est = comp["por_tipo"].get(_c, "falta")
             fila[_c] = "—" if _est == "falta" else _etq(_est)
@@ -2577,7 +2587,8 @@ def _diagnostico(ps: dict) -> dict:
                              "tarde": hoy > fin})     # arrastrada: ya paso su ventana
         # ⚠️ v665 · el hito es lo que QUEDA por hacer: una actividad ya al 100 % no lo es (ciclo 1:
         # una obra completada seguía diciendo «Next milestone: Prepping starts tomorrow»)
-        if proximo is None and a["inicio"] > hoy and pct < 100:
+        # v697 · H19 del ciclo 6: tampoco una ya EMPEZADA («Prepping starts on 24/11» con Prepping al 24 %)
+        if proximo is None and a["inicio"] > hoy and pct <= 0:
             proximo = {"nombre": a["nombre"], "fecha": f_i,
                        "faltan": a["inicio"] - hoy}
 
@@ -3579,10 +3590,14 @@ def _detalle_proyecto(pid: str, grupo: str = None):
                           help=t("It comes from the map pin (above). Move it or search the address to change it."))
             modelo   = e2.text_input(t("Model"), value=prj.get("Model", ""))
             _cmp_ed = _field_users(grupo)
+            # v697 · H2: la cuadrilla primero y los demás marcados (como al crear)
+            _cmp_ed = [u for u in _cmp_ed if u in (asignados or [])] + [u for u in _cmp_ed if u not in (asignados or [])]
             ing = e1.multiselect(
                 t("Head installer/s"), _cmp_ed,
                 default=[u for u in P.head_installers(prj) if u in _cmp_ed],
-                format_func=lambda u: _etq_us(_cmp_ed).get(u, u), select_all=False,
+                format_func=lambda u: _etq_us(_cmp_ed).get(u, u) + ("" if (not asignados or u in asignados)
+                                                                    else "  · " + t("not in the crew")),
+                select_all=False,
                 help=(t("Field users of this company.") if _cmp_ed else
                       t("No field users yet: create them in Planning → Users.")))
             # Calendario, no texto libre: ver `_a_fecha`. El valor se guarda
@@ -5339,6 +5354,9 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     # Quitar solo la primera dejaría las otras dos diciendo lo mismo a medias — el
     # desajuste de media-unificación de v419.
     _loc = P.es_interno(P.get_project(pid) or {})
+    # v697 · H23 del ciclo 6: con muy poco avance la proyección es ruido («$1,980 … within the budget of $40,000» con
+    # un 3 % y 0,27 h): hasta `AVANCE_MIN_PROYECCION`, sin cifra de cierre
+    _av_obra = P._num((P.get_project(pid) or {}).get("Progress"))
 
     # ── Titular: una frase antes de cualquier numero ──
     # ⚠️ v349: los importes van por `theme.dinero` (formatea Y escapa el `$`). Con dos
@@ -5349,6 +5367,13 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
               if cp["total"] > 0 else
               t("No spend has been recorded at this location yet."))
         _c, _fn = "#6b7280", st.info
+    # ⚠️ salvo que lo GASTADO ya pase del presupuesto: eso no es una proyección, es un hecho, y se dice abajo
+    elif proy and _av_obra < AVANCE_MIN_PROYECCION and not (pres > 0 and cp["total"] > pres):
+        _t = t("Too early to project the cost: **{g}** spent so far with {a}% progress. The cost at completion "
+               "appears from {m}% progress.", g=_T.dinero(cp["total"], 0), a="%.0f" % _av_obra,
+               m=AVANCE_MIN_PROYECCION)
+        _c, _fn = "#6b7280", st.info
+        proy = 0                                  # la tarjeta, «—»
     elif proy and pres > 0 and proy > pres * 1.02:
         # v564 · los titulares con `t()` (iban por una variable: la trampa 30)
         _t = (t("At this rate the project will cost **{p}**, **{o} over** budget")
@@ -5627,6 +5652,9 @@ def render_expenses(pid, grupo, can_delete=False, key_prefix="ex",
                                                              str(r.get('Description') or '')] if x)
                 if _ex:
                     _lbl += f" · {_ex}"
+                _por = str(r.get("CreatedBy", "") or "").strip()      # v697 · H24 del ciclo 6: quién lo cargó
+                if _por:
+                    _lbl += " · " + t("by {x}", x=maps.literal_md(_etq_us([_por]).get(_por, _por)))
                 # v670 · el gasto de una ORDEN recibida (H8): su comprobante es la factura del proveedor, y se quita
                 # deshaciendo la recepción, no con la papelera (H9: la orden se quedaba «received» sin costo)
                 _ord = _de_orden.get(_rid) or {}

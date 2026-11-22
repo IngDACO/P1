@@ -1958,10 +1958,11 @@ def _proyectos_home(grupo):
         _dl, _ah, _al = delays.get(_pid, 0), aheads.get(_pid, 0), alarmas.get(_pid, 0)
         _extra = ""
         # v544 · enteros: llegan como float y se leía «18.0d» (el resumen dice «18d»)
+        # v697 · H18 del ciclo 6: «2d» decía lo mismo adelantada que retrasada (solo el tinte lo distinguía)
         if _dl:
-            _extra += f" · :material/schedule: {int(round(_dl))}d"
+            _extra += " · " + t(":material/schedule: {n}d behind", n=int(round(_dl)))
         elif _ah:
-            _extra += f" · :material/schedule: {int(round(_ah))}d"
+            _extra += " · " + t(":material/schedule: {n}d ahead", n=int(round(_ah)))
         if _al:
             _extra += f" · :material/notifications: {_al}"
         _lbl = f"{p.get('Name', '')} · {_av}%{_extra}"
