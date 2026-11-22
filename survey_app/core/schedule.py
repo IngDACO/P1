@@ -442,7 +442,8 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
          f'<text x="18" y="31" font-size="8.5" fill="#5b6472">'
          f'{_esc(titulo) + " · " if titulo else ""}'
          f'{start.strftime("%d/%m/%Y")} → {sched["fecha_fin"].strftime("%d/%m/%Y")} · '
-         f'{total} {_d("days")} · {n} {_d("activities")}</text>']
+         # v699 · días de TRABAJO (de lunes a viernes, D1 del ciclo 6): decía «33 days» con el plan ya en laborables
+         f'{total} {_d("working days")} · {n} {_d("activities")}</text>']
 
     # ── Rejilla vertical: la comparten Gantt y curva ────────
     step = 5 if fin_eje > 15 else (2 if fin_eje > 6 else 1)
