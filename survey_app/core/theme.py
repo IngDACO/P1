@@ -454,6 +454,23 @@ body:has([data-testid="stStatusWidget"])::before {{
   color: {AZUL_OSC} !important; font-weight: 700 !important;
 }}
 
+/* v695 · D3 del ciclo 6 (decisión del usuario): los avisos de `flash` FLOTAN arriba a la derecha y se
+   desvanecen. Ocupaban sitio arriba de la página y, al irse en la pasada siguiente, TODO subía ~55 px: un
+   toque en «Read it again» cayó en «Confirm» y acreditó (medido en producción). Sin `pointer-events`, nunca
+   tapan un toque. El envoltorio, fuera del flujo: así no deja hueco ni separación. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-cpx_flash) {{
+  position: absolute !important; height: 0 !important; margin: 0 !important; padding: 0 !important;
+}}
+.st-key-cpx_flash {{
+  position: fixed !important; top: 58px; right: 16px; left: auto !important;
+  width: min(560px, calc(100vw - 32px)) !important; z-index: 999990;
+  pointer-events: none; background: #fff; border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .18);
+  animation: cpxFlashFuera 9s ease forwards;
+}}
+.st-key-cpx_flash [data-testid="stAlert"] {{ margin: 0 !important; }}
+@keyframes cpxFlashFuera {{ 0%, 82% {{ opacity: 1; }} 100% {{ opacity: 0; visibility: hidden; }} }}
+
 .cpx-sec {{
   display: flex; align-items: baseline; gap: 9px;
   margin: 14px 0 6px; padding-bottom: 5px; border-bottom: 1px solid {BORDE};

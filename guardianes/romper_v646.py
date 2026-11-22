@@ -58,9 +58,11 @@ ROTURAS = [
     # ── «Add to To-do» ──
     ("⚠️ lo pendiente, sin «Add to To-do»", U, [("""                if todo:\n                    _boton_tarea(""", """                if False:\n                    _boton_tarea(""")]),
     ("la tarea lleva la cabecera «Pending:»", U, [(""""", tx, flags=re.I).strip()\n""", """"", "", flags=re.I).strip() or tx\n""")]),
-    ("⚠️ se ofrece dos veces", U, [("""    if any(TA.normaliza(r.get("Text")) == TA.normaliza(tx) for r in TA.pendientes(pid)):\n""", """    if False:\n""")]),
+    # v695 · re-anclada: se compara por el PRINCIPIO (la tarea lleva detrás la fecha del parte, H16 del ciclo 6)
+    ("⚠️ se ofrece dos veces", U, [("""    if any(TA.normaliza(r.get("Text")).startswith(TA.normaliza(tx)) for r in TA.pendientes(pid)):\n""", """    if False:\n""")]),
     ("⚠️ apunta en una obra ajena", U, [("""    if not pet or pet.get("pid") not in mias:\n""", """    if not pet:\n""")]),
-    ("⚠️ apunta con otro autor", U, [("""        ok, r = TA.crear(pet["pid"], grupo, pet["texto"], usuario)\n""", """        ok, r = TA.crear(pet["pid"], grupo, pet["texto"], "x")\n""")]),
+    # v695 · re-anclada: el texto va ahora en `_tx` (con la fecha del parte, H16 del ciclo 6)
+    ("⚠️ apunta con otro autor", U, [("""        ok, r = TA.crear(pet["pid"], grupo, _tx, usuario)\n""", """        ok, r = TA.crear(pet["pid"], grupo, _tx, "x")\n""")]),
     ("⚠️ el botón no hace nada", U, [("""    _apuntar_tarea(grupo, usuario, set(_asignables(usuario, grupo, pid)))      # v646 · «Add to To-do»\n""", "")]),
     ("sin tarjeta, lo pendiente sin botón", U, [("""        _pendientes_a_todo(_prev, (lid, str(pid)), kp)        # v646\n""", "")]),
     # ── La oficina confirma por el autor ──

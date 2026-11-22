@@ -191,7 +191,8 @@ chk("marcar sin guardar: la etapa dice «1 unsaved»", "1 unsaved" in _tit(at, "
 chk("...arriba, el aviso y «Save all (1)»", any("1 unsaved ticks" in x for x in _todo(at))
     and _w(at.button, "fld_save_all_PRJ-1") is not None)
 _bs = _w(at.button, "fld_save_PRJ-1_1")
-chk("...y el botón de la etapa lo dice y se resalta", _bs is not None and "(1 changes)" in _bs.label
+# v695 · H11 del ciclo 6: en singular, «(1 change)»
+chk("...y el botón de la etapa lo dice y se resalta", _bs is not None and "(1 change)" in _bs.label
     and _bs.proto.type == "primary", _bs and (_bs.label, _bs.proto.type))
 chk("nada escrito todavía", at.session_state["_acr"] == [])
 at.session_state["cpxseg_fld_sec"] = "📝 Parte"

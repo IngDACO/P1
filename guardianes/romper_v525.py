@@ -39,11 +39,13 @@ ROTURAS = [
      "origen=SP.PARTE)"),
 
     ("los creditos NUEVOS no guardan su dia de trabajo",
-     SPR, 'str(origen), str(quien), _ahora, _dia])', "str(origen), str(quien), _ahora])"),
+     # v695 · re-anclada: detrás va `_nv` (Levels, D2 del ciclo 6)
+     SPR, 'str(origen), str(quien), _ahora, _dia, _nv])', "str(origen), str(quien), _ahora, _nv])"),
 
     # ⚠️ v528 · Sin la coma final: la lista va ahora dentro de un `_lote_sp += [...]`.
     ("al re-acreditar una fila, su dia de trabajo se queda el viejo",
-     SPR, '("Updated", _ahora), ("WorkDate", _dia))]', '("Updated", _ahora))]'),
+     # v695 · re-anclada: detrás va ("Levels", _nv)
+     SPR, '("Updated", _ahora), ("WorkDate", _dia), ("Levels", _nv))]', '("Updated", _ahora), ("Levels", _nv))]'),
 
     ("el credito de AHORA no cuenta para las fechas de la etapa",
      SPR, "        _fechas[(_et, _ac)] = _dia\n", ""),
@@ -63,7 +65,8 @@ ROTURAS = [
      SPR, 'for k in ("WorkDate", "Updated"):', 'for k in ("WorkDate",):'),
 
     ("`WorkDate` se mete en MEDIO de la cabecera (todo se desplaza, v363)",
-     SPR, '"UpdatedBy", "Updated", "WorkDate"]', '"WorkDate", "UpdatedBy", "Updated"]'),
+     # v695 · re-anclada: la cabecera sigue con «Levels» en su propia línea
+     SPR, '"UpdatedBy", "Updated", "WorkDate",\n', '"WorkDate", "UpdatedBy", "Updated",\n'),
 
     ("`save_field_progress` ignora el inicio que le llega (fecha HOY)",
      PRJ, '"values": [[fi_n or hoy]]})', '"values": [[hoy]]})'),

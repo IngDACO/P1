@@ -76,7 +76,7 @@ def _ayuda(cred, orden, nombre, pct):
     """v616 · El «?» de una casilla acreditada: QUIÉN, el DÍA del trabajo y, si vino de un parte,
     cuál (decisión del usuario). En un «?» y no en una línea: la lista de una etapa ya tiene 24
     casillas en el móvil."""
-    if _num(pct) < 100:
+    if _num(pct) <= 0:                         # v695 · D2: también a medias (las plantas)
         return None
     r = cred.get((int(orden), str(nombre)))
     if not r:
@@ -85,7 +85,19 @@ def _ayuda(cred, orden, nombre, pct):
              d=_dmy(r.get("WorkDate") or r.get("Updated")))
     if str(r.get("Source", "")) == SP.PARTE and str(r.get("Note", "")).strip():
         _txt += " — " + t("from daily log {l}", l=str(r.get("Note")).strip())
+    _lv = str(r.get("Levels", "") or "").strip()
+    if _lv and _num(pct) < 100:
+        _txt += " — " + t("levels {l}", l=_lv.replace(",", ", "))
     return _txt
+
+
+def _parcial(cred, orden, nombre, pct) -> str:
+    """v695 · D2 del ciclo 6: «· levels 3, 4 done (25%)» de una actividad a medias, o ""."""
+    if not 0 < _num(pct) < 100:
+        return ""
+    _lv = str((cred.get((int(orden), str(nombre))) or {}).get("Levels", "") or "").strip()
+    return "  ·  :orange[" + (t("levels {l} done ({p}%)", l=_lv.replace(",", ", "), p="%.0f" % _num(pct)) if _lv
+                             else t("{p}% done", p="%.0f" % _num(pct))) + "]"
 
 
 def _color(pct) -> str:
@@ -170,7 +182,8 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                 _k = "%s_%s_%d_%d" % (key_prefix, pid, e["orden"], i)
                 _sv = _num(a["pct"]) >= 100
                 _marcas[a["nombre"]] = st.checkbox(
-                    "%s  ·  %.1f%%" % (a["nombre"], _num(a["peso_en_etapa"])),
+                    "%s  ·  %.1f%%" % (a["nombre"], _num(a["peso_en_etapa"]))
+                    + _parcial(_cred, e["orden"], a["nombre"], a["pct"]),            # v695 · D2
                     value=_pend.get(f"{e['orden']}|{a['nombre']}", _sv), key=_k,
                     disabled=not editable, help=_ayuda(_cred, e["orden"], a["nombre"], a["pct"]),
                     on_change=_apuntar, args=(key_prefix, pid, e["orden"], a["nombre"], _k, _sv))
@@ -192,7 +205,9 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
             if not editable:
                 continue
             # v616 · con cambios sin guardar, el botón lo dice y se resalta
-            if st.button(t(":material/save: Save stage {n} ({c} changes)", n=e["orden"], c=_n_pend)
+            # v695 · H11 del ciclo 6: «(1 changes)»
+            if st.button((t(":material/save: Save stage {n} (1 change)", n=e["orden"]) if _n_pend == 1 else
+                          t(":material/save: Save stage {n} ({c} changes)", n=e["orden"], c=_n_pend))
                          if _n_pend else t(":material/save: Save stage {n}", n=e["orden"]),
                          key="%s_save_%s_%d" % (key_prefix, pid, e["orden"]),
                          type="primary" if _n_pend else "secondary", width="stretch"):

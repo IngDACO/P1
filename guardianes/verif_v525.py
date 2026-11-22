@@ -77,8 +77,9 @@ class _Reloj:
 
 # ═════════════════════════════════════════════════════════════════
 sec("1. La columna nueva y el día de trabajo")
-chk("`WorkDate` va AL FINAL de StageProgress (v363)",
-    SP.HEADERS[-1] == "WorkDate" and SP.HEADERS[:10] == [
+# v695 · detrás de `WorkDate` va `Levels` (las plantas, D2 del ciclo 6): sigue sin desplazar nada (v363)
+chk("`WorkDate` va detrás de las diez de antes, sin desplazar nada (v363)",
+    SP.HEADERS[10] == "WorkDate" and SP.HEADERS[:10] == [
         "ID", "Group", "ProjectID", "StageOrder", "Activity", "Pct", "Note", "Source",
         "UpdatedBy", "Updated"], SP.HEADERS)
 _oc = SP.clock

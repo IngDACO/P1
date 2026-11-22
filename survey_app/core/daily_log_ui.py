@@ -159,7 +159,63 @@ def _prueba(item, oficina=False) -> None:
         st.caption("  \n".join([x for x in [_txt] + _extra if x]))
 
 
-def _pintar(p, k, titulo=True, todo=None, oficina=False) -> dict:
+def _etq_plantas(x) -> str:
+    """v695 · D2 del ciclo 6: lo que se acredita de una actividad por plantas, junto a su casilla."""
+    from core import plantas as PL
+    _pc = round(100.0 * len(x["todas"]) / x["ns"])
+    return t("levels {l} → {a} of {n} levels ({p}%)", l=PL.texto(x["nuevas"]), a=len(x["todas"]), n=x["ns"],
+             p=min(100, _pc))
+
+
+def _plantas_de(p, plan, ns, cred) -> dict:
+    """v695 · D2 del ciclo 6 (decisión del usuario): `{(orden, actividad): {"nuevas", "todas", "ns"}}` de las
+    actividades que se hacen PLANTA A PLANTA (`stages.por_plantas`) y que el parte nombra con plantas concretas.
+    «Installed the landing door panels on levels 5 and 6» (de 8) premarcaba «Install door panels» ENTERA. `todas`
+    suma las que ya tenía acreditadas (`Levels`). Sin NS, o sin plantas en el texto, nada: entera, como siempre."""
+    from core import plantas as PL
+    from core import stages as S
+    from core.num import num as _n
+    if not ns or ns <= 0:
+        return {}
+    _por = {i for i, e in enumerate(plan or [], start=1) if S.por_plantas(e.get("pista"), e.get("numero"))}
+    if not _por:
+        return {}
+    _ya = {(int(_n(r.get("StageOrder"))), str(r.get("Activity", ""))): PL.leer(r.get("Levels"))
+           for r in cred or [] if 0 < _n(r.get("Pct")) < 100}
+    out = {}
+
+    def _mira(orden, act, txt):
+        if int(orden) not in _por:
+            return
+        nv = PL.de_texto(txt, ns)
+        if not nv or len(nv) >= ns:
+            return
+        out[(int(orden), str(act))] = {"nuevas": nv, "todas": sorted(set(nv) | _ya.get((int(orden), str(act)), set())),
+                                      "ns": int(ns)}
+    for f in p.get("actividades") or []:
+        _mira(f["orden"], f["actividad"], " ".join([str(f.get("termino") or "")]
+                                                   + [str(y) for y in f.get("pruebas") or []]))
+    for q in p.get("preguntas") or []:
+        for o in q.get("opciones") or []:
+            _mira(o["orden"], o["actividad"], " ".join([str(q.get("termino") or "")]
+                                                       + [str(y) for y in q.get("pruebas") or []]))
+    return out
+
+
+def _a_medias(creditos, plantas) -> list:
+    """v695 · D2: el crédito de una actividad por plantas es la PARTE hecha (plantas / NS) y lleva sus plantas; con
+    todas, entera."""
+    out = []
+    for c in creditos or []:
+        x = (plantas or {}).get((int(c["etapa"]), str(c["actividad"])))
+        if x:
+            _pc = round(100.0 * len(x["todas"]) / x["ns"], 1)
+            c = dict(c, niveles=list(x["todas"]), pct=100.0 if _pc >= 100 else _pc)
+        out.append(c)
+    return out
+
+
+def _pintar(p, k, titulo=True, todo=None, oficina=False, plantas=None) -> dict:
     """Las propuestas de UN destino. Devuelve lo MARCADO y, desde v524, lo que se ENSEÑÓ:
     `{"marcadas": [(orden, actividad)], "ofrecidas": [[tipo, orden, actividad, termino]],
     "hechas": [(orden, actividad)]}` — el registro que mide el acierto.
@@ -193,8 +249,9 @@ def _pintar(p, k, titulo=True, todo=None, oficina=False) -> dict:
                 _seg = f.get("fuente") == "agente" and not f.get("aviso")
                 if _seg:
                     pre.append((f["orden"], f["actividad"]))
-                if st.checkbox(f["actividad"], value=_seg, key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]),
-                               help=_et):
+                _pl = (plantas or {}).get((int(f["orden"]), str(f["actividad"])))     # v695 · D2
+                if st.checkbox(f["actividad"] + (("  ·  " + _etq_plantas(_pl)) if _pl else ""), value=_seg,
+                               key="%s_a_%d_%s" % (k, f["orden"], f["actividad"]), help=_et):
                     tick.append((f["orden"], f["actividad"]))
             # ⚠️ v608 · Dos casillas seguidas que salen del MISMO trozo («Finished with rails
             # cabin and cw» → rieles de cabina y de contrapeso) repetían la cita debajo de cada
@@ -230,7 +287,9 @@ def _pintar(p, k, titulo=True, todo=None, oficina=False) -> dict:
                 _ya(o)
                 continue
             ofr.append(["q", o["orden"], o["actividad"], q["termino"]])
-            if st.checkbox("%s  ·  #%d %s" % (o["actividad"], o["orden"], o["etapa"]),
+            _pl = (plantas or {}).get((int(o["orden"]), str(o["actividad"])))     # v695 · D2
+            if st.checkbox("%s  ·  #%d %s" % (o["actividad"], o["orden"], o["etapa"])
+                           + (("  ·  " + _etq_plantas(_pl)) if _pl else ""),
                            key="%s_q_%s_%d_%s" % (k, q["termino"], o["orden"], o["actividad"])):
                 tick.append((o["orden"], o["actividad"]))
     if p["pendientes"]:
@@ -248,7 +307,7 @@ def _pintar(p, k, titulo=True, todo=None, oficina=False) -> dict:
     if p["fuera"]:
         st.caption(t(":material/block: Mentioned, but not in this job's plan: {x}",
                      x=", ".join(sorted({f["actividad"] for f in p["fuera"]}))))
-    _resto_agente(p)
+    _resto_agente(p, todo=todo, k=k)                  # v695 · H12: lo empezado, también al To-do
     # ⚠️ Sin repetidos: la misma actividad puede salir en una etapa Y en una pregunta
     # («Lights»), y marcada en las dos el botón decía «3 marcadas» para 2 créditos.
     return {"marcadas": list(dict.fromkeys(tick)), "ofrecidas": ofr,
@@ -264,7 +323,8 @@ _TAREA = "_dl_tarea"            # lo que pidió «Add to To-do», atendido arrib
 def _tarea_de(x) -> str:
     """El texto de la tarea: las palabras del parte, sin la cabecera «Pending:» delante."""
     tx = str(((x.get("pruebas") or [""])[0]) or x.get("termino") or "").strip()
-    return re.sub(r"^\s*(?:pendings?|issues?|to ?do)\s*[:\-–]\s*", "", tx, flags=re.I).strip()
+    tx = re.sub(r"^\s*(?:pendings?|issues?|to ?do)\s*[:\-–]\s*", "", tx, flags=re.I).strip()
+    return tx[:1].upper() + tx[1:]          # v695 · H16: con mayúscula («we will re-gap…» salía tal cual)
 
 
 def _boton_tarea(x, todo, kb) -> None:
@@ -274,7 +334,8 @@ def _boton_tarea(x, todo, kb) -> None:
     if not tx:
         return
     from core import tareas as TA
-    if any(TA.normaliza(r.get("Text")) == TA.normaliza(tx) for r in TA.pendientes(pid)):
+    # v695 · H16: la tarea guardada lleva detrás la fecha del parte → se compara por el PRINCIPIO
+    if any(TA.normaliza(r.get("Text")).startswith(TA.normaliza(tx)) for r in TA.pendientes(pid)):
         st.caption(t(":material/check: In the job's To-do."))
         return
     st.button(t(":material/add_task: Add to To-do"), key=kb, type="tertiary", on_click=_pedir_tarea,
@@ -292,7 +353,10 @@ def _apuntar_tarea(grupo, usuario, mias) -> None:
         return
     from core import tareas as TA
     with st.spinner(t("Saving…")):
-        ok, r = TA.crear(pet["pid"], grupo, pet["texto"], usuario)
+        # v695 · H16 del ciclo 6: con la fecha del parte detrás: «tomorrow» deja de significar algo al día siguiente
+        _dl = next((x for x in DL.partes(pet["pid"]) if str(x.get("ID", "")) == pet.get("lid")), {})
+        _tx = pet["texto"] + ((" " + t("(from the log of {d})", d=_dmy(_dl.get("Date")))) if _dl.get("Date") else "")
+        ok, r = TA.crear(pet["pid"], grupo, _tx, usuario)
     (flash.exito if ok else flash.error)(t("Added to the job's To-do ({x}).", x=r) if ok else str(r))
     st.rerun()
 
@@ -318,7 +382,7 @@ def partes_para_la_oficina(grupo) -> list:
     return out
 
 
-def _resto_agente(p) -> None:
+def _resto_agente(p, todo=None, k="") -> None:
     """v607 · Lo que solo el agente distingue, para que ningún trozo del parte quede sin
     decir qué pasó con él: lo EMPEZADO (no se acredita), los PROBLEMAS y lo que no es avance,
     con su motivo. En las propuestas del vocabulario estas claves no existen: no pinta nada."""
@@ -326,6 +390,11 @@ def _resto_agente(p) -> None:
     if _emp:
         st.caption(t(":material/pending: Started, not finished — not credited:") + "  \n"
                    + "  \n".join("“%s”" % literal_md(x["texto"]) for x in _emp))
+        # v695 · H12 del ciclo 6: lo empezado también puede ir al To-do (lo pendiente sí podía y esto no)
+        if todo:
+            for _ie, x in enumerate(_emp):
+                _boton_tarea({"pruebas": [x.get("texto", "")], "termino": x.get("texto", "")}, todo,
+                             "%s_tde%d" % (k, _ie))
     # (Los PROBLEMAS no van aquí desde v608: van una vez por parte, con su «Tell the office»,
     # en `_problemas`.)
     _ap = p.get("aparte") or []
@@ -696,6 +765,13 @@ def _problemas(reg, r, kp) -> None:
                   on_click=_cerrar_aviso, args=(_ko,))
 
 
+def _sin_enviar(reg) -> list:
+    """v695 · H12: los PROBLEMAS que vio el agente y que el autor aún no mandó a la oficina."""
+    _ya = {a.get("texto") for a in (reg or {}).get("avisos") or []}
+    return [f.get("texto", "") for f in (reg or {}).get("fragmentos") or []
+            if f.get("clase") == "problem" and f.get("texto", "") and f.get("texto", "") not in _ya]
+
+
 def _sin_agente(lid) -> None:
     """Cuando el agente está puesto pero NO pudo leer este parte: dicho, para que la lista de
     palabras no se tome por lo que leyó el agente. Sin agente (sin clave), nada que decir."""
@@ -909,7 +985,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
                                               if v and v != _OTRA},
                                       tambien=tambien, sin_responder=sin_resp)
 
-        por_destino, prjs = {}, {}
+        por_destino, prjs, _plantas_d = {}, {}, {}
         for d, txt in destinos.items():
             dprj = prj if d == str(pid) else (P.get_project(d) or {})
             prjs[d] = dprj
@@ -932,7 +1008,9 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
             _cab = len(destinos) > 1 or d != str(pid)
             if _cab:
                 st.markdown("**→ %s**" % (ops or {}).get(d, d))
-            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab, todo=(lid, str(d)), oficina=oficina)
+            _plantas_d[d] = _plantas_de(_p, plan, int(P._num(dprj.get("NS"))), SP.creditos(d))      # v695 · D2
+            por_destino[d] = _pintar(_p, "%s_%s" % (kp, d), titulo=not _cab, todo=(lid, str(d)), oficina=oficina,
+                                     plantas=_plantas_d[d])
 
         n = sum(len(v["marcadas"]) for v in por_destino.values())
         if reg and not oficina:
@@ -948,6 +1026,12 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
                                                               reg.get("prompt", "")))
                                if reg else "", en_nombre_de=_autor if oficina else "")
 
+        # v695 · H12 del ciclo 6: un aviso que el agente vio y el autor NO mandó se perdía al confirmar
+        _no_env = _sin_enviar(reg) if (reg and not oficina) else []
+        if _no_env:
+            st.warning(t(":material/report: Not sent to the office yet: {x}. Confirming does not send it: use «Tell "
+                         "the office» above if they should know.",
+                         x="; ".join("«%s»" % literal_md(x) for x in _no_env[:2])))
         c1, c2 = st.columns([3, 2])
         if c1.button(t(":material/done_all: Confirm the {n} ticked", n=n) if n
                      else t(":material/done_all: Confirm"), key="%s_ok" % kp,
@@ -970,7 +1054,7 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
                         continue
                     # ⚠️ v525 · Con la fecha del PARTE: el trabajo se hizo el día que dice
                     # el parte, no el día en que se confirma (la 1A del usuario).
-                    ok, msg = SP.acreditar(d, grupo, prjs[d], PP.creditos(ticks, lid),
+                    ok, msg = SP.acreditar(d, grupo, prjs[d], _a_medias(PP.creditos(ticks, lid), _plantas_d.get(d)),
                                            quien=usuario, origen=SP.PARTE,
                                            fecha=str(r.get("Date", "") or ""))
                     if not ok:
@@ -1008,6 +1092,15 @@ def _acreditadas(n, de="") -> str:
 def _estado_revision(r, pid) -> None:
     """Una línea: si su autor ya revisó las propuestas y cuántas acreditó desde ahí."""
     if not DL.revisado(r):
+        # v695 · H22 del ciclo 6: la oficina veía un parte sin revisar como texto suelto
+        if str(r.get("Text", "") or "").strip():
+            from core.num import parse_date as _pd0
+            import datetime as _dtm
+            _c = _pd0(str(r.get("Created", "") or "").split(" ")[0]) or _pd0(r.get("Date"))   # sin «[:10]» (verif_v604)
+            if _c:
+                st.caption(t(":material/hourglass_top: Not reviewed by {a} yet · the office can review it from {d}.",
+                             a=_nombre(r.get("Author")),
+                             d=_dmy((_c + _dtm.timedelta(days=DL.DIAS_OFICINA)).isoformat())))
         return
     from core import stage_progress as SP
     try:
@@ -1081,6 +1174,16 @@ def render_campo(pid, grupo, usuario, key_prefix="fld", ir_avance=None) -> None:
             # asignar la clave de un widget ya pintado en esta pasada revienta.
             st.session_state[_kv] = True
             flash.exito(t("Daily log saved."))
+            # v695 · H17 del ciclo 6: un parte de un día ANTERIOR al inicio de la obra se guarda, pero se dice
+            try:
+                from core import projects as _P17
+                from core.num import parse_date as _pd17
+                _ini = _pd17((_P17.get_project(pid) or {}).get("StartDate"))
+                if _ini and dia and dia < _ini:
+                    flash.aviso(t("This job starts on {d} and the log is for {x}. If the date is wrong, tell the office.",
+                                  d=_dmy(_ini.isoformat()), x=_dmy(dia.isoformat())))
+            except Exception as e:
+                logger.warning("parte: no se pudo mirar el inicio de la obra: %s", e)
             st.rerun()
         else:
             st.error(msg)

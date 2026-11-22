@@ -43,8 +43,9 @@ ROTURAS = [
     # sus anclas murieron y NADIE avisaba: check_anclas_roturas no leia las tuplas con el
     # fichero en una constante (UI, PPR...). Arreglado alli tambien.
     ("las casillas nacen MARCADAS todas, tambien sin el agente (v646: solo lo que el agente tiene claro)",
-     UI, 'if st.checkbox(f["actividad"], value=_seg, key=',
-     'if st.checkbox(f["actividad"], value=True, key='),
+     # v695 · re-anclada: la etiqueta lleva ahora las plantas (D2 del ciclo 6); la rotura es la misma
+     UI, '(("  ·  " + _etq_plantas(_pl)) if _pl else ""), value=_seg,',
+     '(("  ·  " + _etq_plantas(_pl)) if _pl else ""), value=True,'),
 
     ("se acredita lo NO marcado de la lista de una etapa (la casilla al reves)",
      UI, '                if st.checkbox(o["actividad"],\n',

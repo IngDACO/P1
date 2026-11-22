@@ -36,7 +36,8 @@ ROTURAS = [
                                                """t(":material/checklist: Your log names «{e}» — which of these were finished?", e=e["termino"])""")]),
     ("el aviso de «Issues/Pending», con «your log» para la oficina", DU, [("""_extra.append(t(((oficina and _AVISO_OFICINA.get(item["aviso"])) or _AVISO[item["aviso"]])))""",
                                                                          """_extra.append(t(_AVISO[item["aviso"]]))""")]),
-    ("⚠️ la tarjeta no pasa `oficina` a lo que pinta", DU, [("""todo=(lid, str(d)), oficina=oficina)""", """todo=(lid, str(d)))""")]),
+    # v695 · re-anclada: la llamada sigue con `plantas=` (D2 del ciclo 6)
+    ("⚠️ la tarjeta no pasa `oficina` a lo que pinta", DU, [("""todo=(lid, str(d)), oficina=oficina,""", """todo=(lid, str(d)),""")]),
     ("sin nada que acreditar, no pasa `oficina`", DU, [("""_nada_que_confirmar(_prev, oficina)""", """_nada_que_confirmar(_prev)""")]),
     ("sin nada que acreditar, la oficina lee «your log»", DU, [("""t(":material/pending: What this log lists as still to do is not credited ({n}).", n=len(p["pendientes"]))""",
                                                                """t(":material/pending: What your log lists as still to do is not credited ({n}).", n=len(p["pendientes"]))""")]),

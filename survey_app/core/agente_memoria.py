@@ -304,6 +304,49 @@ def olvidar(ids, grupo, es_propietario) -> tuple:
     return True, len(lote) // 2
 
 
+# ── v695 · H14 del ciclo 6: deshacer a mano lo que vino de un parte ─────────────
+def desaprender(pares) -> int:
+    """`pares` = `[(ID del parte, actividad)]` que alguien DESMARCÓ a mano en «Progress» después de acreditarlos
+    desde ese parte. Las lecciones APRENDIDAS de ese parte para esa actividad pasan a una confirmación menos y un
+    rechazo más: la cuadrilla dijo que no era eso. Ciclo 6: un toque equivocado acreditó «Install door panels» y la
+    memoria lo guardó como confirmado; deshacerlo en Progress no lo quitaba. Las reglas de la oficina no se tocan.
+    Devuelve cuántas lecciones cambió. Lee FRESCO y escribe en UN lote."""
+    _p = {(str(l).strip(), str(a)) for l, a in pares or [] if str(l).strip()}
+    if not _p:
+        return 0
+    w = _ws()
+    if w is None:
+        return 0
+    try:
+        from core import columnas
+        recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    except Exception as e:
+        logger.warning("agente_memoria.desaprender: %s", e)
+        return 0
+    lote, n, ahora = [], 0, _ahora()
+    for i, r in enumerate(recs):
+        if _es_olvidada(r) or str(r.get("Kind", "")) == REGLA:
+            continue
+        if (str(r.get("LogID", "")).strip(), str(r.get("Activity", ""))) not in _p:
+            continue
+        c, x = int(_num(r.get("Confirmed"))), int(_num(r.get("Rejected")))
+        if c <= 0:
+            continue
+        lote += [{"range": "%s%d" % (_col_letter(_COL["Confirmed"]), i + 2), "values": [[str(c - 1)]]},
+                 {"range": "%s%d" % (_col_letter(_COL["Rejected"]), i + 2), "values": [[str(x + 1)]]},
+                 {"range": "%s%d" % (_col_letter(_COL["Updated"]), i + 2), "values": [[ahora]]}]
+        n += 1
+    if not lote:
+        return 0
+    try:
+        w.batch_update(lote, value_input_option="RAW")
+    except Exception as e:
+        logger.warning("agente_memoria.desaprender: %s", e)
+        return 0
+    _invalidate()
+    return n
+
+
 # ── deshacer lo olvidado (v611) ──────────────────────────────────────────────
 # ⚠️ Olvidar no tenía vuelta atrás en la pantalla: la fila quedaba (`Active=NO`) pero nadie podía
 # recuperarla, y lo que aprende una cuadrilla en semanas se iba en dos clics.

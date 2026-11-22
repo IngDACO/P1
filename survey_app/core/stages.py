@@ -390,6 +390,19 @@ INFORMATIVAS = {
 }
 
 
+# v695 · D2 del ciclo 6: las etapas que se hacen PLANTA A PLANTA. Un parte que nombra plantas concretas acredita
+# esa parte de la actividad (`plantas`, `stage_progress` con `Levels`), no la actividad entera.
+POR_PLANTAS = {(PISTA_INSTALL, 7)}            # Landing Doors
+
+
+def por_plantas(pista, numero) -> bool:
+    """¿Esa etapa se hace planta a planta? (v695)"""
+    try:
+        return (pista, int(numero)) in POR_PLANTAS
+    except (TypeError, ValueError):
+        return False
+
+
 def informativas(pista, numero) -> list:
     """Las actividades informativas de esa etapa: se marcan, no cuentan. Lista vacía si
     no tiene ninguna."""

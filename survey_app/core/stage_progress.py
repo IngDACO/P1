@@ -58,7 +58,9 @@ SHEET = "StageProgress"
 # en que se registró (`Updated`). Un parte del lunes confirmado el jueves se hizo el lunes,
 # y de aquí salen las fechas reales de la etapa — la curva S real y el historial.
 HEADERS = ["ID", "Group", "ProjectID", "StageOrder", "Activity", "Pct",
-           "Note", "Source", "UpdatedBy", "Updated", "WorkDate"]
+           "Note", "Source", "UpdatedBy", "Updated", "WorkDate",
+           # ⚠️ v695 · D2 del ciclo 6: las PLANTAS hechas de una actividad por plantas a medias («3,4»). Al final.
+           "Levels"]
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # De dónde salió el crédito. Por ahora solo a mano; el parte diario en texto añadirá
@@ -362,6 +364,10 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
     # lectura de ANTES de escribir. v528 · Esa lectura es la fresca, no la caché.
     _filas, _despues, _fechas = _indice(_leido.get(SHEET), pid)
     _tocadas, _nuevas, _lote_sp = set(), [], []
+    # v695 · H14 del ciclo 6: la ÚLTIMA fila de cada actividad, para saber si lo que se deshace vino de un parte
+    _ult = {(int(_num(r.get("StageOrder"))), str(r.get("Activity", ""))): r
+            for r in (_leido.get(SHEET) or []) if str(r.get("ProjectID", "")) == str(pid)}
+    _deshechos = []
     # ⚠️ v581 · el sufijo del ID sigue al MAYOR de la obra. Era la posición dentro de ESTE
     # lote, así que dos confirmaciones de la misma etapa en días distintos emitían las
     # dos `SP-<obra>-<etapa>-0`: el ID es la identidad, aunque hoy nadie lo lea.
@@ -385,16 +391,25 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
             _tocadas.add(_et)
         _despues[(_et, _ac)] = _pc
         _fechas[(_et, _ac)] = _dia
+        # v695 · D2: las plantas de una actividad por plantas A MEDIAS; entera o a 0, ninguna
+        _nv = (",".join(str(x) for x in sorted({int(_num(x)) for x in c.get("niveles") or []}))
+               if c.get("niveles") and 0 < _pc < 100 else "")
+        # v695 · H14 del ciclo 6: deshacer A MANO lo que vino de un parte corrige la memoria del agente (aprendió
+        # «did the doors on levels 3 and 4» → «Install door panels» de un toque equivocado, y desmarcarlo no lo quitaba)
+        _pr = _ult.get((_et, _ac))
+        if (origen == MANUAL and _pc <= 0 and _pr and str(_pr.get("Source", "")) == PARTE
+                and _num(_pr.get("Pct")) > 0 and str(_pr.get("Note", "")).strip()):
+            _deshechos.append((str(_pr.get("Note", "")).strip(), _ac))
         row = _filas.get((_et, _ac))
         if row is None:
             _nuevas.append(["SP-%s-%d-%d" % (pid, _et, _sp_n + len(_nuevas)), str(grupo),
                             str(pid), str(_et), _ac, str(_pc),
-                            str(c.get("nota", "")), str(origen), str(quien), _ahora, _dia])
+                            str(c.get("nota", "")), str(origen), str(quien), _ahora, _dia, _nv])
         else:
             _lote_sp += [{"range": "%s%d" % (_col_letter(_COL[k]), row), "values": [[str(v)]]}
                          for k, v in (("Pct", _pc), ("Note", c.get("nota", "")),
                                       ("Source", origen), ("UpdatedBy", quien),
-                                      ("Updated", _ahora), ("WorkDate", _dia))]
+                                      ("Updated", _ahora), ("WorkDate", _dia), ("Levels", _nv))]
 
     # ── y ahora el número que lee todo lo demás ──────────────────────────────
     _det = {e["orden"]: e for e in _sobre(_plan, _despues)}
@@ -439,6 +454,12 @@ def acreditar(pid, grupo, prj, creditos_nuevos, quien="", origen=MANUAL, fecha=N
         # Sin filas nuevas, lo que falló era TODO lo que había que escribir.
         return False, "%s: %s" % (t("Error saving"), e)
     _invalidate()
+    if _deshechos:                               # v695 · H14: después de escribir, y sin tumbar el guardado
+        try:
+            from core import agente_memoria
+            agente_memoria.desaprender(_deshechos)
+        except Exception as e:
+            logger.warning("stage_progress: no se pudo corregir la memoria: %s", e)
     if not _cambios:
         return True, t("Saved.")
     P._invalidate()

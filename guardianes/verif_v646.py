@@ -268,7 +268,9 @@ _b = _bt(at, "fld_pp_LOG-A_PRJ-9001_td0")
 chk("lo pendiente, con «Add to To-do»", _b is not None and "Add to To-do" in _b.label, [b.key for b in at.button if "_td" in (b.key or "")])
 _b.click().run()
 chk("⚠️ a la lista de ESA obra, con sus palabras (sin «Pending:») y con quien lo pulsó",
-    at.session_state["_creadas"] == [("PRJ-9001", "cliente1", "fix the door clip", "campo000")], at.session_state["_creadas"])
+    # v695 · H16 del ciclo 6: con MAYÚSCULA y la fecha del parte detrás (si el parte tiene fecha)
+    [(x[0], x[1], x[2].split(" (from the log of")[0], x[3]) for x in at.session_state["_creadas"]]
+    == [("PRJ-9001", "cliente1", "Fix the door clip", "campo000")], at.session_state["_creadas"])
 chk("y luego dice que ya está, en vez del botón", _bt(at, "fld_pp_LOG-A_PRJ-9001_td0") is None
     and any("In the job's To-do" in x for x in _todo(at)))
 _bf = _bt(at, "fld_pp_LOG-F_tdn0")

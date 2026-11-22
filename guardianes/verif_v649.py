@@ -119,7 +119,8 @@ chk("⚠️ la oficina dice de QUIÉN era", DU._acreditadas(1, "Ana") == "Credit
 _dl = leer("core/daily_log_ui.py")
 chk("y se usa al confirmar, con el autor si es la oficina", '_acreditadas(n, _nombre(_autor) if oficina else "")' in _dl
     and "Credited {n} activities from your log.\", n=n) if ok" not in _dl)
-chk("⚠️ la tarjeta pasa `oficina` a lo que pinta", "todo=(lid, str(d)), oficina=oficina)" in _dl
+# v695 · la llamada sigue con `plantas=` (D2 del ciclo 6): se mira hasta la coma
+chk("⚠️ la tarjeta pasa `oficina` a lo que pinta", "todo=(lid, str(d)), oficina=oficina," in _dl
     and "_nada_que_confirmar(_prev, oficina)" in _dl)
 G2 = r'''
 import sys
