@@ -758,8 +758,9 @@ def _avisos_del_campo(grupo, aid, _nom, _cp):
 def render_equipo_campo(usuario, grupo):
     """🧰 «My equipment» del CAMPO (v691, D3 del usuario, ciclo 5 H15/H12): lo que tiene a su cargo y, por el QR o por
     el ID de la etiqueta, la ficha de cualquier equipo de su empresa en SOLO LECTURA, con «I have it», «I returned
-    it» y «Report a problem», que la oficina confirma. Escanear el QR no hacía nada para el campo."""
-    st.markdown(t("## :material/construction: My equipment"))
+    it» y «Report a problem», que la oficina confirma. Escanear el QR no hacía nada para el campo.
+    ⚠️ v693 · SIN título propio, como las otras de Self-service (v478, v627): `_sub_header` ya pinta «Self-service · My
+    equipment» y salía dos veces (visto en producción con la sesión de campo)."""
     if not INV.is_configured():
         st.info(t(":material/info: Configure Google Sheets for the inventory."))
         return
