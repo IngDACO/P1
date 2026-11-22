@@ -470,6 +470,12 @@ body:has([data-testid="stStatusWidget"])::before {{
 }}
 .st-key-cpx_flash [data-testid="stAlert"] {{ margin: 0 !important; }}
 @keyframes cpxFlashFuera {{ 0%, 82% {{ opacity: 1; }} 100% {{ opacity: 0; visibility: hidden; }} }}
+/* ⚠️ v696 · Con «reducir movimiento», la regla de arriba deja TODA animación en .001 ms y, con `forwards`, el aviso
+   pasaba al instante a su estado final: invisible (medido en producción: «Task added.» con opacidad 0 desde el
+   primer momento). Sin animación, se queda visible hasta la pasada siguiente, flotando, sin mover nada. */
+@media (prefers-reduced-motion: reduce) {{
+  .st-key-cpx_flash {{ animation: none !important; }}
+}}
 
 .cpx-sec {{
   display: flex; align-items: baseline; gap: 9px;
