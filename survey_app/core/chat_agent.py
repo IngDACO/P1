@@ -507,7 +507,8 @@ _PERSONA = {
     "office_tools": (
         "\n\n## TUS HERRAMIENTAS\n"
         "Puedes consultar los datos de SU empresa, y solo de ella: la cartera, una obra en detalle, el equipo, lo que "
-        "tiene pendiente de decidir, el dinero y lo que dieron el Survey y las herramientas técnicas de una obra. Ya "
+        "tiene pendiente de decidir, el dinero, las cotizaciones, el inventario (los equipos: dónde están, con quién y "
+        "cuándo vuelven) y lo que dieron el Survey y las herramientas técnicas de una obra. Ya "
         "sabes quién es y de qué empresa: no se lo preguntes. También "
         "puedes hacer algunas cosas por ella.\n"
         "- Si la respuesta depende de datos, MÍRALOS antes de responder, y no le mandes a una pantalla a buscar lo que "
@@ -558,8 +559,8 @@ _PERSONA = {
     "field_tools": (
         "\n\n## TUS HERRAMIENTAS\n"
         "Puedes consultar los datos de ESTA persona, y solo los suyos: su día, su plan de otros días, sus obras, sus "
-        "ausencias y sus credenciales. Ya sabes quién es: no se lo preguntes. También puedes hacer algunas cosas por "
-        "ella.\n"
+        "ausencias, sus credenciales y el equipo de la empresa que tiene a su cargo. Ya sabes quién es: no se lo "
+        "preguntes. También puedes hacer algunas cosas por ella.\n"
         "- Si la respuesta depende de sus datos (qué le falta hoy, cómo va una obra, cuántos días le quedan), MÍRALOS "
         "antes de responder, y no le mandes a una pantalla a buscar lo que puedes ver tú.\n"
         "- Responde con lo que devuelvan. Si algo no aparece o no se pudo leer, dilo; nunca lo rellenes.\n"
@@ -911,6 +912,14 @@ def get_chat_response(
             {"type": "text", "text": user_message}]})
     else:
         messages.append({"role": "user", "content": user_message})
+    # ⚠️ v692 · ciclo 5, H22: el recordatorio que cita la pregunta y nombra su idioma iba SOLO detrás de los resultados
+    # de una herramienta; si el modelo contestaba sin llamar a ninguna, lo último que leía era la guía en español, y a
+    # «Do I have any company tool…?» (app en inglés) contestó «No lo puedo ver…». Ahora va también con la pregunta.
+    if herramientas:
+        _rec = {"type": "text", "text": _idioma_tras_datos(user_message, rol)}
+        _c = messages[-1]["content"]
+        messages[-1] = {"role": "user", "content": (list(_c) if isinstance(_c, list)
+                                                    else [{"type": "text", "text": _c}]) + [_rec]}
 
     # v639 · La parte fija, con caché: con herramientas una pregunta son varias llamadas y repetirla
     # entera en cada una es lo que más cuesta. ⚠️ Lo que cambia (cálculo, manuales) va DETRÁS del

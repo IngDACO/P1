@@ -228,7 +228,23 @@ _HIST_V678 = _HIST_C3 + [
     {"role": "assistant", "content": "✅ helper leader CI 1: 5 day(s) freed on the board.", "app": "confirm",
      "card": "Board · free helper leader CI 1 · C3 — Harbour Lifts — Lift 3 (manual)"}]
 REVISAR2 = [{"rol": "administrator", "hist": _HIST_V678, "q": "Who is planned on PRJ-0044 on Monday 23/11?"}] * 3
-PREGUNTAS = REVISAR2 if sys.argv[4:] == ["revisar2"] else REVISAR if sys.argv[4:] == ["revisar"] else IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
+# `v692` (ciclo 5): cotizaciones e inventario (H20) y el idioma cuando no consulta nada (H22, el campo contestó en
+# español). La del campo la hace campo000, que tiene el polipasto ACT-0006 a su cargo.
+_C0 = {"rol": "field", "u": "campo000", "n": "hjg,ujgjg", "hist": []}
+V692 = [
+    {"rol": "administrator", "hist": [], "q": "Which quotes are still waiting for a client reply, and which of our assets "
+                                              "(tools, hoists) are out of the store right now, with whom and when do they come back?"},
+    {"rol": "administrator", "hist": [], "q": "How is quote 0008 going? Is the job already created?"},
+    {"rol": "administrator", "hist": [], "q": "¿Qué equipos tiene hjg,ujgjg y cuándo los tiene que devolver?"},
+    {"rol": "administrator", "hist": [], "q": "Thanks, that's all for now."},
+    dict(_C0, q="Do I have any company tool or equipment signed out to me right now, like the chain hoist on PRJ-0045? "
+                "When do I have to return it?"),
+    dict(_C0, q="What does the overload clutch on a chain hoist do?"),
+    dict(_C0, q="Thanks, see you tomorrow."),
+]
+# `v692b`: las dos que salieron mejorables en `v692` (la obra sin su ID; la persona buscada como equipo)
+V692B = [V692[2], V692[4]]
+PREGUNTAS = V692B if sys.argv[4:] == ["v692b"] else V692 if sys.argv[4:] == ["v692"] else REVISAR2 if sys.argv[4:] == ["revisar2"] else REVISAR if sys.argv[4:] == ["revisar"] else IDIOMA2 if sys.argv[4:] == ["idioma2"] else CONFIRMADO if sys.argv[4:] == ["confirmado"] else ASIGNAR if sys.argv[4:] == ["asignar"] else ACCIONES if sys.argv[4:] == ["acciones"] else IDIOMA if sys.argv[4:] == ["idioma"] else CORTO if sys.argv[4:] == ["corto"] else [
     "how are my jobs going? which ones should I worry about?",
     "quién está fichado ahora mismo y en qué obra?",
     "who is planned to work tomorrow and who is away?",
@@ -250,7 +266,8 @@ for q in PREGUNTAS:
     t0 = time.time()
     if isinstance(q, dict):
         _tarjetas = []
-        _u, _n = (USUARIO, NOMBRE) if q["rol"] == "administrator" else ("installer", "installer CI 1")
+        _u, _n = ((q["u"], q["n"]) if q.get("u") else
+                  (USUARIO, NOMBRE) if q["rol"] == "administrator" else ("installer", "installer CI 1"))
         r = CA.get_chat_response(q["q"], q["hist"], None, None, rol=q["rol"], grupo="cliente1", usuario=_u, nombre=_n, acciones=_tarjetas)
         r += "".join("\n[TARJETA] %s :: %s" % (a["titulo"], a["detalle"].replace("\n", " / ")) for a in _tarjetas)
         q = "(%s, tras Confirm) %s" % (q["rol"], q["q"])
@@ -271,6 +288,7 @@ for q in PREGUNTAS:
     print("\n=== %s\n    %.1f s · %d llamadas · $%.4f · ent %d sal %d esc %d lee %d · %s" % (
         q, d, _medida["llamadas"], c, _medida["ent"], _medida["sal"], _medida["esc"], _medida["lee"], _usadas or "sin herramientas"))
     print("    " + r.replace("\n", "\n    "))
+    print("    [idioma · pregunta %s · respuesta %s]" % (CA.idioma_de(q) or "?", CA.idioma_de(r) or "?"))   # v692 · H22
 with open(SALIDA, "w", encoding="utf-8") as f:
     json.dump(_datos, f, ensure_ascii=False, indent=1)
 print("\nINTENTOS DE ESCRIBIR:", INTENTOS or "ninguno")

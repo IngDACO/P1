@@ -113,7 +113,8 @@ def ej(nombre, entrada, ctx=None):
 sec("1. ⚠️ Lo que no debe hacer ni existe")
 _nom = [h["name"] for h in CT.definiciones("field", "campo000")]
 # v678 · detrás de SEIS consultas (`get_my_plan`, H14 del ciclo 3)
-chk("lo pedido: dos directas y tres que se preparan", _nom[6:] == ["add_todo", "mark_todo", "prepare_daily_log", "prepare_office_alert", "prepare_absence"], _nom)
+# v692 · detrás de SIETE consultas (`get_my_equipment`, H20 del ciclo 5)
+chk("lo pedido: dos directas y tres que se preparan", _nom[7:] == ["add_todo", "mark_todo", "prepare_daily_log", "prepare_office_alert", "prepare_absence"], _nom)
 _mal = ("clock", "sign", "firm", "submit", "credit", "progress", "prestart", "pre_start", "false_car", "delete", "cancel")
 chk("⚠️ fichar, firmar, enviar o acreditar no existen como herramienta", not [n for n in _nom if any(x in n.lower() for x in _mal)], _nom)
 _s = leer("core/chat_tools.py")
@@ -127,7 +128,7 @@ chk("⚠️ acreditar, solo desde la tarjeta que confirma su autor", _quien_acre
 # ⚠️ v643 · El P&L de la oficina dice «payroll_cost», que es un total: lo que no debe entrar es el módulo
 chk("sigue sin nóminas", "import payroll" not in _s and "payroll as" not in _s and ", payroll" not in _s)
 # v678 · detrás de SEIS consultas (`get_my_plan`, H14 del ciclo 3): las que actúan empiezan en la séptima
-chk("⚠️ cada una dice si guarda o no", all(("no confirmation" in h["description"]) or ("card to confirm" in h["description"]) for h in CT.definiciones("field", "x")[6:]), [h["name"] for h in CT.definiciones("field", "x")[6:]])
+chk("⚠️ cada una dice si guarda o no", all(("no confirmation" in h["description"]) or ("card to confirm" in h["description"]) for h in CT.definiciones("field", "x")[7:]), [h["name"] for h in CT.definiciones("field", "x")[7:]])   # v692
 
 sec("2. Nivel 3: To-do, directo")
 ESC.clear()

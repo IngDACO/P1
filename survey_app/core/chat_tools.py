@@ -268,6 +268,157 @@ def _mis_ausencias(entrada, ctx) -> dict:
                          for r in _pedidas[:MAX_SOLICITUDES]]}
 
 
+# ── v692 · ciclo 5, H20: las cotizaciones y el inventario (el asistente decía «I can't see either of those») ──
+def _trato_txt(rep, vs, hoy) -> dict:
+    from core import quotes as Q
+    # por las CONSTANTES (verif_v463: un mapa con «vencida» a mano mezclaba claves migradas y sin migrar)
+    _EST_COT = {Q.BORRADOR: "draft", Q.ENVIADA: "sent", Q.VENCIDA: "expired", Q.ACEPTADA: "accepted",
+                Q.RECHAZADA: "rejected"}
+    e = Q.estado_de(rep)
+    _v = _parse_date(rep.get("ValidUntil"))
+    d = {"number": str(rep.get("Number", "")), "version": Q._ver(rep), "versions": len(vs),
+         "client": str(rep.get("ClientName", "") or ""), "status": _EST_COT.get(e, e),
+         "total_inc_tax": round(_num(rep.get("Total")), 2), "issued": dmy(rep.get("Date")),
+         "valid_until": dmy(rep.get("ValidUntil"))}
+    if e == Q.ENVIADA and _v:
+        d["days_left"] = (_v - hoy).days
+    if e == Q.VENCIDA and _v:
+        d["expired_days_ago"] = (hoy - _v).days
+    if e == Q.ACEPTADA:
+        d["project_id"] = str(rep.get("ProjectID", "") or "")
+    if e == Q.RECHAZADA:
+        _k, _n = Q.motivo_de(rep)
+        d["reject_reason"] = (_k or "not recorded") + (f" ({_corto(_n)})" if _n else "")
+    return d
+
+
+def _cotizaciones(entrada, ctx) -> dict:
+    """Las cotizaciones de la empresa, por TRATO (un número con sus versiones, `quotes.representante`): en la calle,
+    a cuáles llamar, ganadas y perdidas (con su motivo) y las cifras de Quotes. Solo lectura (v692)."""
+    from core import quotes as Q
+    g = ctx["grupo"]
+    hoy = clock.today(g)
+    cs = Q.list_cotizaciones(g)
+    _cli = str(entrada.get("client") or "").strip().lower()
+    if _cli:
+        cs = [c for c in cs if _cli in str(c.get("ClientName", "")).lower()]
+    tratos = [_trato_txt(Q.representante(vs), vs, hoy) for vs in Q._por_trato(cs).values()]
+    tratos.sort(key=lambda x: x["number"], reverse=True)
+    r = Q.resumen(g)
+    _seg = [{"number": x["numero"], "client": x["cliente"],
+             **({"expired_days_ago": x["vencida"]} if "vencida" in x else {"days_left": x["quedan"]})}
+            for x in Q.seguimiento(g)]
+    return {"how_to_read": "Each quote NUMBER is one deal. Its figures use the version that speaks for it (the highest "
+                           "accepted one, or else the highest one sent); older versions are «superseded» and do not "
+                           "count. «expired» = sent, past its validity date, with no reply. Totals include tax. The "
+                           "company totals ignore the client filter. Where: Finance → Quotes.",
+            "company_totals": {"out_with_clients_inc_tax": r["en_calle"], "won_inc_tax": r["ganado"],
+                               "conversion_pct": r["conversion"], "superseded_versions": r.get("sustituidas", 0)},
+            "awaiting_reply": [x for x in tratos if x["status"] in ("sent", "expired")][:MAX_LISTA],
+            "to_chase_now": _seg[:MAX_LISTA],
+            "won": [x for x in tratos if x["status"] == "accepted"][:MAX_LISTA],
+            "lost": [x for x in tratos if x["status"] == "rejected"][:MAX_LISTA],
+            "drafts": [x for x in tratos if x["status"] == "draft"][:MAX_LISTA]}
+
+
+def _equipo_txt(a, nom, hoy) -> dict:
+    from core import inventory as INV
+    fd, dd = INV.vuelta_de(a, hoy)
+    _asg = str(a.get("AssignedTo", "") or "").strip()
+    _pm = _parse_date(a.get("NextService"))
+    d = {"id": str(a.get("ID", "")), "name": str(a.get("Name", "")), "category": str(a.get("Category", "")),
+         "status": str(a.get("Status", "")), "where": INV.ubic_str(a, None, nom),
+         "with": nom.get(_asg, _asg) if _asg else "nobody"}
+    # ⚠️ examen v692: con solo el NOMBRE de la obra, a «the chain hoist on PRJ-0045?» contestó «The record doesn't link
+    # this hoist to PRJ-0045» (es esa obra, «C4 — Harbour Lifts — Lift 4»): el ID va también
+    if str(a.get("LocationType", "")).strip().lower() == "project":
+        d["project_id"] = str(a.get("LocationRef", "") or "")
+    if fd and str(a.get("Status", "")) == "in use":
+        d["due_back"] = dmy(fd.isoformat())
+        if dd < 0:
+            d["days_late"] = -dd
+        else:
+            d["days_left"] = dd
+    if _pm:
+        d["next_service"] = dmy(_pm.isoformat())
+        if _pm < hoy:
+            d["service_overdue"] = True
+    return d
+
+
+def _activos(entrada, ctx) -> dict:
+    """El inventario de la empresa: qué está fuera, dónde y con quién, cuándo vuelve, lo atrasado, las revisiones
+    vencidas y lo que dijo el campo de un equipo esperando a la oficina. Solo lectura (v692)."""
+    from core import admin_digest as AD, inventory as INV
+    g = ctx["grupo"]
+    hoy = clock.today(g)
+    nom = AD.nombres_usuarios()
+    acts = INV.list_activos(g)
+    _q = str(entrada.get("asset") or "").strip().lower()
+    if _q:
+        acts = [a for a in acts if _q in str(a.get("ID", "")).lower() or _q in str(a.get("Name", "")).lower()]
+    # examen v692: a «¿qué equipos tiene hjg,ujgjg?» buscó a la persona como si fuera un equipo y volvió a preguntar
+    _p = str(entrada.get("person") or "").strip().lower()
+    if _p:
+        _logins = {u for u, n in nom.items() if _p in str(u).lower() or _p in str(n).lower()}
+        acts = [a for a in acts if str(a.get("AssignedTo", "")).strip() in _logins
+                or (str(a.get("LocationType", "")) == "user" and str(a.get("LocationRef", "")).strip() in _logins)]
+    todos = [_equipo_txt(a, nom, hoy) for a in acts]
+    _fuera = [x for x in todos if x["status"] == "in use"]
+    _avs = [{"asset": x["activo"], "asset_id": x["aid"], "who": nom.get(x["usuario"], x["usuario"]),
+             "says": {"has it": "they have it", "returned": "they returned it", "problem": "there is a problem"}.get(
+                 x["tipo"], x["tipo"]), "note": _corto(x["nota"]), "date": dmy(x["fecha"][:10])}
+            for x in INV.avisos_pendientes(g) if not _q or x["aid"].lower() == _q or _q in x["activo"].lower()]
+    return {"how_to_read": "Read only. «with» is the person responsible (custody); «where» is the location. The office "
+                           "confirms or dismisses what the field says in Inventory → the asset. Written-off assets are "
+                           "not listed.",
+            "assets": len(todos), "out_of_the_store": _fuera[:MAX_LISTA],
+            "not_returned_on_time": [x for x in _fuera if x.get("days_late")][:MAX_LISTA],
+            "service_overdue": [x for x in todos if x.get("service_overdue")][:MAX_LISTA],
+            "under_maintenance": [x for x in todos if x["status"] == "maintenance"][:MAX_LISTA],
+            "notices_from_the_field": _avs[:MAX_LISTA],
+            **({"matching_assets": todos[:MAX_LISTA]} if (_q or _p) else {})}
+
+
+def _mi_equipo(entrada, ctx) -> dict:
+    """El equipo de la empresa que tiene ESTA persona a su cargo, con su vuelta, y lo que dijo a la oficina que aún
+    espera (v692)."""
+    from core import admin_digest as AD, inventory as INV
+    g, u = ctx["grupo"], ctx["usuario"]
+    hoy = clock.today(g)
+    nom = AD.nombres_usuarios()
+    _avs = [{"asset": x["activo"], "you_said": {"has it": "you have it", "returned": "you returned it",
+                                                "problem": "a problem"}.get(x["tipo"], x["tipo"]),
+             "date": dmy(x["fecha"][:10])} for x in INV.avisos_pendientes(g) if x["usuario"] == u]
+    return {"signed_out_to_you": [_equipo_txt(a, nom, hoy) for a in INV.de_la_persona(g, u)][:MAX_LISTA],
+            "your_notices_waiting_for_the_office": _avs[:MAX_LISTA],
+            "where": "Self-service → My equipment, or scan the QR code on the asset's label."}
+
+
+def _pendiente_ventas_y_equipo(g) -> dict:
+    """Lo de cotizaciones e inventario que espera a la oficina (v692): para la bandeja y el resumen del día."""
+    out = {}
+    try:
+        from core import quotes as Q
+        out["quotes_to_chase"] = [{"number": x["numero"], "client": x["cliente"],
+                                   **({"expired_days_ago": x["vencida"]} if "vencida" in x
+                                      else {"days_left": x["quedan"]})} for x in Q.seguimiento(g)][:MAX_LISTA]
+    except Exception as e:
+        logger.warning("chat_tools: las cotizaciones por seguir no se pudieron leer: %s", e)
+    try:
+        from core import admin_digest as AD, inventory as INV
+        nom = AD.nombres_usuarios()
+        out["equipment_notices_from_the_field"] = [
+            {"asset": x["activo"], "who": nom.get(x["usuario"], x["usuario"]), "says": x["tipo"],
+             "where": "Inventory → the asset"} for x in INV.avisos_pendientes(g)][:MAX_LISTA]
+        out["equipment_not_returned"] = [
+            {"asset": x["activo"], "days_late": x["dias"], "who": nom.get(x.get("usuario", ""), x.get("usuario", ""))}
+            for x in INV.alertas(g) if x.get("tipo") == "no_devuelto"][:MAX_LISTA]
+    except Exception as e:
+        logger.warning("chat_tools: el inventario no se pudo leer: %s", e)
+    return out
+
+
 def _mis_credenciales(entrada, ctx) -> dict:
     from core import credentials as CR
     return {"credentials": [{"type": c.get("Type", ""),
@@ -649,7 +800,9 @@ def _bandejas(entrada, ctx) -> dict:
                                       "where": "Projects → the job → Status, at the bottom (Daily logs)", "latest": [
             {"log_id": r.get("ID", ""), "job": _obras.get(str(r.get("ProjectID", "")), r.get("ProjectID", "")),
              "project_id": r.get("ProjectID", ""), "author": nom.get(str(r.get("Author", "")), r.get("Author", "")),
-             "date": dmy(r.get("Date", "")), "days_waiting": DL.dias_sin_revisar(r, clock.today(g))} for r in _partes[:MAX_LISTA]]}}
+             "date": dmy(r.get("Date", "")), "days_waiting": DL.dias_sin_revisar(r, clock.today(g))} for r in _partes[:MAX_LISTA]]},
+        # v692 · ciclo 5, H20/H21: las cotizaciones por seguir y lo del inventario que espera a la oficina
+        **_pendiente_ventas_y_equipo(g)}
 
 
 def _dinero(entrada, ctx) -> dict:
@@ -1181,6 +1334,11 @@ LECTURA = [
     {"name": "get_my_credentials", "input_schema": _SIN_ENTRADA, "fn": _mis_credenciales,
      "description": "Their credentials and tickets with expiry date and status. Call it for anything about their "
                     "cards, tickets or licences."},
+    # v692 · ciclo 5, H20
+    {"name": "get_my_equipment", "input_schema": _SIN_ENTRADA, "fn": _mi_equipo,
+     "description": "Company equipment signed out to this person or in their custody: what it is, where it is and when "
+                    "it is due back, plus what they told the office about an asset that is still waiting. Read only. "
+                    "Call it for anything about tools, hoists or equipment they have or have to return."},
 ]
 _ID_OBRA = {"type": "string", "description": "The job ID, like PRJ-0027."}
 DIRECTAS = [
@@ -1330,6 +1488,24 @@ LECTURA_OFICINA = [
                     "its status and what was collected) and what is pending to invoice. For the company: profit and loss for a period, "
                     "jobs by profit, over budget, pending to invoice, open invoices, and invoiced, collected, to collect and overdue by "
                     "client (all time). Call it for anything about costs, budget, invoices, payments or margin."},
+    # v692 · ciclo 5, H20: «I can't see either of those» a cotizaciones e inventario
+    {"name": "get_quotes", "fn": _cotizaciones,
+     "input_schema": {"type": "object", "additionalProperties": False,
+                      "properties": {"client": {"type": "string", "description": "Optional: part of a client's name."}}},
+     "description": "The company's quotes by deal (a quote number with its versions): what is out with clients awaiting a "
+                    "reply and how long each is still valid, which ones to chase now, what was won (with its job) and lost "
+                    "(with the reason), drafts, and the totals of Finance → Quotes. Read only. Call it for anything about "
+                    "quotes, offers, sales or what to follow up with a client."},
+    {"name": "get_assets", "fn": _activos,
+     "input_schema": {"type": "object", "additionalProperties": False,
+                      "properties": {"asset": {"type": "string", "description": "Optional: an asset ID like ACT-0006 or "
+                                                                                 "part of its name."},
+                                     "person": {"type": "string", "description": "Optional: a person's name or login, "
+                                                                                  "for the equipment they have."}}},
+     "description": "The company's equipment (Inventory): what is out of the store, where and with whom, when it is due "
+                    "back and what is late, service overdue, under maintenance, and what the field said about an asset "
+                    "(has it, returned it, a problem) that is waiting for the office. Read only. Call it for anything "
+                    "about tools, hoists, equipment or the inventory."},
     {"name": "get_calculations", "fn": _calculos, "input_schema": _POR_OBRA,
      "description": "What the lift survey and the site tools gave on one job (read only): the survey's shifts, what stays "
                     "out of limit, the landing door openings to cut, the limiting wall and the plumb line check; and the "

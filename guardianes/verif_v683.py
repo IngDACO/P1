@@ -106,7 +106,8 @@ chk("⚠️ el campo no la puede pedir aunque la nombre el modelo", _err_c and "
 chk("una obra sin nada guardado: survey null y sin herramientas", vacio.get("survey") is None and vacio.get("site_tools") == {},
     vacio)
 _ca = io.open(os.path.join(RAIZ, "core", "chat_agent.py"), encoding="utf-8").read()
-chk("la guía de la oficina lo sabe", "el dinero y lo que dieron el Survey y las herramientas técnicas de una obra" in _ca)
+# v692 · la línea dice ahora también «las cotizaciones, el inventario» (H20 del ciclo 5); lo del Survey sigue
+chk("la guía de la oficina lo sabe", "y lo que dieron el Survey y las herramientas técnicas de una obra" in _ca)
 
 # ══════════════════════════════════════════════════════════════════════════════
 sec("2. «My route» en fin de semana (F1) y en un día de ausencia (F2)")

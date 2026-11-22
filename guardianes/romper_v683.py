@@ -28,8 +28,9 @@ ROTURAS = [
                                       "                \"saved_on\": \"\",")]),
     ("cómo leerlo, sin el muro", CT, [(" (a limiting wall is NEVER cut)", "")]),
     ("la guía de la oficina no lo sabe", CA,
-     [("tiene pendiente de decidir, el dinero y lo que dieron el Survey y las herramientas técnicas de una obra. Ya ",
-       "tiene pendiente de decidir y el dinero. Ya ")]),
+     # v692 · re-anclada: la línea dice además las cotizaciones y el inventario (H20 del ciclo 5). La misma rotura
+     [("cuándo vuelven) y lo que dieron el Survey y las herramientas técnicas de una obra. Ya ",
+       "cuándo vuelven). Ya ")]),
     ("⚠️ F1: el fin de semana vuelve a abrir en ese día", RT,
      [("            if not obras_de_mi_dia(usuario, grupo, _hoy):\n                _ini = _R.semana_de_trabajo(_hoy)",
        "            if False:\n                _ini = _R.semana_de_trabajo(_hoy)")]),

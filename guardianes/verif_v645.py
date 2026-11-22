@@ -145,7 +145,9 @@ for _rol, _us in (("administrator", "Admin2"), ("field", "campo000")):
     _ms = _vistos[0]["messages"]
     chk("⚠️ %s: la línea de la app llega como nota de la persona, y la pregunta detrás" % _rol,
         [m["role"] for m in _ms] == ["user", "assistant", "user", "user"] and _ms[2]["content"].startswith("[I pressed Confirm")
-        and _ms[3]["content"] == "and now?", [(m["role"], str(m["content"])[:40]) for m in _ms])
+        # v692 · la pregunta va con el recordatorio del idioma detrás (H22 del ciclo 5): su primer bloque es ella
+        and isinstance(_ms[3]["content"], list) and _ms[3]["content"][0]["text"] == "and now?",
+        [(m["role"], str(m["content"])[:40]) for m in _ms])
     chk("⚠️ %s: a la API no le llegan claves de la app" % _rol, all(set(m) == {"role", "content"} for m in _ms), _ms)
 _vistos.clear()
 CA.get_chat_response("hi", [{"role": "assistant", "content": "✅ x", "app": "confirm", "card": "c"}], None, None, rol="administrator",

@@ -199,7 +199,11 @@ def pregunta(hist=(), fotos=None):
 
 m = pregunta([msg("assistant", "Cancelled"), msg("user", "antes"), msg("assistant", "resp")])
 chk("⚠️ nunca empieza por el asistente", m[0] == {"role": "user", "content": "antes"} and len(m) == 3, m)
-chk("sin fotos, el texto de siempre", m[-1] == {"role": "user", "content": "¿y esto?"}, m[-1])
+# v692 · CADUCADO «el texto de siempre»: la pregunta va con el recordatorio del idioma detrás (H22 del ciclo 5: sin
+# herramientas contestó en español). El principio sigue: sin fotos, solo texto, y la pregunta tal cual primero.
+chk("sin fotos, el texto de siempre (y el recordatorio del idioma detrás, v692)",
+    m[-1]["role"] == "user" and isinstance(m[-1]["content"], list) and [b["type"] for b in m[-1]["content"]] == ["text", "text"]
+    and m[-1]["content"][0]["text"] == "¿y esto?" and "in Spanish" in m[-1]["content"][1]["text"], m[-1])
 m = pregunta([msg("assistant", "solo esto")])
 chk("⚠️ un historial solo del asistente no rompe la llamada", len(m) == 1 and m[0]["role"] == "user", m)
 m = pregunta([msg("user", "a", "2026-11-01"), msg("assistant", "b", "2026-11-01")])
