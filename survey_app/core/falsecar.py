@@ -152,6 +152,21 @@ def _dentro(per, dia) -> bool:
     return bool(desde) and desde <= dia and not (hasta and hasta <= dia)
 
 
+def montar(prj, grupo, quien, dia=None) -> tuple:
+    """v694 · H8 del ciclo 6: «está montado» desde la pantalla del checklist. Sin «Install sky climber» marcado, la
+    pantalla solo decía «not recorded as installed» y no ofrecía nada. Con la MISMA escritura que «Progress»
+    (`stage_progress.acreditar`, origen manual, el día de hoy): quien lo marca queda como autor."""
+    from core import stage_progress as SP
+    from core import stages as S
+    _et = next((i for i, e in enumerate(SP.plan_de_obra(prj), start=1)
+                for a in e["actividades"] if a["nombre"] == S.FC_MONTAR), None)
+    if not _et:
+        return False, t("This job's plan has no «{a}».", a=S.FC_MONTAR)
+    return SP.acreditar(str((prj or {}).get("ID", "")), grupo, prj,
+                        [{"etapa": _et, "actividad": S.FC_MONTAR, "pct": 100, "nota": ""}],
+                        quien=quien, origen=SP.MANUAL, fecha=dia)
+
+
 def activo(prj, dia=None) -> bool:
     """¿Ese día había que hacer el checklist? Desde que está montado hasta que se retira."""
     if not tiene(prj):
@@ -350,6 +365,11 @@ def submit(data: dict) -> dict:
         res["error"] = f"{t('Could not generate the PDF')}: {e}"
         return res
     fname = filename_for(dia, iniciales)
+    try:                                         # v694 · H9: el mismo nombre en Files, no
+        from core import projects as _Pn
+        fname = _Pn.nombre_libre(pid, fname)
+    except Exception as e:
+        logger.warning("falsecar: no se pudo comprobar el nombre: %s", e)
     res["pdf"], res["filename"] = pdf, fname
 
     drive_id = ""

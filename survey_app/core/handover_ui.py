@@ -25,6 +25,45 @@ def _params(prj) -> dict:
         return {}
 
 
+def asistencia(pid, grupo, prj) -> dict:
+    """v694 · H25 del ciclo 6: las charlas con sus asistentes (`prestarts`), quién fichó aquí con su último día
+    (`trabajaron`) y TODOS sus días (`dias_fichados`). Aparte del expediente para que la ficha diga quién firmó la
+    charla sin fichar sin leer lo demás. Cada fuente en su `try`, como `contexto`."""
+    # Pre-starts: `Attendees` trae el LOGIN de cada asistente; un invitado o
+    # subcontratista lo trae vacío y no se le exige certificado propio.
+    prestarts = []
+    try:
+        from core import prestart as PS
+        if PS.is_configured():
+            for r in (PS.list_prestarts(pid) or []):
+                try:
+                    _a = json.loads(r.get("Attendees", "") or "[]") or []
+                except Exception:
+                    _a = []
+                prestarts.append({"Date": r.get("Date", ""),
+                                  "Attendees": [str(x.get("usuario", "") or "").strip()
+                                                for x in _a if isinstance(x, dict)
+                                                and str(x.get("usuario", "") or "").strip()]})
+    except Exception:
+        pass
+    trabajaron, dias = {}, {}
+    try:
+        from core import timeclock as TC
+        _nom = str(prj.get("Name", "") or "")
+        for r in (P._fichajes_visibles(grupo) or []):
+            if not TC.es_del_proyecto(r, pid, _nom):
+                continue
+            _u = str(r.get("User", "") or "").strip()
+            _d = str(r.get("Clock In", "") or "")[:10]
+            if _u and _d:
+                trabajaron[_u] = max(trabajaron.get(_u, ""), _d)
+                dias.setdefault(_u, set()).add(_d)
+    except Exception:
+        pass
+    return {"prestarts": prestarts, "trabajaron": trabajaron,
+            "dias_fichados": {u: sorted(v) for u, v in dias.items()}}
+
+
 def contexto(pid, grupo, prj) -> dict:
     """Los hechos de la obra, reunidos de lo que ya está cacheado.
 
@@ -43,23 +82,8 @@ def contexto(pid, grupo, prj) -> dict:
     except Exception:
         pass
 
-    # Pre-starts: `Attendees` trae el LOGIN de cada asistente; un invitado o
-    # subcontratista lo trae vacío y no se le exige certificado propio.
-    prestarts = []
-    try:
-        from core import prestart as PS
-        if PS.is_configured():
-            for r in (PS.list_prestarts(pid) or []):
-                try:
-                    _a = json.loads(r.get("Attendees", "") or "[]") or []
-                except Exception:
-                    _a = []
-                prestarts.append({"Date": r.get("Date", ""),
-                                  "Attendees": [str(x.get("usuario", "") or "").strip()
-                                                for x in _a if isinstance(x, dict)
-                                                and str(x.get("usuario", "") or "").strip()]})
-    except Exception:
-        pass
+    _as = asistencia(pid, grupo, prj)             # v694 · las charlas y los días fichados, aparte
+    prestarts = _as["prestarts"]
 
     # v636 · Los días trabajados sin su registro, y los checklists del false car
     false_car, checks_fc, sin_ps, sin_fc = False, [], [], []
@@ -74,19 +98,7 @@ def contexto(pid, grupo, prj) -> dict:
         pass
 
     # Quién trabajó de verdad aquí, con su último día
-    trabajaron = {}
-    try:
-        from core import timeclock as TC
-        _nom = str(prj.get("Name", "") or "")
-        for r in (P._fichajes_visibles(grupo) or []):
-            if not TC.es_del_proyecto(r, pid, _nom):
-                continue
-            _u = str(r.get("User", "") or "").strip()
-            _d = str(r.get("Clock In", "") or "")[:10]
-            if _u and _d:
-                trabajaron[_u] = max(trabajaron.get(_u, ""), _d)
-    except Exception:
-        pass
+    trabajaron = _as["trabajaron"]
 
     # Credenciales de esa gente: {login: [vencimiento, …]}
     creds = {}
@@ -125,7 +137,8 @@ def contexto(pid, grupo, prj) -> dict:
         "plumb_ok": bool(P._num(_p.get("LengthTemplate"))),
         "acts": acts, "prestarts": prestarts, "sin_prestart": sin_ps,
         "false_car": false_car, "checks_fc": checks_fc, "sin_falsecar": sin_fc,
-        "trabajaron": trabajaron, "credenciales": creds, "docs": docs,
+        "trabajaron": trabajaron, "dias_fichados": _as["dias_fichados"],      # v694 · H25
+        "credenciales": creds, "docs": docs,
         "asignados": [x.strip() for x in str(prj.get("FieldAssigned", "")).split(";") if x.strip()],
         "nombres": nombres,
     }

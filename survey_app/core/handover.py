@@ -174,7 +174,12 @@ def _ev_installer_certs(ctx):
     """⚠️ No basta con que la persona TENGA un certificado: tiene que estar vigente el
     día que trabajó. Un ticket que venció a mitad de obra es exactamente lo que una
     auditoría busca, y es un cruce que solo se puede hacer teniendo las dos cosas."""
-    trabajaron = ctx.get("trabajaron") or {}      # {login: ultima fecha trabajada}
+    trabajaron = dict(ctx.get("trabajaron") or {})      # {login: ultima fecha trabajada}
+    # v694 · H25 del ciclo 6: quien FIRMÓ la charla estuvo en la obra ese día, haya fichado o no (helper 1 firmó el
+    # Pre-Start de C6 sin fichar, y sin Working at Heights: no salía en ningún sitio)
+    for u, d in _asistieron(ctx).items():
+        if str(d) > str(trabajaron.get(u) or ""):
+            trabajaron[u] = d
     if not trabajaron:
         return FALTA, "Nobody recorded as having worked on this job"
     creds = ctx.get("credenciales") or {}         # {login: [fecha de vencimiento|None]}
@@ -197,6 +202,38 @@ def _ev_installer_certs(ctx):
         return (FALTA if sin else PARCIAL), " · ".join(_p)
     return OK, "%d worker%s with a valid certificate" % (
         len(trabajaron), "" if len(trabajaron) == 1 else "s")
+
+
+def _asistieron(ctx) -> dict:
+    """v694 · `{login: último día en que firmó una charla de la obra}` (ISO). Un invitado, sin login, no cuenta."""
+    out = {}
+    for p in (ctx.get("prestarts") or []):
+        _d = _f(p.get("Date"))
+        if not _d:
+            continue
+        for u in (p.get("Attendees") or []):
+            u = str(u).strip()
+            if u and _d.isoformat() > out.get(u, ""):
+                out[u] = _d.isoformat()
+    return out
+
+
+def firmaron_sin_fichar(ctx) -> list:
+    """v694 · H25 del ciclo 6: `[(login, día ISO)]` de quien firmó la charla de un día y no fichó en la obra ese día.
+    ⚠️ Solo con `dias_fichados` en el contexto: sin él, todos parecerían no haber fichado."""
+    if "dias_fichados" not in ctx:
+        return []
+    fich = ctx.get("dias_fichados") or {}
+    out = set()
+    for p in (ctx.get("prestarts") or []):
+        _d = _f(p.get("Date"))
+        if not _d:
+            continue
+        for u in (p.get("Attendees") or []):
+            u = str(u).strip()
+            if u and _d.isoformat() not in (fich.get(u) or ()):
+                out.add((u, _d.isoformat()))
+    return sorted(out, key=lambda x: (x[1], x[0]))
 
 
 _EVIDENCIA = {
@@ -279,6 +316,25 @@ def incoherencias(ctx) -> list:
                             "texto": "%s signed the pre-start of %s, but their certificate "
                                      "expired on %s" % (_nom(ctx, u), _d.strftime("%d/%m/%Y"),
                                                         max(_v).strftime("%d/%m/%Y"))})
+
+    # 1b) v694 · H25: firmó la charla SIN ningún certificado registrado (el cruce 1 solo veía los vencidos). Una vez
+    # por persona, con su primera charla.
+    _sin_cert = {}
+    for p in (ctx.get("prestarts") or []):
+        _d = _f(p.get("Date"))
+        for u in (p.get("Attendees") or []):
+            u = str(u).strip()
+            if u and _d and not [x for x in (creds.get(u) or []) if x is not None] and u not in _sin_cert:
+                _sin_cert[u] = _d
+    for u, _d in sorted(_sin_cert.items(), key=lambda x: x[1]):
+        out.append({"tipo": "sin_certificado",
+                    "texto": "%s signed the pre-start of %s with no certificate on file"
+                             % (_nom(ctx, u), _d.strftime("%d/%m/%Y"))})
+    # 1c) v694 · H25: firmó la charla y no fichó ese día en la obra (estuvo, y sus horas no constan)
+    for u, d in firmaron_sin_fichar(ctx):
+        out.append({"tipo": "sin_fichar",
+                    "texto": "%s signed the pre-start of %s but did not clock in on this job that day"
+                             % (_nom(ctx, u), _f(d).strftime("%d/%m/%Y"))})
 
     # 2) obra cerrada sin verificación de plomada
     acts = ctx.get("acts") or []

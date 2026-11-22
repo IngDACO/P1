@@ -50,6 +50,20 @@ def group_digest(grupo) -> dict:
     al = [{"id": str(p.get("ID", "")), "nombre": p.get("Name", ""),
            "n": alarmas.get(str(p.get("ID", "")), 0)}
           for p in activos if alarmas.get(str(p.get("ID", "")), 0)]
+    # v694 · H26 del ciclo 6: una alarma de SEGURIDAD abierta no sale de la campana porque su obra se archive, se
+    # complete o se cancele: «Do not use the false car…» desaparecía al archivar C6 a medias. `estado` lo dice.
+    try:
+        _seg = alerts.seguridad_abiertas_por_obra() if alerts.is_configured() else {}
+        if _seg:
+            _vistos = {a["id"] for a in al}
+            for p in P.list_projects(grupo=grupo, incluir_archivados=True):
+                _pid = str(p.get("ID", ""))
+                if _pid in _vistos or not _seg.get(_pid):
+                    continue
+                al.append({"id": _pid, "nombre": p.get("Name", ""),
+                           "n": max(_seg[_pid], alarmas.get(_pid, 0)), "estado": str(p.get("Status", ""))})
+    except Exception as e:
+        logger.warning("digest: alarmas de seguridad de obras cerradas: %s", e)
 
     por_vencer, vencidos = [], []
     for p in activos:
@@ -256,6 +270,15 @@ def digest_text(d) -> str:
     if len(L) == 1:
         L.append(t("No urgent items."))
     return "\n".join(L)
+
+
+def invalidar() -> None:
+    """v694 · H27 del ciclo 6: la campana sale de `group_digest`, guardado 120 s. Quien escribe algo que la cambia
+    (resolver o abrir una alarma, archivar o restaurar una obra) la tira: si no, decía lo de antes hasta 2 min."""
+    try:
+        group_digest.clear()
+    except Exception:
+        pass
 
 
 def owner_digest() -> list:

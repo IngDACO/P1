@@ -98,6 +98,13 @@ def _invalidate():
         _records_cached.clear()
     except Exception:
         pass
+    # v694 · H27 del ciclo 6: y el resumen del día, del que sale la campana (guardado 120 s): tras resolver seguía
+    # «2 open alarms» con 1 abierta, 3 min después. Perezoso: `admin_digest` importa este módulo.
+    try:
+        from core import admin_digest
+        admin_digest.invalidar()
+    except Exception:
+        pass
 
 
 # ── Lecturas ─────────────────────────────────────────────────────
@@ -139,6 +146,37 @@ def _alarmas_visibles() -> list:
         with tenant.como_grupo(g):
             out.extend(_records())
     return out
+
+
+def seguridad_abiertas_por_obra() -> dict:
+    """v694 · H26 del ciclo 6: `{ProyectoID: nº de alarmas de SEGURIDAD abiertas}`, las que no pueden salir de la
+    campana aunque la obra se archive, se complete o se cancele."""
+    d = {}
+    for r in _alarmas_visibles():
+        if str(r.get("Status", "")) == "abierta" and es_seguridad(r):
+            k = str(r.get("ProjectID", ""))
+            d[k] = d.get(k, 0) + 1
+    return d
+
+
+def resueltas_para(usuario, dias=2) -> list:
+    """v694 · D4 del ciclo 6: las alarmas de SEGURIDAD que levantó `usuario` y resolvió OTRA persona en los últimos
+    `dias` días, la más reciente primero (la campana del campo). Lo que resolvió él mismo ya lo sabe."""
+    from core.num import parse_date
+    u = str(usuario or "").strip().lower()
+    if not u:
+        return []
+    hoy = clock.today()
+    out = []
+    for r in _records():
+        if (str(r.get("Status", "")) != "resuelta" or not es_seguridad(r)
+                or str(r.get("CreatedBy", "")).strip().lower() != u
+                or str(r.get("ResolvedBy", "")).strip().lower() == u):
+            continue
+        _f = parse_date(str(r.get("ResolvedDate", ""))[:10])
+        if _f and 0 <= (hoy - _f).days <= dias:
+            out.append(r)
+    return sorted(out, key=lambda r: str(r.get("ResolvedDate", "")), reverse=True)
 
 
 # ── Escrituras ───────────────────────────────────────────────────
@@ -217,7 +255,59 @@ def resolve_alert(alert_id, resuelto_por, gestor=True, nota="") -> tuple:
                 lote.append({"range": f"{_col_letter(_COL['Resolution'])}{row}", "values": [[nota[:1000]]]})
             w.batch_update(lote, value_input_option="RAW")
             _invalidate()
+            # v694 · D4 del ciclo 6 (decisión del usuario): una de SEGURIDAD resuelta por la oficina se le dice a quien
+            # la levantó, con lo que se hizo. La nota solo quedaba en la obra y el campo no sabía si ya podía usar el
+            # false car.
+            _autor = str(r.get("CreatedBy", "")).strip()
+            if gestor and es_seguridad(r) and _autor and _autor.lower() != str(resuelto_por).strip().lower():
+                _avisar_resuelta(r, resuelto_por, nota)
             return True, _d("Alert resolved.")
+    return False, _d("Alert not found.")
+
+
+def _avisar_resuelta(r, resuelto_por, nota) -> None:
+    """v694 · D4: Telegram/correo a quien levantó la alarma de seguridad, con la nota. La campana del campo la saca
+    `resueltas_para`."""
+    try:
+        from core import projects as _P
+        _pid = str(r.get("ProjectID", ""))
+        _nom = str((_P.get_project(_pid) or {}).get("Name") or _pid)
+        _quien = str((auth.get_user(resuelto_por) or {}).get("Name") or resuelto_por)
+        # ⚠️ Por `notify.notify_user`, que lo escapa TODO (lo vigila `guardianes/html_seguro.POR_AVISO`)
+        notify.notify_user(str(r.get("CreatedBy", "")).strip(),
+                           f"{_d('Your alert was resolved')}: {_nom}",
+                           [f"<b>{_d('Resolved by')}</b> {_quien}:", str(nota or ""),
+                            f"{_d('Your alert')}: {str(r.get('Message', ''))[:300]}",
+                            f"{_d('Project')}: {_nom}."])
+    except Exception as e:
+        logger.warning("alerts: no se pudo avisar de la resolución: %s", e)
+
+
+def ampliar(alert_id, texto, quien, project_name="") -> tuple:
+    """v694 · H15 del ciclo 6: lo mismo que ya dice una alarma ABIERTA va a ESA alarma, no a otra. El balanceo de la
+    plataforma salió dos veces: la X del false car y «Tell the office» del parte. Se añade al final del mensaje
+    (que conserva su principio: si era de SEGURIDAD lo sigue siendo) y se avisa a la oficina. Lee FRESCO."""
+    texto = str(texto or "").strip()
+    if not texto:
+        return False, _d("Write what the office should know first.")
+    w, err = _ws()
+    if err:
+        return False, err
+    recs = columnas.canonizar(w.get_all_records(numericise_ignore=["all"]))
+    for i, r in enumerate(recs):
+        if str(r.get("ID", "")) != str(alert_id):
+            continue
+        if str(r.get("Status", "")) != "abierta":
+            return False, _d("That alert is already resolved: send it as a new one.")
+        _nuevo = "%s\n\n+ %s · %s: %s" % (str(r.get("Message", "")), quien,
+                                         clock.now().strftime("%d/%m %H:%M"), texto)
+        w.batch_update([{"range": f"{_col_letter(_COL['Message'])}{i + 2}", "values": [[_nuevo[:4000]]]}],
+                       value_input_option="RAW")
+        _invalidate()
+        _p = project_name or str(r.get("ProjectID", ""))
+        _notify(_admins_and_owners(str(r.get("Group", ""))), f"{_d('Alert updated on')} {_p}",
+                [f"<b>{_d('Added by')}</b> {quien} ({alert_id}):", texto, f"{_d('Project')}: {_p}."])
+        return True, str(alert_id)
     return False, _d("Alert not found.")
 
 

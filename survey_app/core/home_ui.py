@@ -1207,6 +1207,8 @@ def _alertas_items(grupo) -> list:
                         if a["n"] == 1 else
                         t(":red[:material/notifications:] **{p}** — {n} open alarms")
                         .replace("{n}", str(a["n"])).replace("{p}", str(a["nombre"])))
+                if a.get("estado"):       # v694 · H26: la obra ya no está activa y la de seguridad sigue abierta
+                    _txt = _txt.replace("**%s**" % a["nombre"], "**%s** (%s)" % (a["nombre"], _etq(a["estado"])), 1)
                 out.append({"texto": _txt, "destino": ("obra", a["id"])})
         except Exception as e:
             logger.warning("campana: no se pudieron leer los urgentes: %s", e)
@@ -1302,6 +1304,22 @@ def _alertas_items(grupo) -> list:
                 out.append({"texto": _txt, "destino": ("activo", e.get("id", ""))})
     except Exception:
         pass
+    if _es_campo:
+        # v694 · D4 del ciclo 6 (decisión del usuario): la oficina resolvió una alarma de SEGURIDAD que levantó él, con
+        # lo que se hizo. Antes no se enteraba: la nota solo quedaba en la obra.
+        try:
+            from core import alerts as _AL4
+            from core import projects as _P4
+            from core.maps import literal_md as _lmd4
+            for a in _AL4.resueltas_para(_yo, dias=2)[:5]:
+                _pid4 = str(a.get("ProjectID", ""))
+                _nom4 = str((_P4.get_project(_pid4) or {}).get("Name") or _pid4)
+                _nota4 = str(a.get("Resolution", "") or "").strip()
+                _txt = (t(":green[:material/task_alt:] **{p}** — the office resolved your alert: {n}")
+                        .replace("{p}", _lmd4(_nom4)).replace("{n}", _lmd4(_nota4[:120]) or "—"))
+                out.append({"texto": _txt, "destino": ("obra_campo", _pid4)})
+        except Exception as e:
+            logger.warning("campana: no se pudieron leer las alarmas resueltas: %s", e)
     return out
 
 
@@ -1328,6 +1346,10 @@ def _ir_alerta(destino, grupo):
             _nom = _u
         st.session_state["gp_fichasel"] = f"{_nom} ({_u})"     # pre-selecciona la persona
         navegar("planificacion", "👷 Usuarios")
+    elif destino[0] == "obra_campo":              # v694 · D4: al campo, las alarmas de ESA obra
+        st.session_state["_fieldproj_pending"] = str(destino[1])
+        st.session_state["cpxseg_fld_sec"] = "🚨 Avisos"
+        navegar("misproyectos")
     elif destino[0] == "equipo":                  # v691 · al campo, la ficha de SU equipo
         st.session_state["_equipo_open"] = str(destino[1])
         navegar("autogestion", "🧰 Equipo")

@@ -585,10 +585,11 @@ def _cerrar_aviso(ko) -> None:
     st.session_state.pop(ko, None)
 
 
-def _pedir_aviso(lid, texto, kt, ko) -> None:
+def _pedir_aviso(lid, texto, kt, ko, alerta="") -> None:
     """`on_click` de «Send to the office»: solo APUNTA. El envío —escribe la alarma y avisa por
-    Telegram/correo, segundos— se hace arriba, antes de pintar la lista (trampa 37)."""
-    st.session_state[_AVISAR] = {"lid": str(lid), "texto": str(texto),
+    Telegram/correo, segundos— se hace arriba, antes de pintar la lista (trampa 37).
+    v694 · `alerta`: añadirlo a ESA alarma abierta en vez de abrir otra (H15 del ciclo 6)."""
+    st.session_state[_AVISAR] = {"lid": str(lid), "texto": str(texto), "alerta": str(alerta or ""),
                                  "mensaje": str(st.session_state.get(kt, "") or "").strip()}
     st.session_state.pop(ko, None)
 
@@ -614,16 +615,41 @@ def _avisar(pid, grupo, usuario, partes) -> None:
     from core import projects as P
     _prj = P.get_project(pid) or {}
     with st.spinner(t("Sending to the office…")):
-        ok, res = alerts.report_problem(pid, grupo, pet["mensaje"][:1000], usuario,
-                                        str(_prj.get("Name", "") or pid))
+        if pet.get("alerta"):
+            # v694 · H15: a la alarma de seguridad que la obra ya tenía abierta, con el nombre de quien lo dice
+            _quien = str((st.session_state.get("auth") or {}).get("nombre") or usuario)
+            ok, res = alerts.ampliar(pet["alerta"], pet["mensaje"][:1000], _quien,
+                                     str(_prj.get("Name", "") or pid))
+        else:
+            ok, res = alerts.report_problem(pid, grupo, pet["mensaje"][:1000], usuario,
+                                            str(_prj.get("Name", "") or pid))
     if ok:
         _apuntar({pet["lid"]: dict(reg, avisos=list(reg.get("avisos") or [])
                                    + [{"texto": pet["texto"], "alerta": str(res)}])}, {})
-        flash.exito(t("Sent to the office ({a}). The administrators get it by Telegram and email.",
-                      a=res))
+        if pet.get("alerta"):
+            flash.exito(t("Added to the office's alert {a}. The administrators get it by Telegram and email.",
+                          a=res))
+        else:
+            flash.exito(t("Sent to the office ({a}). The administrators get it by Telegram and email.",
+                          a=res))
     else:
         flash.error(t("Could not send it ({m}). Try again in a minute.", m=res))
     st.rerun()
+
+
+def _alarma_seguridad_del_dia(r) -> dict:
+    """v694 · H15 del ciclo 6: la alarma de SEGURIDAD abierta más reciente de la obra de este parte, del mismo día
+    que el parte (la X del false car, un near miss…), o {}."""
+    try:
+        from core import alerts
+        from core.num import parse_date as _pd
+        _dia = _pd(r.get("Date"))          # por fecha, no por texto (y nada de «Date[:10]», verif_v604)
+        _x = [a for a in alerts.list_alerts(str(r.get("ProjectID", "")), "abierta")
+              if alerts.es_seguridad(a) and _dia and _pd(str(a.get("Date", "")).split(" ")[0]) == _dia]
+    except Exception as e:
+        logger.warning("parte: no se pudieron mirar las alarmas del día: %s", e)
+        return {}
+    return sorted(_x, key=lambda a: str(a.get("Date", "")))[-1] if _x else {}
 
 
 def _problemas(reg, r, kp) -> None:
@@ -648,11 +674,23 @@ def _problemas(reg, r, kp) -> None:
                       type="tertiary", on_click=_abrir_aviso, args=(_ko, i))
             continue
         _kt = "%s_pb_txt%d" % (kp, i)
+        # v694 · H15 del ciclo 6: si la obra ya tiene una alarma de seguridad abierta ese día, se dice, y lo del
+        # parte puede ir a ESA alarma en vez de abrir otra por lo mismo (el balanceo del false car salió dos veces)
+        _ya_al = _alarma_seguridad_del_dia(r)
+        if _ya_al:
+            st.info(t(":material/notifications_active: The office already has an open safety alert on this job "
+                      "for that day ({a}): «{m}». If it is the same thing, add it there.",
+                      a=_ya_al.get("ID", ""), m=literal_md(str(_ya_al.get("Message", "")).split("\n")[0][:160])))
         st.text_area(t("What the office will receive"), value=_texto_aviso(tx, r), key=_kt,
                      height=110)
+        if _ya_al:
+            st.button(t(":material/add_comment: Add it to {a}", a=_ya_al.get("ID", "")),
+                      key="%s_pb_add%d" % (kp, i), type="primary", width="stretch", on_click=_pedir_aviso,
+                      args=(lid, tx, _kt, _ko, str(_ya_al.get("ID", ""))))
         c1, c2 = st.columns(2)
-        c1.button(t(":material/send: Send to the office"), key="%s_pb_env%d" % (kp, i),
-                  type="primary", width="stretch", on_click=_pedir_aviso,
+        c1.button(t(":material/send: Send as a new alert") if _ya_al else t(":material/send: Send to the office"),
+                  key="%s_pb_env%d" % (kp, i),
+                  type="secondary" if _ya_al else "primary", width="stretch", on_click=_pedir_aviso,
                   args=(lid, tx, _kt, _ko))
         c2.button(t("Cancel"), key="%s_pb_no%d" % (kp, i), type="tertiary", width="stretch",
                   on_click=_cerrar_aviso, args=(_ko,))

@@ -2602,6 +2602,7 @@ def _equipo_proyecto(pid, grupo):
     st.markdown(t("**:material/groups: Who has worked here**"))
     if not _lb["items"]:
         st.caption(t("Nobody has clocked hours to this project yet."))
+        _firmaron_sin_fichar(pid, grupo)            # v694 · H25
         return
     # v559 · por su NOMBRE: salían «Admin2» y «campo000» (Admin2 es «Bobo»).
     _nm = _etq_us([x["usuario"] for x in _lb["items"]])
@@ -2610,6 +2611,23 @@ def _equipo_proyecto(pid, grupo):
                                for x in _lb["items"]]),
                  hide_index=True, width="stretch", column_config=tabla.cfg())
     st.caption(f"Total: **{_lb['horas']:.1f} h**")
+    _firmaron_sin_fichar(pid, grupo)                # v694 · H25
+
+
+def _firmaron_sin_fichar(pid, grupo) -> None:
+    """v694 · H25 del ciclo 6: quien firmó el Pre-Start de un día y no fichó aquí ese día. helper 1 firmó la charla de
+    C6 sin fichar: ni sus horas ni su falta de credencial salían en ningún sitio."""
+    try:
+        from core import handover as _H
+        from core import handover_ui as _HU
+        _x = _H.firmaron_sin_fichar(_HU.asistencia(pid, grupo, P.get_project(pid) or {}))
+    except Exception as e:
+        logger.warning("_firmaron_sin_fichar %s: %s", pid, e)
+        return
+    if _x:
+        _nm = _etq_us(sorted({u for u, _d in _x}))
+        st.caption(t(":orange[:material/person_alert:] Signed the Pre-Start but did not clock in here: {l}",
+                     l=", ".join("%s (%s)" % (maps.literal_md(_nm.get(u, u)), _fmt_fecha(d)) for u, d in _x[:8])))
 
 
 # ⚠️ Las CLAVES son los nombres REALES de columna (`auditoria` guarda por ellos): no se
@@ -3871,7 +3889,20 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         else:
             with st.expander(t(":material/inventory_2: Archive project"), key=f"exp_arch_{pid}"):
                 st.caption(t("It disappears from lists and reports, but is kept in full and can be restored whenever you want. This is what is recommended when a job closes."))
-                if st.button(t(":material/inventory_2: Archive"), key=f"arch_{pid}", width="stretch"):
+                # v694 · H26 del ciclo 6: lo que sigue ABIERTO, ANTES de archivar, y una casilla si hay algo. C6 al 3 % se
+                # archivó al instante con una alarma de seguridad abierta, dos tareas, gente en el tablero y $63 sin
+                # facturar: la lista de cierre solo salía al 100 %. La MISMA lista (`lista_cierre`).
+                _abierto = lista_cierre(pid, grupo, prj)
+                if not _completada(prj) and not P.es_cancelada(prj):
+                    _abierto.insert(0, t("The job is at **{p}%**: it is not finished.", p=int(round(avance))))
+                _ok_arch = True
+                if _abierto:
+                    st.warning(t(":material/flag: **Still open on this job:**") + "\n\n"
+                               + "\n".join(f"- {x}" for x in _abierto))
+                    _ok_arch = st.checkbox(t("Archive it anyway: I know what is still open."),
+                                           key=f"arch_conf_{pid}")
+                if st.button(t(":material/inventory_2: Archive"), key=f"arch_{pid}", width="stretch",
+                             disabled=not _ok_arch):
                     ok, msg = P.set_archivado(pid, True)
                     (flash.exito if ok else st.error)(msg)
                     if ok:
@@ -4698,6 +4729,11 @@ def render_field_projects(usuario: str, grupo: str):
             (i for i in idmap if f"({i})" in str(_prev)), _VACIO)
     # Si el usuario tiene fichaje abierto, se abre ESE proyecto: es donde está
     # trabajando ahora (mismo criterio que usan las herramientas desde v137).
+    # v694 · H5 del ciclo 6: al fichar (menú lateral o Fichaje), esta pantalla abre ESA obra. Solo se elegía sola si
+    # el desplegable aún no existía: con «— choose —» ya puesto, fichar no lo movía hasta otra visita.
+    _pend = st.session_state.pop("_fieldproj_pending", None)
+    if _pend and str(_pend) in idmap:
+        st.session_state["fieldproj_sel"] = str(_pend)
     _opts = [_VACIO] + list(idmap.keys())
     if "fieldproj_sel" not in st.session_state:
         _fich = ""

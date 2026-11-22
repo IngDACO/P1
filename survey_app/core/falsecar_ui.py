@@ -106,7 +106,7 @@ def _resultado(r) -> None:
     if r.get("fallos"):
         _no_usar([{"n": n} for n in r["fallos"]])
         if r.get("alarma"):
-            st.warning(t(":material/cancel: A project alert was opened. The administrator has been notified."))
+            st.warning(t(":material/notifications_active: A project alert was opened. The administrator has been notified."))
         else:
             st.error(t(":material/error: The alert could NOT be opened. Tell your administrator now."))
     st.download_button(t(":material/download: Download PDF"), data=r["pdf"], file_name=r["filename"],
@@ -203,10 +203,26 @@ def _historial(pid) -> None:
             st.rerun()
 
 
+_MONTAR = "_fc_montar"        # v694 · la petición de «It is installed» (acción DIFERIDA, trampa 37)
+
+
+def _pedir_montar(pid) -> None:
+    st.session_state[_MONTAR] = str(pid)
+
+
 def render(prj, grupo, rol, usuario, nombre, dia_pedido=None) -> None:
     """El checklist de esa obra. Solo se llama en obras con false car. `dia_pedido`: el día tocado
     en la lista de días sin registro."""
     pid = str(prj.get("ID", ""))
+    # v694 · H8: «It is installed» se atiende ARRIBA, antes de pintar (trampa 37). Una petición de OTRA obra se tira.
+    if st.session_state.pop(_MONTAR, None) == pid:
+        with st.spinner(t("Saving…")):
+            ok, msg = FC.montar(prj, grupo, usuario, clock.today(grupo))
+        if ok:
+            flash.exito(t("«Install sky climber» ticked for today: the checklist is now required."))
+        else:
+            flash.error(msg)
+        st.rerun()
     st.markdown(t("### :material/verified: Daily False Car Checklist"))
     st.caption(t("Daily inspections are to be carried out according to the following schedule."))
     gestor = rol != "field"
@@ -242,6 +258,11 @@ def render(prj, grupo, rol, usuario, nombre, dia_pedido=None) -> None:
         st.info(t(":material/info: The false car is not recorded as installed on that day. It is "
                   "required from when **Install sky climber** is ticked in the job's progress until "
                   "it is marked as removed."))
+        # v694 · H8 del ciclo 6: si HOY está montado y nadie lo marcó, se marca aquí (no se ofrecía nada). Solo
+        # para hoy y si nunca se montó: un día pasado o una máquina ya retirada no se rehacen desde aquí.
+        if dia == hoy and not FC.periodo(prj)[0]:
+            st.button(t(":material/construction: It is installed: tick «Install sky climber» for today"),
+                      key=f"fc_montar_{pid}", width="stretch", on_click=_pedir_montar, args=(pid,))
     _historial(pid)
 
 

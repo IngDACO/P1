@@ -198,6 +198,40 @@ def compliance(usuario, requeridos) -> dict:
     return {"por_tipo": por_tipo, "cumple": cumple}
 
 
+def requeridos_de(prj) -> list:
+    """v694 · Las credenciales que exige una obra (`RequiredCerts`, separadas por «;»)."""
+    return [x.strip() for x in str((prj or {}).get("RequiredCerts", "") or "").split(";") if x.strip()]
+
+
+def incumplidas(usuario, requeridos) -> list:
+    """v694 · H4 del ciclo 6: lo exigido que esta persona NO cumple, `[(tipo, estado, vence)]`.
+
+    `estado` es 'vencido' o 'falta' —la regla de `compliance`: «por vencer» cumple— y `vence`, la fecha de la
+    última de ese tipo que venció ("" si no tiene ninguna). Campo000 fichó y firmó en una obra que exige Working at
+    Heights con la suya vencida y no vio nada: la oficina lo sabía al asignar, el campo no."""
+    if not requeridos or not str(usuario or "").strip():
+        return []
+    _c = compliance(usuario, requeridos)
+    mias = list_for(usuario)
+    out = []
+    for tipo in requeridos:
+        est = _c["por_tipo"].get(tipo)
+        if est not in ("vencido", "falta"):
+            continue
+        _fs = [_parse(c.get("ExpiryDate")) for c in mias
+               if str(c.get("Type", "")).strip() == str(tipo).strip() and completa(c)]
+        _fs = [f for f in _fs if f]
+        out.append((tipo, est, max(_fs).isoformat() if (est == "vencido" and _fs) else ""))
+    return out
+
+
+def texto_incumplidas(malas) -> str:
+    """v694 · «Working at Heights expired on 19/11/2026; Forklift not on file» ("" sin nada)."""
+    from core.num import dmy
+    return "; ".join(t("{c} expired on {d}", c=tp, d=dmy(f)) if est == "vencido" and f
+                     else t("{c} not on file", c=tp) for tp, est, f in malas or [])
+
+
 def matrix(grupo) -> tuple:
     """Matriz de compliance: (tipos, filas) = usuarios × credenciales con semáforo.
     Celda: 🟢 vigente · 🟡 por vencer · 🔴 vencido · — no tiene."""

@@ -509,6 +509,23 @@ def nota_obra(pid, grupo="") -> str:
     return ""
 
 
+def nota_credenciales(pid, grupo, usuario) -> str:
+    """v694 · H4 del ciclo 6: fichar en una obra que exige una credencial que esta persona no cumple. Avisa, no
+    bloquea (decisión del ciclo 1: avisar, no impedir). La oficina lo veía al asignar; el campo, nada."""
+    try:
+        from core import credentials as CR
+        if not CR.is_configured():
+            return ""
+        _m = CR.incumplidas(usuario, CR.requeridos_de(projects_data.get_project(pid) or {}))
+    except Exception as e:
+        logger.warning("nota_credenciales %s: %s", pid, e)
+        return ""
+    if not _m:
+        return ""
+    return t(":material/badge: This job requires certificates you don't meet: {x}. Tell the office before doing "
+             "that work.", x=CR.texto_incumplidas(_m))
+
+
 def _fichar(nombre, nom_obra, grupo, usuario, pid):
     """Ficha al proyecto y deja pendiente el aviso del Pre-Start si falta.
 
@@ -524,6 +541,11 @@ def _fichar(nombre, nom_obra, grupo, usuario, pid):
     _nota = nota_obra(pid, grupo)            # v677 · H7 del ciclo 3
     if _nota:
         flash.aviso(_nota)
+    _nc = nota_credenciales(pid, grupo, usuario)     # v694 · H4 del ciclo 6
+    if _nc:
+        flash.aviso(_nc)
+    # v694 · H5 del ciclo 6: «My projects» abre ESTA obra en la pasada siguiente (solo se elegía sola la primera vez)
+    st.session_state["_fieldproj_pending"] = str(pid)
     _armar_aviso_prestart(pid, nom_obra, grupo)
     st.rerun()
 
@@ -1054,6 +1076,10 @@ def render_timeclock_tab():
                     if ok:
                         if nota_obra(_nuevo, grupo):                # v677 · H7: también al cambiar de obra
                             flash.aviso(nota_obra(_nuevo, grupo))
+                        _nc = nota_credenciales(_nuevo, grupo, usuario)   # v694 · H4
+                        if _nc:
+                            flash.aviso(_nc)
+                        st.session_state["_fieldproj_pending"] = str(_nuevo)   # v694 · H5
                         _armar_aviso_prestart(_nuevo, _nom, grupo)   # otra obra: su charla
                         st.rerun()
         elif not idmap:

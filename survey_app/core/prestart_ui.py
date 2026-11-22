@@ -155,7 +155,7 @@ def _clave_firma(a) -> str:
     return "".join(c if c.isalnum() else "_" for c in base)[:28]
 
 
-def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list, kp: str) -> list:
+def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list, kp: str, requeridos=()) -> list:
     """Asistentes con su firma DIBUJADA (v383), elegidos de la CUADRILLA (v418).
 
     ⚠️ Antes el nombre se TECLEABA uno a uno. Con la cuadrilla del proyecto delante,
@@ -216,6 +216,15 @@ def _asistentes_con_firma(yo: str, yo_usuario: str, cuadrilla: list, kp: str) ->
             st.markdown(f"**{literal_md(nom)}**")
             st.caption(t("clocked in here today") if a["ficho"] else
                        (t("from the crew") if a["usuario"] else t("added by hand")))
+            # v694 · H4 del ciclo 6: lo que exige la obra y esta persona no cumple, junto a su firma
+            if requeridos and a["usuario"]:
+                try:
+                    from core import credentials as _CR
+                    _m = _CR.incumplidas(a["usuario"], requeridos) if _CR.is_configured() else []
+                except Exception:
+                    _m = []
+                if _m:
+                    st.caption(":orange[:material/badge: " + literal_md(_CR.texto_incumplidas(_m)) + "]")
         firma = None
         with c2:
             if st_canvas is not None:
@@ -364,13 +373,13 @@ def _resultado(r):
         st.error(t(":material/warning: Checks answered **NO** (review before working)") + ": "
                  + " · ".join(t(x) for x in _no))
     if r.get("alarma"):
-        st.warning(t(":material/cancel: A project alert was opened for the near miss/hazard reported."))
+        st.warning(t(":material/notifications_active: A project alert was opened for the near miss/hazard reported."))
     elif r.get("nm"):
         # ⚠️ v623 · Fallar aquí era silencioso: el aviso de «tell your administrator» solo existía
         # para los NO, y un near miss se quedaba sin alarma y sin que nadie lo supiera.
         st.error(t(":material/error: The near miss alert could NOT be opened. Tell your administrator now."))
     if r.get("alarma_checks"):
-        st.warning(t(":material/cancel: A project alert was opened for {n} control(s) answered NO. "
+        st.warning(t(":material/notifications_active: A project alert was opened for {n} control(s) answered NO. "
                      "The administrator has been notified.", n=len(_no)))
     elif _no:
         st.caption(t(":orange[:material/warning:] The alert for the NO checks could not be opened; tell your administrator."))
@@ -642,8 +651,10 @@ def render_prestart_tab():
 
     # ── 5. Attendees — cada uno FIRMA (v383) ──
     st.markdown(t("**5. Attendees**"))
+    from core import credentials as _CR0
     attendees = _asistentes_con_firma(nombre or usuario, usuario,
-                                  _cuadrilla(prj, pid, pgrupo), kp)
+                                  _cuadrilla(prj, pid, pgrupo), kp,
+                                  requeridos=_CR0.requeridos_de(prj))       # v694 · H4
 
     st.markdown("---")
     # Qué falta por responder. v623 · Por SECCIÓN: con las frases enteras, en el móvil eran 211 px

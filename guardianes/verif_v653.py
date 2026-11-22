@@ -77,8 +77,9 @@ _app = HS.barrer()
 chk("en TODA la app: ningún dato de la hoja sin escapar en HTML ni en un PDF", _app == set(), sorted(_app)[:12])
 _av = HS.por_aviso_comprobado()
 # v677 · y los dos nuevos: la ausencia que registra la oficina (H2) y el día que añade (H9)
-chk("los avisos que se dejan fuera del barrido siguen saliendo por `notify_user` (los 8)",
-    len(_av) == 8 and all(_av.values()), _av)
+# v694 · y la alarma de seguridad resuelta, a quien la levantó (D4 del ciclo 6): 9, también por `notify_user`
+chk("los avisos que se dejan fuera del barrido siguen saliendo por `notify_user` (los 9)",
+    len(_av) == 9 and all(_av.values()), _av)
 _nu = next(n for n in ast.walk(ast.parse(src("core/notify.py")))
            if isinstance(n, ast.FunctionDef) and n.name == "notify_user")
 chk("...y `notify_user` escapa el texto con `html_seguro` (v603)",

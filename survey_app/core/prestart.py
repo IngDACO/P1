@@ -554,6 +554,12 @@ def submit(data: dict) -> dict:
         res["error"] = f"{t('Could not generate the PDF')}: {e}"
         return res
     fname = filename_for(data)
+    # v694 · H9 del ciclo 6: otra charla el mismo día con la misma gente daba el MISMO nombre en Files
+    try:
+        from core import projects as _Pn
+        fname = _Pn.nombre_libre(str(data.get("proyecto_id", "")), fname)
+    except Exception as e:
+        logger.warning("prestart: no se pudo comprobar el nombre: %s", e)
     res["pdf"] = pdf
     res["filename"] = fname
 

@@ -938,13 +938,27 @@ def set_archivado(pid: str, archivar: bool = True) -> tuple:
     if not prj:
         return False, t("Project not found.")
     if archivar:
-        return update_project(pid, {"ManualStatus": ARCHIVADO, "Status": ARCHIVADO})
+        ok, msg = update_project(pid, {"ManualStatus": ARCHIVADO, "Status": ARCHIVADO})
+        _resumen_al_dia()
+        return ok, (t("Project archived.") if ok else msg)     # v694 · decía «Project updated.»
     # ⚠️ v422: con el tipo. Sin él, restaurar una localización interna la devolvía a
     # «Planificado» en vez de «Abierta» — se puede archivar y no se puede volver bien,
     # que es media aplicación de la regla v340.
-    return update_project(pid, {"ManualStatus": "",
-                                "Status": derive_estado(_num(prj.get("Progress")), "",
-                                                        prj.get("Type", ""))})
+    ok, msg = update_project(pid, {"ManualStatus": "",
+                                   "Status": derive_estado(_num(prj.get("Progress")), "",
+                                                           prj.get("Type", ""))})
+    _resumen_al_dia()
+    return ok, (t("Project restored.") if ok else msg)
+
+
+def _resumen_al_dia() -> None:
+    """v694 · H27 del ciclo 6: la campana sale del resumen del día (guardado 120 s): al archivar o restaurar, otra
+    vez desde la hoja. Perezoso: `admin_digest` importa este módulo."""
+    try:
+        from core import admin_digest
+        admin_digest.invalidar()
+    except Exception as e:
+        logger.warning("projects: no se pudo refrescar el resumen: %s", e)
 
 
 def datos_asociados(pid: str) -> dict:
@@ -1707,6 +1721,21 @@ def _documents_ws():
 def list_documents(pid: str) -> list:
     return [r for r in _records(DOCUMENTS_SHEET)
             if str(r.get("ProjectID", "")) == str(pid)]
+
+
+def nombre_libre(pid, nombre) -> str:
+    """v694 · H9 del ciclo 6: `nombre`, o «nombre (2).pdf», «(3)»… si la obra ya tiene un documento así. Dos
+    charlas el mismo día con la misma gente salían con el MISMO nombre en Files."""
+    _ya = {str(r.get("Name", "")).strip().lower() for r in list_documents(pid)}
+    if str(nombre).strip().lower() not in _ya:
+        return nombre
+    _base, _ext = (nombre.rsplit(".", 1) + [""])[:2] if "." in nombre else (nombre, "")
+    n = 2
+    while True:
+        _c = "%s (%d)%s" % (_base, n, ("." + _ext) if _ext else "")
+        if _c.strip().lower() not in _ya:
+            return _c
+        n += 1
 
 
 def add_document(pid, nombre, tipo, drive_id, subido_por="", handover_item="") -> tuple:

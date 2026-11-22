@@ -52,7 +52,9 @@ POR_AVISO = {("core/notify.py", "notify_assignment"), ("core/credentials.py", "n
              ("core/ausencias_ui.py", "_avisar_cancelacion"), ("core/ausencias_ui.py", "_avisar_exceso"),
              ("core/ausencias_ui.py", "_avisar_persona"), ("core/ausencias_ui.py", "_avisar_persona_cancelada"),
              # v677 · la ausencia que registra la oficina (H2) y el día que añade (H9): también por `notify_user`
-             ("core/ausencias_ui.py", "_avisar_registrada"), ("core/correcciones_ui.py", "avisar_dia_anadido")}
+             ("core/ausencias_ui.py", "_avisar_registrada"), ("core/correcciones_ui.py", "avisar_dia_anadido"),
+             # v694 · D4 del ciclo 6: la alarma de seguridad resuelta, a quien la levantó: también por `notify_user`
+             ("core/alerts.py", "_avisar_resuelta")}
 
 
 def por_aviso_comprobado(fuentes=None) -> dict:
