@@ -21,9 +21,11 @@ FICHEROS = ["core/plan.py", "core/schedule.py", "core/projects.py", "core/projec
 ROTURAS = [
     ("lo no empezado puede arrancar en el PASADO", "core/plan.py",
      "            ini = max(ini_pred, hoy)", "            ini = ini_pred"),
+    # v700 · re-anclada: desde H28 del ciclo 6, lo que falta corre desde `sigue` (hoy, o el fin de sus predecesoras
+    # si la empezaron fuera de orden); «desde HOY» vive ahora en `sigue = max(hoy, ini)`
     ("lo en curso no cuenta desde HOY", "core/plan.py",
-     'fin[i] = max(hoy, ini) + dur * (1.0 - av / 100.0)',
-     'fin[i] = ini + dur * (1.0 - av / 100.0)'),
+     'sigue = max(hoy, ini)',
+     'sigue = ini'),
     ("lo terminado ignora su fecha REAL", "core/plan.py",
      'fin[i] = num(fin_r) if fin_r is not None else ini + dur',
      'fin[i] = ini + dur'),

@@ -120,14 +120,23 @@ def pronostico(acts: list, hoy: float = 0.0) -> dict:
 
     Las tres reglas, que es donde está el dominio:
     - **terminada** → su fecha es la REAL: ya no se mueve ni la mueve nadie;
-    - **en curso**  → le queda `duración × (1 − avance)`, y eso corre **desde HOY**;
+    - **en curso**  → le queda `duración × (1 − avance)`, y eso corre **desde HOY**, ⚠️
+      **y nunca antes de que acaben sus predecesoras** (v700): lo hecho fuera de orden se
+      GANA, lo que falta sigue el orden del plan;
     - **sin empezar** → empieza cuando sus predecesoras la dejen, ⚠️ **nunca antes de
       HOY**: lo que tocaba el martes y no se hizo no se puede hacer el martes.
     Por eso el retraso se PROPAGA por la cadena en vez de diluirse en un promedio.
+
+    ⚠️ v700 · H28 del ciclo 6: lo que faltaba de una actividad EMPEZADA corría desde hoy
+    sin mirar a las de delante, y todo lo de detrás la seguía. En C6 (puertas en 4 de 8
+    plantas antes de tiempo) la puesta en marcha salía ANTES que la cabina y el motor, y la
+    obra «terminaba» el día 18,7 de 33: «14d ahead». Y en Parramatta escondía 11 días de
+    retraso. Una actividad que de verdad va en paralelo se declara sin predecesora.
     """
     preds, avisos = _preparar(acts)
     hoy = max(0.0, num(hoy))
     inicio, fin = {}, {}
+    espera = {}      # v700 · en curso y RETENIDA por sus predecesoras: desde cuándo sigue lo que falta
     for i in _en_orden(preds, len(acts)):
         a = acts[i]
         dur = max(0.0, num(a.get("duracion")))
@@ -140,9 +149,12 @@ def pronostico(acts: list, hoy: float = 0.0) -> dict:
         if av >= 100.0:                      # terminada: manda lo que PASÓ
             ini = num(ini_r) if ini_r is not None else max(0.0, ini_pred)
             fin[i] = num(fin_r) if fin_r is not None else ini + dur
-        elif av > 0.0:                       # en curso: le queda el resto, desde hoy
+        elif av > 0.0:                       # en curso: le queda el resto, desde hoy y tras las de delante
             ini = num(ini_r) if ini_r is not None else max(0.0, ini_pred)
-            fin[i] = max(hoy, ini) + dur * (1.0 - av / 100.0)
+            sigue = max(hoy, ini)
+            if ini_pred > sigue:             # v700 · empezada fuera de orden: lo que falta espera
+                sigue = espera[i] = ini_pred
+            fin[i] = sigue + dur * (1.0 - av / 100.0)
         else:                                # sin empezar: no puede arrancar en el pasado
             ini = max(ini_pred, hoy)
             fin[i] = ini + dur
@@ -157,7 +169,9 @@ def pronostico(acts: list, hoy: float = 0.0) -> dict:
             continue
         criticas.add(i)
         for j, lag in preds.get(i, []):
-            if abs(fin.get(j, 0.0) + lag - inicio.get(i, 0.0)) < 1e-6:
+            _llega = fin.get(j, 0.0) + lag
+            # v700 · la que RETIENE lo que falta de una en curso también manda en la fecha
+            if abs(_llega - inicio.get(i, 0.0)) < 1e-6 or (i in espera and abs(_llega - espera[i]) < 1e-6):
                 pila.append(j)
 
     return {"por_orden": {int(num(acts[i].get("orden"))): {
