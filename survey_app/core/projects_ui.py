@@ -1462,7 +1462,8 @@ def _nuevo_proyecto_form(grupo: str, key: str = "nuevo"):
             try:
                 _sch_prev = build_schedule(int(ns), f_ini, {},
                                            custom_rows=_filas_etapas(_tipo, ns, key))
-                st.caption(t(":material/event_available: Estimated finish: **{f}** ({n} days) — from the NS and the standard activities.",
+                # v698 · D1: días de trabajo, de lunes a viernes
+                st.caption(t(":material/event_available: Estimated finish: **{f}** ({n} working days, Monday to Friday) — from the NS and the standard activities.",
                              f=_sch_prev["fecha_fin"].strftime("%d/%m/%Y"),
                              n=_sch_prev["total_dias"]))
             except Exception:
@@ -2571,7 +2572,8 @@ def _diagnostico(ps: dict) -> dict:
     for i, a in enumerate(acts):
         pct  = float(av[i]) if i < len(av) else 0.0
         fin  = a["inicio"] + a["duracion"]
-        f_i  = ini + timedelta(days=int(a["inicio"]))
+        # v698 · D1: la fecha del día N del plan, de su calendario (de lunes a viernes, fuera de pausa)
+        f_i  = sched["cal"].fecha(a["inicio"]) if sched.get("cal") else ini + timedelta(days=int(a["inicio"]))
         # `inicio < hoy` (estricto): el dia en que se abre la ventana aun no
         # cuenta como retraso — si no, un proyecto recien creado nace en rojo.
         _ow = str(ow[i]) if i < len(ow) else ""      # v502: LOGIN, se traduce al pintar
@@ -3057,8 +3059,9 @@ def _estado_section(pid: str, grupo: str, prj: dict):
     # diria "día 29 de 29" llevando 40. El real es ps["today_day"].
     _hoy_real = ps["today_day"]
     _tot      = proj.get("total", 0)
-    _dia_txt  = (f"day {_hoy_real} of {_tot}" if _hoy_real <= _tot
-                 else f"day {_hoy_real} — {_hoy_real - _tot} more than the {_tot} planned")
+    # v698 · D1: días de TRABAJO (de lunes a viernes, fuera de pausa)
+    _dia_txt  = (f"working day {_hoy_real} of {_tot}" if _hoy_real <= _tot
+                 else f"working day {_hoy_real} — {_hoy_real - _tot} more than the {_tot} planned")
 
     # ── KPIs (tarjetas, no st.metric planos) ──
     _fin = (proj["fecha_cadena"].strftime("%d/%m/%Y")
@@ -3265,7 +3268,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
             st.caption(f":material/flag: Next milestone: **{d['proximo']['nombre']}** starts on "
                        f"{d['proximo']['fecha'].strftime('%d/%m/%Y')} "
                        + ("(today)." if _fl <= 0 else
-                          "(tomorrow)." if _fl == 1 else f"(in {_fl:.0f} days)."))
+                          "(next working day)." if _fl == 1 else f"(in {_fl:.0f} working days)."))      # v698 · D1
     with _der:
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
         st.markdown("")

@@ -356,8 +356,9 @@ at.number_input(key="np_ns_adm").set_value(4)
 at.run()
 _f1 = fin_estimada(at)
 chk("⚠️ cambiar el NS mueve la fecha estimada SIN enviar", _f0 and _f1 and _f0 != _f1, (_f0, _f1))
-chk("…y dice la que se va a guardar («04/11/2026 (25 days)»)",
-    _f1 and "**04/11/2026** (25 days)" in _f1[0], _f1)
+# v698 · D1 del ciclo 6: 25 días de TRABAJO (de lunes a viernes) → el 13/11/2026; con días naturales era el 04/11
+chk("…y dice la que se va a guardar («13/11/2026 (25 working days…)»)",
+    _f1 and "**13/11/2026** (25 working days, Monday to Friday)" in _f1[0], _f1)
 
 print("\n5. Nombre repetido")
 crear(at, [("text_input", "np_nom_adm", "88 Walker  St")])
@@ -372,7 +373,8 @@ at.run()
 chk("⚠️ marcarla NO la borra (sigue ahí, con su clave, tras otra pasada)",
     _kdup is not None and [c.key for c in at.checkbox if str(c.key).startswith("np_dup_adm_")] == [_kdup])
 crear(at, [("checkbox", _kdup, True)])
-chk("⚠️ con la casilla, la obra homónima SE CREA", log(at)[:1] == [("crear", "88 Walker  St", "Installation", "2026-11-04", log(at)[0][4] if log(at) else -1)],
+# v698 · D1 del ciclo 6: la fecha de fin que se guarda es la de días de TRABAJO (13/11; con días naturales, 04/11)
+chk("⚠️ con la casilla, la obra homónima SE CREA", log(at)[:1] == [("crear", "88 Walker  St", "Installation", "2026-11-13", log(at)[0][4] if log(at) else -1)],
     log(at))
 
 print("\n6. Tras crear")

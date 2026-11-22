@@ -475,8 +475,12 @@ body:has([data-testid="stStatusWidget"])::before {{
 /* ⚠️ v696 · Con «reducir movimiento», la regla de arriba deja TODA animación en .001 ms y, con `forwards`, el aviso
    pasaba al instante a su estado final: invisible (medido en producción: «Task added.» con opacidad 0 desde el
    primer momento). Sin animación, se queda visible hasta la pasada siguiente, flotando, sin mover nada. */
+/* ⚠️ v698 · …pero sin animación se quedaba ENCIMA del contenido hasta la pasada siguiente (en el campo tapaba media
+   advertencia del parte): con «reducir movimiento», desaparece DE GOLPE a los 9 s (`steps`, sin fundido). La
+   duración con `!important` y esta especificidad gana a la global de .001 ms. */
 @media (prefers-reduced-motion: reduce) {{
-  .st-key-cpx_flash {{ animation: none !important; }}
+  .st-key-cpx_flash {{ animation: cpxFlashFuera 9s steps(1, end) forwards !important;
+                      animation-duration: 9s !important; }}
 }}
 
 .cpx-sec {{

@@ -148,9 +148,11 @@ cr = [{"nombre": "A", "duracion": 3, "peso": 1, "orden": 1, "pred": ""},
       {"nombre": "C", "duracion": 2, "peso": 1, "orden": 3, "pred": "1+2"},
       {"nombre": "D", "duracion": 4, "peso": 1, "orden": 4, "pred": "2;3-1"}]
 s2 = build_schedule(1, dt.date(2026, 9, 1), {}, custom_rows=cr)
-ck("con red: las fechas salen del encadenado",
+# v698 · D1 del ciclo 6: el día N del plan es el N-ésimo de LUNES A VIERNES (`calendario`). Los días 5 y 6 desde el
+# martes 1/9 son el martes 8/9 y el miércoles 9/9 (eran el 6 y el 7, contando el fin de semana).
+ck("con red: las fechas salen del encadenado (en días de lunes a viernes)",
    [(a["fecha_inicio"].isoformat(), a["critica"]) for a in s2["activities"]],
-   [("2026-09-01", True), ("2026-09-01", False), ("2026-09-06", True), ("2026-09-07", True)])
+   [("2026-09-01", True), ("2026-09-01", False), ("2026-09-08", True), ("2026-09-09", True)])
 ck("...y el proyecto dura lo que la ruta crítica", s2["total_dias"], 10)
 _svg = schedule_svg(s2)
 ck("el Gantt marca las críticas", _svg.count('stroke="#c0392b"'), 3)

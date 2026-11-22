@@ -65,9 +65,11 @@ def plan(durs, preds=None):
 print("\n[1] el plan acordado se congela, y lo que se mueve se ve")
 s1 = plan([4, 4, 4])
 bl = BL.fijar({}, s1, "Bobo", "2026-09-17 09:00")
+# v698 · D1 del ciclo 6: la entrega es el ÚLTIMO día de trabajo de lunes a viernes (12 días desde el martes 1/9 →
+# miércoles 16/9); era el 13/9, inicio + 12 días naturales.
 ck("al fijar se guarda la entrega, el total y las actividades",
    (bl["original"]["entrega"], bl["original"]["total"], len(bl["original"]["acts"])),
-   ("2026-09-13", 12.0, 3))
+   ("2026-09-16", 12.0, 3))
 ck("...y todavía no hay replanificaciones", bl["historial"], [])
 ck("si el plan no cambia, no hay nada que reportar", BL.comparar(s1, bl)["actividades"], [])
 

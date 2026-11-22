@@ -1617,13 +1617,14 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
         peso = _num(p.get("WeightInGrouping")) or 1.0
         series.append({"peso": peso, "inicio": ps["sched"]["start_date"],
                        "plan": ps["sched"]["scurve"], "real": ps["real"],
-                       "hoy": ps["today_day"]})
+                       "hoy": ps["today_day"], "cal": ps["sched"].get("cal")})       # v698 · su calendario
     if not series:
         return {}
 
     ini = min(s["inicio"] for s in series)
-    fin = max(s["inicio"] + timedelta(days=int(s["plan"][-1][0])) for s in series
-              if s["plan"])
+    # v698 · cada obra con SU calendario (de lunes a viernes, sus pausas): el día N de una no es el de otra
+    fin = max((s["cal"].fin(s["plan"][-1][0]) if s.get("cal") else s["inicio"] + timedelta(days=int(s["plan"][-1][0])))
+              for s in series if s["plan"])
     tot_peso = sum(s["peso"] for s in series) or 1.0
 
     def _pct(curva, dia):
@@ -1646,7 +1647,7 @@ def grouping_curve(gid: str, grupo: str = None) -> dict:
     while d <= fin:
         pl = rl = 0.0
         for s in series:
-            off = (d - s["inicio"]).days
+            off = s["cal"].dia(d) if s.get("cal") else (d - s["inicio"]).days
             pl += s["peso"] * _pct(s["plan"], off)
             if d <= hoy:                                  # la real se corta en HOY
                 rl += s["peso"] * _pct(s["real"], off)
@@ -1690,14 +1691,26 @@ def project_schedule(pid: str):
                "orden":    _num(a.get("Order")) or (i + 1),
                "pred":     str(a.get("Predecessors", "") or "")}
               for i, a in enumerate(acts)]
-    sched     = build_schedule(1, start, {}, custom_rows=custom)
+    # ⚠️ v698 · D1 del ciclo 6 (decisión del usuario): el plan cuenta de LUNES A VIERNES y se para mientras la obra
+    # está en pausa (las pausas, del rastro de cambios). Sábado y domingo suman avance, no tiempo. `today_day` y
+    # las ventanas reales son días de ESE calendario, no naturales.
+    from core.calendario import Calendario, pausas_de
+    _hoy = clock.today()
+    try:
+        from core import auditoria
+        _hist = auditoria.historial(entidad="proyecto", entidad_id=str(pid)) if auditoria.is_configured() else []
+    except Exception as e:
+        logger.warning("project_schedule %s: sin rastro para las pausas: %s", pid, e)
+        _hist = []
+    cal = Calendario(start, pausas_de(_hist, prj.get("Status", ""), _hoy), _hoy)
+    sched     = build_schedule(1, start, {}, custom_rows=custom, cal=cal)
     avances   = [_num(a.get("Progress")) for a in acts]
-    today_day = (clock.today() - start).days
+    today_day = cal.dia(_hoy)
 
     def _day_off(s):
         try:
             y, m, dd = str(s).split("-")
-            return (date(int(y), int(m), int(dd)) - start).days
+            return cal.dia(date(int(y), int(m), int(dd)))
         except Exception:
             return None
     windows = [(_day_off(a.get("ActualStartDate")), _day_off(a.get("ActualEndDate")))

@@ -1031,7 +1031,8 @@ def _propuestas(r, pid, grupo, usuario, key_prefix, oficina=False) -> None:
         if _no_env:
             st.warning(t(":material/report: Not sent to the office yet: {x}. Confirming does not send it: use «Tell "
                          "the office» above if they should know.",
-                         x="; ".join("«%s»" % literal_md(x) for x in _no_env[:2])))
+                         # v698 · sin el punto final dentro de las comillas («…morning.».)
+                         x="; ".join("«%s»" % literal_md(str(x).rstrip(" .")) for x in _no_env[:2])))
         c1, c2 = st.columns([3, 2])
         if c1.button(t(":material/done_all: Confirm the {n} ticked", n=n) if n
                      else t(":material/done_all: Confirm"), key="%s_ok" % kp,

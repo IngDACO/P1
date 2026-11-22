@@ -105,8 +105,9 @@ _cs = ast.unparse(FN["_costos_section"])
 # dejando la quinta sola a todo el ancho.
 chk("Costs: las tarjetas con base de 110 px (las 5 en una fila)",
     "cpx-kpis" in _cs and "--cpx-min:110px" in _cs)
-chk("Status: «(tomorrow)» y «(today)» para el próximo hito",
-    "(tomorrow)." in _es_src if (_es_src := ast.unparse(FN["_estado_section"])) else False)
+# v698 · D1 del ciclo 6: el hito cuenta días de TRABAJO, así que «mañana» es «el siguiente día de trabajo»
+chk("Status: «(next working day)» y «(today)» para el próximo hito",
+    "(next working day)." in _es_src if (_es_src := ast.unparse(FN["_estado_section"])) else False)
 chk("alta: «created with 1 activity» (no «1 activities»)",
     "1 activity" in ast.unparse(FN["_nuevo_proyecto_form"]))
 _sd = ast.unparse(FN["_subir_documento"])

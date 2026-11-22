@@ -11,7 +11,7 @@ Pesos con distribución en "S" (bajo al inicio, alto en el medio, bajo al final)
 """
 
 from core.i18n import d as _d
-from datetime import date, timedelta
+from datetime import date
 
 from core import plan
 from core.num import num as _num          # v512/v323: UNA definición de num()
@@ -102,7 +102,7 @@ def filas_de_etapas(tipo, ns: int, condicionales=(), pct_ripout=None) -> list:
 
 
 def build_schedule(ns: int, start_date: date, condicionales=None,
-                   custom_rows: list = None, ripout: bool = False) -> dict:
+                   custom_rows: list = None, ripout: bool = False, cal=None) -> dict:
     """
     Genera el cronograma. Si `custom_rows` viene (edición del usuario),
     usa sus duraciones/pesos en lugar de los automáticos.
@@ -124,6 +124,11 @@ def build_schedule(ns: int, start_date: date, condicionales=None,
     viejos— y se leen sus claves verdaderas, así que `{}` sigue queriendo decir «ninguna».
     """
     ns = max(1, int(ns or 1))
+    # ⚠️ v698 · D1 del ciclo 6 (decisión del usuario): el día N del plan es el N-ésimo de LUNES A VIERNES desde el
+    # inicio, fuera de pausa (`calendario`). Hasta v697 eran días naturales: NS 8 → fin el 25/12 contando fines de
+    # semana, y todo lo que sale del plan (should be at, retraso, fin previsto, curva S) avanzaba en sábado y domingo.
+    from core.calendario import Calendario
+    cal = cal or Calendario(start_date)
 
     if custom_rows:
         base = [(r["nombre"], float(r["duracion"]), float(r["peso"])) for r in custom_rows]
@@ -181,8 +186,8 @@ def build_schedule(ns: int, start_date: date, condicionales=None,
             "critica":      _r["critica"],
             "orden":        int(red[i]["orden"]),
             "pred":         str(red[i].get("pred", "") or ""),
-            "fecha_inicio": start_date + timedelta(days=int(_r["inicio"])),
-            "fecha_fin":    start_date + timedelta(days=int(_r["inicio"] + dur)),
+            "fecha_inicio": cal.fecha(_r["inicio"]),
+            "fecha_fin":    cal.fin(_r["inicio"] + dur, desde=_r["inicio"]),      # v698 · el ÚLTIMO día de trabajo
         })
     total_dias = calc["total_dias"]
 
@@ -203,7 +208,8 @@ def build_schedule(ns: int, start_date: date, condicionales=None,
         "total_dias":  int(total_dias),
         "scurve":      scurve,
         "start_date":  start_date,
-        "fecha_fin":   start_date + timedelta(days=int(total_dias)),
+        "fecha_fin":   cal.fin(total_dias),        # v698 · el último día de trabajo (de lunes a viernes)
+        "cal":         cal,                       # v698 · de aquí sacan sus fechas los que pintan el plan
         # v499: lo que el encadenado no pudo resolver (ciclo, referencia que ya no existe).
         # Va en el resultado para que la PANTALLA lo diga: un plan mal encadenado se
         # dibuja igual, y hay que poder verlo para arreglarlo.
@@ -315,7 +321,8 @@ def schedule_projection(sched: dict, avances: list, today_day, windows=None) -> 
     _pr = plan.pronostico(red, today_day)
     fin_cadena = _pr["total_dias"]
     dias_cadena = round(fin_cadena - total, 1)            # + tarde, − antes
-    fecha_cadena = start + timedelta(days=int(round(fin_cadena)))
+    from core.calendario import Calendario
+    fecha_cadena = (sched.get("cal") or Calendario(start)).fin(fin_cadena)      # v698 · en días que cuentan
     # las que MANDAN en esa fecha: son las que hay que empujar para recuperar
     criticas_cadena = [o for o, v in _pr["por_orden"].items() if v["critica"]]
 
@@ -587,6 +594,9 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
         lgx += 30 + len(et) * 5.4
 
     # ── Eje de fechas ───────────────────────────────────────
+    # v698 · las fechas del eje salen del calendario del plan (de lunes a viernes, fuera de pausa)
+    from core.calendario import Calendario
+    _cal_eje = sched.get("cal") or Calendario(start)
     xaxis_y = sc_top + sc_h
     d = 0
     while d <= fin_eje:
@@ -595,7 +605,7 @@ def schedule_svg(sched: dict, real_curve: list = None, today_day: float = None,
                  f'stroke="{C_GRIS}" stroke-width="1"/>')
         p.append(f'<text x="{x:.1f}" y="{xaxis_y+15:.1f}" text-anchor="middle" '
                  f'font-size="7.5" fill="#5b6472">'
-                 f'{(start + timedelta(days=int(d))).strftime("%d/%m")}</text>')
+                 f'{_cal_eje.fecha(d).strftime("%d/%m")}</text>')
         d += step
 
     p.append("</svg>")

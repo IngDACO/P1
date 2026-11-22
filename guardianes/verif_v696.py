@@ -27,10 +27,13 @@ CSS = theme._CSS
 _bloques = re.findall(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", CSS, flags=re.S)
 chk("la sonda SABE ver un bloque de «reducir movimiento» (el global de toda la app)",
     any("animation-duration: .001ms !important" in b for b in _bloques), _bloques)
-chk("hay un bloque que quita la animación al aviso flotante: `.st-key-cpx_flash { animation: none !important; }`",
-    any(re.search(r"\.st-key-cpx_flash \{ animation: none !important; \}", b) for b in _bloques), _bloques)
+# v698 · ya no `animation: none` (se quedaba encima hasta la pasada siguiente: visto con la sesión de campo), sino un
+# corte de golpe a los 9 s, sin fundido. Lo que se afirma sigue siendo lo de v696: que NO desaparece al instante.
+chk("hay un bloque de «reducir movimiento» para el aviso flotante que le da 9 s (no los .001 ms globales)",
+    any(re.search(r"\.st-key-cpx_flash \{ animation: cpxFlashFuera 9s steps\(1, end\) forwards !important;", b)
+        and "animation-duration: 9s !important" in b for b in _bloques), _bloques)
 _i_glob = CSS.find("animation-duration: .001ms !important")
-_i_fl = CSS.find(".st-key-cpx_flash { animation: none !important; }")
+_i_fl = CSS.find(".st-key-cpx_flash { animation: cpxFlashFuera 9s steps(1, end) forwards !important;")
 chk("…y va DESPUÉS del global (con los dos `!important`, decide la especificidad, y el orden no estorba)",
     0 < _i_glob < _i_fl, (_i_glob, _i_fl))
 chk("el aviso sigue con su desvanecido para el resto (no se quitó para todos)",

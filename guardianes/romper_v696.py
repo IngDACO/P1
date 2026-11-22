@@ -14,9 +14,10 @@ TOPE_S = 200
 TH = "core/theme.py"
 
 ROTURAS = [
+    # v698 · re-anclada: la regla es ahora el corte a los 9 s (`steps`); quitarla vuelve a los .001 ms globales
     ("⚠️ con «reducir movimiento», el aviso vuelve a desaparecer al instante", TH,
-     [("@media (prefers-reduced-motion: reduce) {{\n  .st-key-cpx_flash {{ animation: none !important; }}\n}}",
-       "")]),
+     [("  .st-key-cpx_flash {{ animation: cpxFlashFuera 9s steps(1, end) forwards !important;\n"
+       "                      animation-duration: 9s !important; }}\n", "")]),
     ("el aviso pierde el desvanecido para todos", TH,
      [("  animation: cpxFlashFuera 9s ease forwards;\n", "  animation: none;\n")]),
 ]
