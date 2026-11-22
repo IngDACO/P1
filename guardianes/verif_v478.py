@@ -56,8 +56,9 @@ _secs = [k for k, _d in H._secciones()]
 (ok if len(_secs) == 6 else fallo)("son 6 secciones, no 8", _secs)
 _sub = H._subsecciones().get("autogestion", ("", []))
 _ids = [i for i, _d in _sub[1]]
-(ok if sorted(_ids) == sorted(["🌴 Ausencias", "🎫 Credenciales", "💰 Colillas"])
- else fallo)("las tres «mias», bajo autogestion", _ids)
+# v691 · CADUCADO «las tres»: y «My equipment» (D3 del usuario, ciclo 5), lo «mío» del campo bajo el mismo nivel
+(ok if sorted(_ids) == sorted(["🌴 Ausencias", "🎫 Credenciales", "💰 Colillas", "🧰 Equipo"])
+ else fallo)("las «mias», bajo autogestion", _ids)
 (ok if "autogestion" in _secs else fallo)("y la seccion existe en su nav")
 # ⚠️ y NINGUNA de las tres sigue suelta como seccion: si quedara, estaria en DOS
 # sitios — el patron de v140 que este cambio viene justo a evitar.

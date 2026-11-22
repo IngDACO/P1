@@ -69,7 +69,8 @@ def celdas_crudas(src):
                 # salia marcado siendo CORRECTO — la sonda midiendo por la
                 # forma en que se escribio la primera vez (v450/v459).
                 # v677 · y `i18n.estado`, que es `etiqueta()` con mayúscula (H1 del ciclo 3)
-                if ("attr='etiqueta'" in dump or "id='_etq'" in dump
+                # v691 · y `_tipo_mov` de inventory_ui, que es `_etq` más los tipos de los avisos del campo (D3)
+                if ("attr='etiqueta'" in dump or "id='_etq'" in dump or "id='_tipo_mov'" in dump
                         or "id='etiqueta'" in dump
                         or "value=Name(id='i18n', ctx=Load()), attr='estado'" in dump):
                     continue          # ya se traduce

@@ -134,7 +134,9 @@ _SUBSECCIONES_CAMPO = {
     "autogestion": ("campo_auto_sub", [
         ("🌴 Ausencias", ":material/event_busy: My absences"),
         ("🎫 Credenciales", ":material/badge: My credentials"),
-        ("💰 Colillas", ":material/payments: My payslips")]),
+        ("💰 Colillas", ":material/payments: My payslips"),
+        # v691 · D3 del usuario: lo que tiene a su cargo y la ficha de un equipo por su QR
+        ("🧰 Equipo", ":material/construction: My equipment")]),
 }
 
 # PROPIETARIO (v298): su nav vieja era Administración · Pre-Start · las 5 técnicas
@@ -1260,15 +1262,42 @@ def _alertas_items(grupo) -> list:
         pass
     try:
         from core import inventory as INV
+        if INV.is_configured() and _es_campo:
+            # v691 · ciclo 5, H12: al CAMPO, la vuelta de lo que tiene a su cargo (2 días antes, o ya pasada)
+            _u0 = str(st.session_state.get("auth", {}).get("usuario", "")).strip()
+            from core.num import dmy as _dmy
+            from core.maps import literal_md as _lmd_eq
+            for a in INV.de_la_persona(grupo, _u0):
+                _fd, _dd = INV.vuelta_de(a)
+                if _fd is None or _dd > 2:
+                    continue
+                _na = _lmd_eq(str(a.get("Name", "")))
+                _txt = (t(":red[:material/construction:] **{a}** — {n} d late to return")
+                        .replace("{a}", _na).replace("{n}", str(-_dd)) if _dd < 0 else
+                        t(":orange[:material/construction:] **{a}** — back by {f}")
+                        .replace("{a}", _na).replace("{f}", _dmy(_fd.isoformat())))
+                out.append({"texto": _txt,
+                            "destino": ("equipo", str(a.get("ID", "")))})
         if INV.is_configured() and not _es_campo:
+            # v691 · D3: lo que el campo dijo de un equipo, para confirmarlo
+            from core import admin_digest as _AD
+            _nm = _AD.nombres_usuarios()
+            for x in INV.avisos_pendientes(grupo)[:8]:
+                _q = _nm.get(x["usuario"], x["usuario"])
+                _que = {"has it": t("says they have it"), "returned": t("says they returned it"),
+                        "problem": t("reports a problem")}.get(x["tipo"], "")
+                from core.maps import literal_md as _lmd_av        # nombres = DATOS
+                out.append({"texto": f":orange[:material/campaign:] **{_lmd_av(x['activo'])}** — {_lmd_av(_q)} {_que}",
+                            "destino": ("activo", x["aid"])})
             for e in INV.alertas(grupo)[:10]:
                 if e["tipo"] == "mantenimiento":
                     _txt = (f":material/build: {e['activo']} — "
                             f":red[{t('maintenance overdue by')} {e['dias']} d]")
                 else:
+                    # v691 · la persona por su NOMBRE (ciclo 5, H10: salía la cuenta)
                     _txt = (f":material/inventory_2: {e['activo']} — "
                             f":red[{t('not returned for')} {e['dias']} d]"
-                            + (f" ({e['usuario']})" if e.get("usuario") else ""))
+                            + (f" ({_nm.get(e['usuario'], e['usuario'])})" if e.get("usuario") else ""))
                 # v599 · al ACTIVO (llevaba a la lista general, con el ID en la mano)
                 out.append({"texto": _txt, "destino": ("activo", e.get("id", ""))})
     except Exception:
@@ -1299,6 +1328,9 @@ def _ir_alerta(destino, grupo):
             _nom = _u
         st.session_state["gp_fichasel"] = f"{_nom} ({_u})"     # pre-selecciona la persona
         navegar("planificacion", "👷 Usuarios")
+    elif destino[0] == "equipo":                  # v691 · al campo, la ficha de SU equipo
+        st.session_state["_equipo_open"] = str(destino[1])
+        navegar("autogestion", "🧰 Equipo")
     elif destino[0] == "cotizacion":              # v689 · H21: a ESA cotización
         st.session_state.pop("_cot_nueva", None)
         st.session_state["_cot_open"] = str(destino[1])
@@ -1395,6 +1427,9 @@ def render_admin_content(key, grupo):
             elif _sub == "💰 Colillas":
                 from core.payroll_ui import render_mis_colillas
                 render_mis_colillas(_usr, grupo)
+            elif _sub == "🧰 Equipo":                # v691 · D3
+                from core.inventory_ui import render_equipo_campo
+                render_equipo_campo(_usr, grupo)
             else:
                 from core import ausencias_ui
                 ausencias_ui.render_mis_ausencias()

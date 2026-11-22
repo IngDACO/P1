@@ -23,8 +23,9 @@ ROTURAS = [
     # (v600 · re-ancladas tres: la baja y la reactivación escriben la CONSTANTE `BAJA` —el dato
     # en inglés; escribían «baja»— y las cifras filtran por `_filtrar`, que es quien baja a la tabla)
     ("⚠️ la baja vuelve a PISAR la nota con el motivo", IN,
-     [('    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA})\n',
-       '    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA,\n'
+     # v691 · re-anclada: la baja suelta además al responsable (D4 del ciclo 5). La misma rotura
+     [('    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA, "AssignedTo": "", "ReturnDate": ""})\n',
+       '    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA, "AssignedTo": "", "ReturnDate": "",\n'
        '                                  "Note": (motivo or "Decommissioned")})\n')]),
     ("⚠️ la edición vuelve a guardar SIN nombre", IN,
      [('    if "Name" in fields and not str(fields.get("Name") or "").strip():\n',
@@ -49,10 +50,13 @@ ROTURAS = [
     ("el alta vuelve a ofrecer obra/persona en texto libre", IN,
      [('UBIC_TIPOS_ALTA = ["warehouse", REPARACION]\n', "UBIC_TIPOS_ALTA = UBIC_TIPOS\n")]),
     ("reactivar vuelve a no dejar movimiento", IN,
-     [('        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", BAJA, ubic_str(a),\n'
-       '                 "", "", "", creado_por=creado_por)\n', "        pass\n")]),
+     # v691 · re-anclada: vuelve a un almacén (H11 del ciclo 5). La misma rotura
+     [('        _log_mov(_g, aid, "reactivated", BAJA, f"warehouse: {_bod}", "", "", "", creado_por=creado_por)\n',
+       "        pass\n")]),
     ("…o a decir «Asset updated.»", IN,
-     [('        return True, t("Asset reactivated.")\n', '        return True, t("Asset updated.")\n')]),
+     # v691 · re-anclada: dice además a qué almacén vuelve. La misma rotura
+     [('        return True, t("Asset reactivated: back in the store ({b}).", b=_bod)\n',
+       '        return True, t("Asset updated.")\n')]),
     # ── la lista ──
     ("«Service overdue» deja de filtrar", IU,
      [('"uso": INV.EN_USO, "mant": _FILTRO_MANT}[_s]', '"uso": INV.EN_USO, "mant": "Todos"}[_s]')]),
@@ -88,12 +92,15 @@ ROTURAS = [
     ("…o el alta", IU,
      [('    with st.form(f"inv_reg_{_g}", enter_to_submit=False):\n', '    with st.form(f"inv_reg_{_g}"):\n')]),
     ("⚠️ la baja vuelve SIN confirmación", IU,
-     [('key=f"inv_baja_{aid}", disabled=not _conf):', 'key=f"inv_baja_{aid}", disabled=False):')]),
+     # v691 · re-anclada: el botón espera además el motivo (D4). La misma rotura: sin confirmación
+     [('key=f"inv_baja_{aid}", disabled=not (_conf and _mk)):', 'key=f"inv_baja_{aid}", disabled=not _mk):')]),
     ("…o sin aviso", IU,
      [("                    flash.exito(msg)\n                    st.session_state.pop(\"_inv_open\", None)\n",
        "                    st.session_state.pop(\"_inv_open\", None)\n")]),
     ("…o la ficha de baja sin su motivo", IU,
-     [('                   + (" " + t("Reason: {x}", x=_mot) if _mot else ""))\n', "                   )\n")]),
+     # v691 · re-anclada: el motivo se traduce y se escapa. La misma rotura
+     [('                   + (" " + t("Reason: {x}", x=literal_md(_motivo_baja_txt(_mk) + (f" — {_mn}" if _mn else "")))\n'
+       '                      if _mot else ""))\n', "                   )\n")]),
     ("⚠️ el alta deja de avisar de los repetidos", IU,
      [("        if _dups and not st.session_state.get(_k_dup(nombre, serie)):\n", "        if False:\n")]),
     ("…o deja de decir que registró", IU,

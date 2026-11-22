@@ -50,8 +50,9 @@ ROTURAS = [
      [('        _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), BAJA,\n',
        '        _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), "baja",\n')]),
     ("…la reactivación también", IN,
-     [('        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", BAJA, ubic_str(a),\n',
-       '        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", "baja", ubic_str(a),\n')]),
+     # v691 · re-anclada: la reactivación vuelve a un almacén (H11 del ciclo 5). La misma rotura
+     [('        _log_mov(_g, aid, "reactivated", BAJA, f"warehouse: {_bod}", "", "", "", creado_por=creado_por)\n',
+       '        _log_mov(_g, aid, "reactivated", "baja", f"warehouse: {_bod}", "", "", "", creado_por=creado_por)\n')]),
     ("⚠️ la devolución vuelve a escribir «bodega: …»", IN,
      [('(f"warehouse: {bodega}" if bodega else "warehouse")', '(f"bodega: {bodega}" if bodega else "bodega")')]),
     ("⚠️ un 2º toque de salida vuelve a valer", IN,

@@ -73,7 +73,8 @@ ROTURAS = [
      [("                        index=None if fichas else 0, placeholder=",
        "                        index=len(_map) if not fichas else 0, placeholder=")]),
     ("el PDF sin razón social no avisa", QU,
-     [('        if not str(_CB.identidad(grupo).get("legal") or "").strip():', "        if False:")]),
+     # v691 · re-anclada: pregunta a `tiene_razon_social` (lo visto verificando v689). La misma rotura
+     [("        if not _CB.tiene_razon_social(grupo):", "        if False:")]),
     ("⚠️ la campana no avisa de las cotizaciones", HU,
      [("            for _q in _QT.seguimiento(grupo)[:8]:", "            for _q in []:")]),
     ("la alerta de una cotización no lleva a ella", HU,

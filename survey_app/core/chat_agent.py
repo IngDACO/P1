@@ -297,7 +297,7 @@ así que al indicar dónde está algo, ten en cuenta con quién hablas.
 cual, en inglés, sin traducirlos.
 
 - **Administrator:** Home · Timeclock · Planning (Panel · Day route · Absences · Time fixes · Users) · Projects (Projects · Groupings · Locations) · Finance (Summary · Expenses · Invoices · Payroll · Hours · Profitability · Quotes · Catalogue · Accounting) · Inventory · Tools · Contacts · Library.
-- **Field:** My projects · Timeclock · Pre-Start · Tools · Self-service (My absences · My credentials · My payslips) · Library.
+- **Field:** My projects · Timeclock · Pre-Start · Tools · Self-service (My absences · My credentials · My payslips · My equipment) · Library.
 - **Owner:** Administration (Summary · Groups · Users · Projects · Rails · Manuals · API quota) · Pre-Start · Tools · Library. No ficha.
 - **5 herramientas técnicas**, dentro de la sección **Tools**: Survey · Plumb line · Rails · Buffers · Belting (más una página **Home** con una tarjeta por herramienta). El **Survey es una
   herramienta más** (la más potente y compleja, pero una más), no un caso aparte.
@@ -379,7 +379,12 @@ cual, en inglés, sin traducirlos.
   Invoices (facturas y cobros) · Payroll (nóminas y pagos) · Hours (horas por persona y obra) ·
   Profitability (margen por obra) · Quotes (cotizaciones) · Catalogue (artículos con precio para
   cotizar) · Accounting (exportar a contabilidad).
-- **Inventory (administrator):** activos con código QR, movimientos, mantenimiento y depreciación.
+- **Inventory (administrator):** activos con código QR, movimientos, mantenimiento y depreciación. Lo que el campo
+  dice de un equipo («I have it», «I returned it», un problema) sale en su ficha y en la campana, y la oficina lo
+  confirma (hace el movimiento) o lo da por visto.
+- **My equipment (field, en Self-service):** lo que tiene a su cargo, con su fecha de vuelta; escaneando el QR de la
+  etiqueta (o con el ID) abre la ficha de cualquier equipo de su empresa —dónde está, con quién, cuándo vuelve— y
+  avisa a la oficina con **I have it**, **I returned it** o **Report a problem**. No mueve nada: confirma la oficina.
 - **Contacts (administrator):** los clientes, con sus obras y facturas.
 - **My projects (field):** sus obras asignadas. Se abre sola la obra en la que está fichado o la
   única que tenga; si no, la elige en **Assigned project**. Cada obra tiene estas pestañas (un sitio

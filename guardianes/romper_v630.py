@@ -17,9 +17,13 @@ H = "core/home_ui.py"
 ROTURAS = [
     # ── El menú de la guía ──
     ("⚠️ vuelve «Mis colillas»", C,
-     [("My credentials · My payslips) · Library.\n", "My credentials · Mis colillas) · Library.\n")]),
+     # v691 · re-anclada: Self-service tiene además «My equipment» (D3 del ciclo 5). La misma rotura
+     [("My credentials · My payslips · My equipment) · Library.\n",
+       "My credentials · Mis colillas · My equipment) · Library.\n")]),
     ("⚠️ el campo deja de tener Library", C,
-     [("My credentials · My payslips) · Library.\n", "My credentials · My payslips).\n")]),
+     # v691 · re-anclada (ídem)
+     [("My credentials · My payslips · My equipment) · Library.\n",
+       "My credentials · My payslips · My equipment).\n")]),
     ("a la oficina le falta Accounting", C,
      [("· Quotes · Catalogue · Accounting) · Inventory", "· Quotes · Catalogue) · Inventory")]),
     ("al propietario le falta API quota", C,

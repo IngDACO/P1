@@ -36,8 +36,9 @@ ROTURAS = [
     ("i18n.py", '"bodega": "warehouse", "usuario": "user", "reparacion": "under repair",',
      "", "'bodega' fuera del mapa", True),
     # la peor: traducir DENTRO de ubic_str -> el historial guardaria ingles
-    ("inventory.py", "def ubic_str(a: dict, etq=None) -> str:",
-     "def ubic_str(a: dict, etq=__import__('core.i18n', fromlist=['x']).etiqueta) -> str:",
+    # v691 · re-anclada: la firma lleva además `nombres` (la persona por su nombre, H10 del ciclo 5). La misma rotura
+    ("inventory.py", "def ubic_str(a: dict, etq=None, nombres=None) -> str:",
+     "def ubic_str(a: dict, etq=__import__('core.i18n', fromlist=['x']).etiqueta, nombres=None) -> str:",
      "ubic_str traduce por defecto (metería ingles en la HOJA)", True),
     # v582 · re-anclada: la celda pasa por `_uni_txt` (el servicio sin unidad)
     ("catalogo_ui.py", '"Unidad": _uni_txt(i),',

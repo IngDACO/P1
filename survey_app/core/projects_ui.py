@@ -3241,6 +3241,7 @@ def _estado_section(pid: str, grupo: str, prj: dict):
         _alerts_section(pid, grupo, prj.get("Name", ""), allow_report=False)
         st.markdown("")
         _equipo_proyecto(pid, grupo)
+        _equipos_en_obra(pid, grupo)                 # v691 · ciclo 5, H12
 
     # ── Cumplimiento de certificados del equipo (si el proyecto exige alguno) ──
     _cumplimiento_equipo(pid, grupo, prj)
@@ -4529,6 +4530,56 @@ def _ir_avance_campo():
     st.session_state["cpxseg_fld_sec"] = "🏗 Avance"
 
 
+def _equipos_de_la_obra(grupo, pid) -> list:
+    try:
+        from core import inventory as _INV
+        return _INV.en_obra(grupo, pid) if _INV.is_configured() else []
+    except Exception as e:
+        logger.warning("projects_ui: los equipos de %s no se pudieron leer: %s", pid, e)
+        return []
+
+
+def _equipos_en_obra(pid, grupo) -> None:
+    """Los equipos que están en la obra, con su responsable y su vuelta; cada uno abre su ficha de Inventory (v691,
+    ciclo 5 H12: con el polipasto en PRJ-0045, la obra no decía nada; solo la lista de cierre los contaba)."""
+    _eq = _equipos_de_la_obra(grupo, pid)
+    if not _eq:
+        return
+    from core import inventory as _INV
+    st.markdown(t("**:material/construction: Equipment on site**"))
+    _nm = _etq_us([str(a.get("AssignedTo", "")) for a in _eq if str(a.get("AssignedTo", "")).strip()])
+    for a in sorted(_eq, key=lambda x: str(x.get("Name", "")).lower()):
+        _fd, _dd = _INV.vuelta_de(a)
+        _q = _nm.get(str(a.get("AssignedTo", "")), str(a.get("AssignedTo", "")))
+        _l = (f"{maps.literal_md(a.get('Name', ''))} · {a.get('ID', '')} · "
+              + (maps.literal_md(_q) if _q else t("nobody responsible"))
+              + (" · " + (t("{n} d late", n=-_dd) if _dd < 0 else t("back by {f}", f=_fd.strftime("%d/%m/%Y")))
+                 if _fd else ""))
+        if _dd is not None and _dd < 0:
+            _l = f":red[{_l}]"
+        if st.button(":material/inventory_2: " + _l, key=f"prj_eq_{pid}_{a.get('ID', '')}", type="tertiary"):
+            from core import home_ui
+            st.session_state.pop("_inv_nuevo", None)
+            st.session_state["_inv_open"] = str(a.get("ID", ""))
+            home_ui.navegar("inventario", None)
+
+
+def _equipos_en_obra_campo(prj, grupo, usuario) -> None:
+    """Lo mismo para el CAMPO, en una línea y de solo lectura: qué equipos hay en su obra y cuáles tiene él (v691)."""
+    _eq = [] if P.es_interno(prj) else _equipos_de_la_obra(grupo, str(prj.get("ID", "")))
+    if not _eq:
+        return
+    from core import inventory as _INV
+    _p = []
+    for a in sorted(_eq, key=lambda x: str(x.get("Name", "")).lower()):
+        _s = maps.literal_md(a.get("Name", ""))
+        if str(a.get("AssignedTo", "")).strip() == str(usuario):
+            _fd, _ = _INV.vuelta_de(a)
+            _s += " (" + t("with you") + (", " + t("back by {f}", f=_fd.strftime("%d/%m/%Y")) if _fd else "") + ")"
+        _p.append(_s)
+    st.caption(":material/construction: " + t("Equipment on site: {x}", x=" · ".join(_p)))
+
+
 def _contacto_cliente_campo(prj) -> None:
     """La persona de contacto del cliente y su teléfono (con «call»), de su ficha en Contacts (v690, D2 del usuario:
     el campo veía solo el nombre del cliente). Solo por el `ClientID` de la obra: sin ficha enlazada no se adivina."""
@@ -4708,6 +4759,7 @@ def render_field_projects(usuario: str, grupo: str):
     if _linea:
         st.caption("  ·  ".join(_linea))
     _contacto_cliente_campo(prj)                     # v690 · D2 del usuario (ciclo 5, H23)
+    _equipos_en_obra_campo(prj, grupo, usuario)      # v691 · ciclo 5, H12
 
     # ── Sub-navegación (radio, NO st.tabs — regla v56; como el detalle del admin) ──
     # ⚠️ v423: una localización interna NO tiene actividades, así que «Avance» sería una

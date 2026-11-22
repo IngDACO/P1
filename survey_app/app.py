@@ -166,17 +166,22 @@ _estado_vivo.pasada()
 
 
 # Deep-link del QR del inventario: escanear `…?activo=ACT-####` abre esa ficha.
-# Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Solo
-# el administrador tiene 📦 Inventario (nueva shell). Guard para no re-disparar.
-if _ROL == "administrator":
+# Debe correr ANTES del sidebar (sidebar_menu aplica `_admin_nav_pending`). Guard para no re-disparar.
+# v691 · D3 del usuario (ciclo 5, H15): el CAMPO también — abre la ficha de solo lectura en «My equipment»
+# (Self-service), con «I have it / I returned it» (antes, escanear la etiqueta no hacía nada).
+if _ROL in ("administrator", "field"):
     try:
         _scan = st.query_params.get("activo")
     except Exception:
         _scan = None
     if _scan and st.session_state.get("_scan_handled") != _scan:
         st.session_state["_scan_handled"] = _scan
-        st.session_state["_admin_nav_pending"] = ("inventario", None)
-        st.session_state["_inv_open"] = str(_scan)
+        if _ROL == "administrator":
+            st.session_state["_admin_nav_pending"] = ("inventario", None)
+            st.session_state["_inv_open"] = str(_scan)
+        else:
+            st.session_state["_admin_nav_pending"] = ("autogestion", "🧰 Equipo")
+            st.session_state["_equipo_open"] = str(_scan).strip().upper()
         try:
             st.query_params.clear()
         except Exception:

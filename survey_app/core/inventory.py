@@ -156,7 +156,24 @@ def add_categoria(grupo: str, nombre: str) -> tuple:
     return True, t("Category added.")
 
 
-def del_categoria(grupo: str, nombre: str) -> tuple:
+def en_uso_categoria(grupo: str, nombre: str) -> list:
+    """Los activos (de baja incluidos) con esa categoría (v691, ciclo 5 H14)."""
+    return [a for a in list_activos(grupo, incluir_baja=True)
+            if str(a.get("Category", "")).strip() == str(nombre).strip()]
+
+
+def del_categoria(grupo: str, nombre: str, mover_a: str = "") -> tuple:
+    """Quita una categoría PROPIA. ⚠️ v691 · si algún activo la tiene, primero se pasan a `mover_a` (otra que
+    exista); sin ella, se niega. Ciclo 5 (H14): «Category deleted.» y ACT-0006 se quedaba con una categoría que el
+    filtro ya no ofrecía."""
+    _uso = en_uso_categoria(grupo, nombre)
+    if _uso:
+        if not mover_a or mover_a == nombre or mover_a not in categorias(grupo):
+            return False, t("{n} asset(s) use it: choose the category to move them to.", n=len(_uso))
+        for a in _uso:
+            ok, msg = update_activo(str(a.get("ID", "")), {"Category": mover_a})
+            if not ok:
+                return False, msg
     w, err = _ws(CAT_SHEET)
     if err:
         return False, err
@@ -310,7 +327,17 @@ def update_activo(aid: str, fields: dict) -> tuple:
     return True, t("Asset updated.")
 
 
+# v691 · por qué se da de baja (D4 del usuario, ciclo 5 H11): la CLAVE se guarda y la pantalla la traduce
+MOTIVOS_BAJA = ("lost", "broken beyond repair", "stolen", "sold", "other")
+
+
 def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "") -> tuple:
+    """La baja. ⚠️ v691 · D4 del usuario (ciclo 5, H11): con MOTIVO obligatorio (salía sin él) y, si estaba fuera,
+    suelta al responsable y la fecha de vuelta: ACT-0006, prestado a campo000, quedaba de baja con «Assigned to …
+    due back 25/11» y, reactivado, «disponible» y en manos de alguien a la vez. Lo perdido en obra no se puede
+    devolver, así que se permite dar de baja lo que está fuera, diciendo quién lo tenía (el movimiento lo guarda)."""
+    if not str(motivo or "").strip():
+        return False, t("Give the reason for the write-off.")
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
@@ -318,28 +345,32 @@ def dar_de_baja(aid: str, grupo: str = "", motivo: str = "", creado_por: str = "
         return False, t("This asset is already written off.")       # v600 · un 2º toque
     # ⚠️ v599 · SIN tocar la nota: el motivo la pisaba («Prueba de inventario…» pasó a ser el
     # motivo, visto en producción) y ya queda en el historial, de donde lo lee la ficha.
-    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA})
+    ok, msg = update_activo(aid, {"Active": "NO", "Status": BAJA, "AssignedTo": "", "ReturnDate": ""})
     if ok:
         # ⚠️ v600 · el destino en INGLÉS, el dato canónico (escribía «baja»)
         _log_mov(grupo or str(a.get("Group", "")), aid, "written off", ubic_str(a), BAJA,
-                 "", "", motivo, creado_por=creado_por)
+                 str(a.get("AssignedTo", "") or ""), "", motivo, creado_por=creado_por)
         return True, t("Asset written off.")
     return ok, msg
 
 
-def reactivar(aid: str, grupo: str = "", creado_por: str = "") -> tuple:
+def reactivar(aid: str, grupo: str = "", creado_por: str = "", bodega: str = "") -> tuple:
     """v599 · La vuelta de la baja, con su movimiento (decía «Asset updated.» y el historial
-    no contaba que el activo volvió)."""
+    no contaba que el activo volvió).
+    ⚠️ v691 · vuelve DISPONIBLE al ALMACÉN (el sitio de donde salió, o el que se diga) y sin responsable: volvía
+    «available» con «Location: User: campo000» y «Assigned to …» (ciclo 5, H11)."""
     a = get_activo(aid)
     if not a:
         return False, t("Asset not found.")
     if str(a.get("Status", "")) != BAJA:
         return False, t("This asset is not written off.")             # v600 · un 2º toque
-    ok, msg = update_activo(aid, {"Active": "SI", "Status": DISPONIBLE})
+    _g = grupo or str(a.get("Group", ""))
+    _bod = str(bodega or "").strip() or ultima_bodega(_g, aid) or "Store"
+    ok, msg = update_activo(aid, {"Active": "SI", "Status": DISPONIBLE, "LocationType": "warehouse",
+                                  "LocationRef": _bod, "AssignedTo": "", "ReturnDate": ""})
     if ok:
-        _log_mov(grupo or str(a.get("Group", "")), aid, "reactivated", BAJA, ubic_str(a),
-                 "", "", "", creado_por=creado_por)
-        return True, t("Asset reactivated.")
+        _log_mov(_g, aid, "reactivated", BAJA, f"warehouse: {_bod}", "", "", "", creado_por=creado_por)
+        return True, t("Asset reactivated: back in the store ({b}).", b=_bod)
     return ok, msg
 
 
@@ -437,7 +468,7 @@ def ubic_ref_label(ref: str) -> str:
         return ref
 
 
-def ubic_texto(txt, etq=None) -> str:
+def ubic_texto(txt, etq=None, nombres=None) -> str:
     """Traduce un texto de ubicacion YA COMPUESTO (`"warehouse: Store"`).
 
     ⚠️ Es SOLO para pantalla. El historial de movimientos guarda ese texto ya
@@ -452,10 +483,13 @@ def ubic_texto(txt, etq=None) -> str:
     if not etq or ": " not in _t:
         return etq(_t) if (etq and _t) else _t
     _pre, _resto = _t.split(": ", 1)
+    # v691 · una PERSONA por su nombre (`nombres`: {cuenta: «Nombre (cuenta)»}), no la cuenta (ciclo 5, H10)
+    if nombres and _pre.strip() == "user":
+        _resto = nombres.get(_resto.strip(), _resto)
     return "%s: %s" % (etq(_pre), _resto)
 
 
-def ubic_str(a: dict, etq=None) -> str:
+def ubic_str(a: dict, etq=None, nombres=None) -> str:
     """Ubicación legible.
 
     ⚠️ `etq` (un traductor) es SOLO para pantalla y va por parámetro a propósito: las
@@ -463,10 +497,12 @@ def ubic_str(a: dict, etq=None) -> str:
     y traducirlo metería inglés en el dato — el fallo que casi se cuela en v452. Así
     la composición sigue teniendo UNA definición (v306) sin arriesgar la escritura.
     """
-    _tp = str(a.get("LocationType", "") or "")
-    if etq:
-        _tp = etq(_tp)
+    _tp0 = str(a.get("LocationType", "") or "")
+    _tp = etq(_tp0) if etq else _tp0
     ref = ubic_ref_label(a.get("LocationRef", ""))
+    # v691 · una PERSONA por su nombre, solo para pantalla (`nombres` no lo pasa nadie que escriba: v452)
+    if nombres and _tp0 == "user" and ref:
+        ref = nombres.get(ref, ref)
     return f"{_tp}: {ref}" if ref else (_tp or "—")
 
 
@@ -648,6 +684,120 @@ def mantenimiento(aid, grupo, costo="", proximo="", nota="", en_mant=False, crea
             return ok, msg
     _log_mov(grupo, aid, "maintenance", ubic_str(a), ubic_str(a), "", costo, nota, creado_por=creado_por)
     return True, t("Maintenance recorded.")
+
+
+# ── v691 · Lo que el CAMPO dice de un equipo (D3 del usuario, ciclo 5 H15) ──────────────────
+# El campo, al escanear el QR, dice «lo tengo yo», «lo devolví» o «tiene un problema»; la OFICINA lo confirma
+# (hace el movimiento de verdad) o lo da por visto. Van al historial como movimientos (sin hoja nueva): un aviso
+# queda PENDIENTE hasta que un movimiento real lo cierra (`CIERRAN`) o la oficina lo da por visto (`VISTO`, con el
+# ID del aviso en la nota).
+AVISOS_CAMPO = ("has it", "returned", "problem")
+VISTO = "office: seen"
+CIERRAN = {"has it": ("check-out", "check-in", "transfer", "written off"),
+           "returned": ("check-out", "check-in", "transfer", "written off"),
+           "problem": ("maintenance", "written off")}
+
+
+def _movs_orden(movs) -> list:
+    return sorted(movs, key=lambda m: (str(m.get("Created", "")), str(m.get("ID", ""))))
+
+
+def avisos_pendientes(grupo: str, aid: str = None) -> list:
+    """[{id (del movimiento), aid, activo, usuario, tipo, nota, fecha}] de los avisos del campo sin cerrar."""
+    _act = {str(a.get("ID", "")): a for a in list_activos(grupo, incluir_baja=True)}
+    _por = {}
+    for m in list_movimientos(grupo, aid):
+        _por.setdefault(str(m.get("AssetID", "")), []).append(m)
+    out = []
+    for _aid, movs in _por.items():
+        movs = _movs_orden(movs)
+        _vistos = {str(m.get("Note", "")).strip() for m in movs if str(m.get("Type", "")) == VISTO}
+        for i, m in enumerate(movs):
+            _tp = str(m.get("Type", ""))
+            if not _tp.startswith("field: "):
+                continue
+            _k = _tp[len("field: "):]
+            if str(m.get("ID", "")) in _vistos:
+                continue
+            if any(str(x.get("Type", "")) in CIERRAN.get(_k, ()) for x in movs[i + 1:]):
+                continue
+            out.append({"id": str(m.get("ID", "")), "aid": _aid,
+                        "activo": str((_act.get(_aid) or {}).get("Name", "") or _aid),
+                        "usuario": str(m.get("User", "")), "tipo": _k, "nota": str(m.get("Note", "") or ""),
+                        "fecha": str(m.get("Created", "") or m.get("Date", ""))})
+    return sorted(out, key=lambda x: x["fecha"])
+
+
+def avisar_desde_campo(aid, grupo, usuario, tipo, nota="") -> tuple:
+    """El campo dice algo de un equipo (D3). Solo apunta: la oficina decide. «problem» necesita la nota."""
+    if tipo not in AVISOS_CAMPO:
+        return False, f"{t('Invalid notice')}: {tipo}."
+    a = get_activo(aid)
+    if not a or str(a.get("Group", "")) != str(grupo):
+        return False, t("Asset not found.")
+    if tipo == "problem" and not str(nota or "").strip():
+        return False, t("Say what the problem is.")
+    if any(x["usuario"] == str(usuario) and x["tipo"] == tipo for x in avisos_pendientes(grupo, aid)):
+        return False, t("You already told the office: it is waiting for them to confirm.")
+    _log_mov(grupo, aid, f"field: {tipo}", ubic_str(a), "", usuario, "", str(nota or "").strip(), creado_por=usuario)
+    return True, {"has it": t("Sent: the office will confirm that you have it."),
+                  "returned": t("Sent: the office will confirm that it is back."),
+                  "problem": t("Sent: the office has your note about the problem.")}[tipo]
+
+
+def dar_por_visto(aid, grupo, aviso_id, creado_por="") -> tuple:
+    """La oficina da un aviso del campo por visto sin hacer el movimiento (v691)."""
+    if not any(x["id"] == str(aviso_id) for x in avisos_pendientes(grupo, aid)):
+        return False, t("That notice is no longer pending.")
+    _a = get_activo(aid) or {}
+    _log_mov(grupo, aid, VISTO, ubic_str(_a), "", "", "", str(aviso_id), creado_por=creado_por)
+    return True, t("Notice dismissed.")
+
+
+def pasar_a(aid, grupo, usuario, creado_por="") -> tuple:
+    """La oficina confirma que `usuario` tiene el equipo (D3, «lo tengo yo»): disponible → sale a su nombre; en uso →
+    pasa a su CUSTODIA (en una obra, sigue en la obra; con otra persona, pasa a la suya)."""
+    a = get_activo(aid)
+    if not a:
+        return False, t("Asset not found.")
+    _st = str(a.get("Status", ""))
+    if _st == DISPONIBLE:
+        return salida(aid, grupo, usuario=usuario, hacia_tipo="user", hacia_ref=usuario, creado_por=creado_por)
+    if _st != "in use":
+        return False, t("It is {e}: check it in or reactivate it first.", e=etiqueta(_st))
+    if str(a.get("AssignedTo", "")) == str(usuario):
+        return False, t("It is already with that person.")
+    desde = ubic_str(a)
+    _c = {"AssignedTo": usuario}
+    if str(a.get("LocationType", "")) == "user":
+        _c.update({"LocationRef": usuario})
+    ok, msg = update_activo(aid, _c)
+    if not ok:
+        return ok, msg
+    _hacia = f"user: {usuario}" if "LocationRef" in _c else desde
+    _log_mov(grupo, aid, "transfer", desde, _hacia, usuario, "", "custody", creado_por=creado_por)   # dato: sin t()
+    return True, t("Recorded: the asset is now with that person.")
+
+
+def de_la_persona(grupo, usuario) -> list:
+    """Los equipos que tiene una persona (responsable o a su nombre), activos (v691)."""
+    u = str(usuario or "").strip()
+    return [a for a in list_activos(grupo) if u and (str(a.get("AssignedTo", "")).strip() == u or
+            (str(a.get("LocationType", "")) == "user" and str(a.get("LocationRef", "")).strip() == u))]
+
+
+def en_obra(grupo, pid) -> list:
+    """Los equipos que están en una obra (v691, ciclo 5 H12)."""
+    return [a for a in list_activos(grupo) if str(a.get("LocationType", "")).strip().lower() == "project"
+            and str(a.get("LocationRef", "")).strip() == str(pid)]
+
+
+def vuelta_de(a, hoy=None) -> tuple:
+    """`(fecha de vuelta | None, días que faltan; negativo = vencida)` (v691)."""
+    fd = _parse_date((a or {}).get("ReturnDate"))
+    if not fd:
+        return None, None
+    return fd, (fd - (hoy or clock.today())).days
 
 
 # ── QR ───────────────────────────────────────────────────────────

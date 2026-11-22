@@ -213,7 +213,10 @@ Q.guardar_lineas = lambda *a, **k: (_LLAM.append(("guardar",) + a), (True, "Quot
 P.get_project = lambda pid: {"ID": pid, "Name": "Obra " + pid} if pid in ("PRJ-A", "PRJ-B") else {}
 C.list_clientes = lambda *a, **k: [{"ID": "CLI-1", "Name": "C5 — Bayview", "Group": "G"},
                                    {"ID": "CLI-2", "Name": "Meridian", "Group": "G"}]
-contable.identidad = lambda g: {"legal": st.session_state.get("_LEGAL", ""), "abn": ""}
+contable.identidad = lambda g: {"legal": st.session_state.get("_LEGAL", "") or g, "abn": ""}
+# ⚠️ v691 · CADUCADO el sustituto de `identidad` con «legal» vacío: la de verdad cae al nombre del grupo, y por eso el
+# aviso no salió nunca en producción (este guardián lo daba por bueno). La pantalla pregunta a `tiene_razon_social`.
+contable.tiene_razon_social = lambda g: bool(st.session_state.get("_LEGAL", ""))
 quote_pdf.generate_quote_pdf = lambda *a, **k: b"%PDF-1.4"
 CAT.list_items = lambda *a, **k: []
 auth.group_tax_default = lambda g: 10.0

@@ -61,6 +61,9 @@ _ALCANZABLE = set(_secs) | {i for _k, (_c, _its) in H._subsecciones().items()
                             for i, _d in _its}
 _ALIAS = {"credenciales": "🎫 Credenciales", "colillas": "💰 Colillas",
           "ausencias": "🌴 Ausencias"}
+# v691 · CADUCADO «las tres»: Self-service del campo tiene además «My equipment» (D3 del usuario, ciclo 5). El
+# principio sigue: lo «mío» del campo, junto bajo un solo nivel.
+_MIAS = sorted(list(_ALIAS.values()) + ["🧰 Equipo"])
 check("el campo sigue LLEGANDO a todo lo que tenia (seccion o sub-seccion)",
       [x for x in _VIEJAS
        if x not in _ALCANZABLE and _ALIAS.get(x) not in _ALCANZABLE], [])
@@ -69,9 +72,9 @@ check("el campo sigue LLEGANDO a todo lo que tenia (seccion o sub-seccion)",
 _SIGUEN = [x for x in _VIEJAS if x in _secs]
 check("...y lo que sigue siendo seccion no se reordena",
       _secs[:len(_SIGUEN)], _SIGUEN)
-check("las tres «mias» estan juntas bajo un solo nivel (v478)",
+check("las «mias» estan juntas bajo un solo nivel (v478; y «My equipment», v691)",
       sorted(i for i, _d in H._subsecciones().get("autogestion", ("", []))[1]),
-      sorted(_ALIAS.values()))
+      _MIAS)
 # su nav VIEJA (app.py): Mis proyectos · Fichaje · Pre-Start · 5 tecnicas · Mis cred · Mis colillas
 _herr = [i for i, _ in H._subsecciones()["herramientas"][1]]
 check("Herramientas = Inicio + las 5 TECNICAS", _herr,

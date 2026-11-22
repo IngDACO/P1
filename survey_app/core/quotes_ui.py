@@ -805,7 +805,8 @@ def _detalle(grupo, cid):
     # v689 · H5: sin razón social el PDF sale con el identificador interno de la empresa (como avisa la factura, v672)
     try:
         from core import contable as _CB
-        if not str(_CB.identidad(grupo).get("legal") or "").strip():
+        # ⚠️ v691 · `tiene_razon_social`: `identidad()["legal"]` cae al nombre del grupo y el aviso no salía nunca
+        if not _CB.tiene_razon_social(grupo):
             st.caption(t(":material/warning: This PDF shows «{g}» as the issuer: the company has no legal name yet. "
                          "The account owner sets it in Administration → Groups → «Tax identity and payment terms».",
                          g=str(grupo)))

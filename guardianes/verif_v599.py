@@ -241,6 +241,9 @@ chk("…y de vuelta del taller, disponible", _a1["Status"] == "available", _a1["
 
 print("\n5. ⚠️ La edición: muestra LO GUARDADO (no deshace el mantenimiento), sin nombre no guarda")
 _fs = [f for f in ast.walk(_ru) if isinstance(f, ast.Call) and ast.unparse(f.func) == "st.form"]
+# v691 · CADUCADO «los 2»: hay un tercero, el buscador por ID del campo, de UN campo (con Enter, regla v617). El
+# principio sigue: los de varios campos (la edición y el alta) no se envían con Enter.
+_fs = [f for f in _fs if any(x in ast.unparse(f) for x in ("inv_edit_", "inv_reg_"))]
 chk("los formularios NO se envían con Enter (enviaban el alta a medias)",
     len(_fs) == 2 and all(any(k.arg == "enter_to_submit" and ast.unparse(k.value) == "False" for k in f.keywords)
                           for f in _fs), [ast.unparse(f) for f in _fs])
@@ -271,6 +274,8 @@ print("\n6. ⚠️ La baja: con confirmación, con aviso, SIN pisar la nota; la 
 at = AppTest.from_string(G, default_timeout=300)
 at.session_state["_inv_open"] = "ACT-1"
 at.run()
+# v691 · la baja pide el MOTIVO (D4 del usuario, ciclo 5): «Broken beyond repair» + la nota «roto»
+next(s for s in at.selectbox if s.key == "inv_baja_mk_ACT-1").set_value("broken beyond repair").run()
 next(t_ for t_ in at.text_input if t_.key == "inv_baja_mot_ACT-1").set_value("roto").run()
 chk("sin la casilla, el botón está DESACTIVADO", _btn(at, "inv_baja_ACT-1").disabled is True)
 next(c for c in at.checkbox if c.key == "inv_baja_conf_ACT-1").check().run()
@@ -279,19 +284,22 @@ at.run()
 _a1 = next(a for a in _ss(at, "_A") if a["ID"] == "ACT-1")
 _m = [m for m in _ss(at, "_MOV") if m["Type"] == "written off"]
 chk("⚠️ la NOTA se conserva («nota original»; el motivo la pisaba) y el motivo va al historial",
-    _a1["Note"] == "nota original" and _m and _m[-1]["Note"] == "roto", (_a1["Note"], _m))
+    _a1["Note"] == "nota original" and _m and _m[-1]["Note"] == "broken beyond repair — roto", (_a1["Note"], _m))
 chk("…y «Asset written off.» A LA VISTA (no decía nada)",
     "Asset written off." in " ".join(str(x.value) for x in at.success), [x.value for x in at.success])
 at.session_state["_inv_open"] = "ACT-1"
 at.run()
-chk("la ficha de baja dice su MOTIVO («Reason: roto»)", "Reason: roto" in _txt(at), _txt(at)[:300])
+chk("la ficha de baja dice su MOTIVO («Reason: Broken beyond repair — roto»)",
+    "Reason: Broken beyond repair — roto" in _txt(at), _txt(at)[:300])
 _btn(at, "inv_react_ACT-1").click()
 at.run()
 _a1 = next(a for a in _ss(at, "_A") if a["ID"] == "ACT-1")
 chk("reactivar: «Asset reactivated.» y su movimiento en el historial",
     _a1["Status"] == "available" and _a1["Active"] == "SI"
     and any(m["Type"] == "reactivated" for m in _ss(at, "_MOV"))
-    and "Asset reactivated." in " ".join(str(x.value) for x in at.success), [x.value for x in at.success])
+    # v691 · y dice a qué almacén vuelve («Asset reactivated: back in the store (…)», H11 del ciclo 5)
+    and "Asset reactivated: back in the store" in " ".join(str(x.value) for x in at.success),
+    [x.value for x in at.success])
 
 print("\n7. ⚠️ El alta: sin Enter, avisa de nombre o serie REPETIDOS, con mensaje")
 at = AppTest.from_string(G, default_timeout=300)
@@ -301,6 +309,8 @@ _ut = next(s for s in at.selectbox if s.label == "Location (type)")
 chk("nace en el almacén o en reparación (a una obra, con la salida)",
     list(_ut.options) == ["Warehouse", "Under repair"], list(_ut.options))   # v667 · con mayúscula (H17)
 next(t_ for t_ in at.text_input if t_.label == "Asset name *").set_value("taladro ")
+# v691 · la categoría ya no viene elegida (H8 del ciclo 5): se elige, en la MISMA pasada que el envío (trampa 58)
+next(s for s in at.selectbox if s.label == "Category *").set_value("Tool")
 next(b for b in at.button if "Register" in str(b.label)).click()
 at.run()
 chk("⚠️ «taladro» como «Taladro»: AVISA y no crea (dos envíos creaban dos iguales)",

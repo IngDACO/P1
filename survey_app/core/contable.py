@@ -121,6 +121,12 @@ def identidad(grupo: str) -> dict:
     }
 
 
+def tiene_razon_social(grupo: str) -> bool:
+    """¿Tiene la empresa su nombre LEGAL puesto? (v691) ⚠️ `identidad()["legal"]` cae al nombre del grupo, así que
+    preguntarle a ella siempre dice que sí: el aviso del emisor de v689 no salía nunca (visto en producción)."""
+    return bool(str(auth.group_text_setting(grupo, "LegalName", "") or "").strip())
+
+
 def contacto_emisor(ident: dict) -> list:
     """Las líneas de contacto del emisor bajo su nombre y su ABN (v672): la dirección, y el email y el teléfono
     juntos. Sin nada puesto, `[]` (el PDF sale como antes)."""

@@ -23,6 +23,7 @@ from core.num import num as _num, dmy as _dmy
 from core import tabla
 from core import ui_common as ui
 from core import theme as T
+from core.maps import literal_md
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,30 @@ def _est_lbl(estado) -> str:
     return f":{_c}[{_etq(_e)}]" if _c else _etq(_e)
 
 
-def _ubic_txt(a) -> str:
+def _ubic_txt(a, nom=None) -> str:
     """Ubicación legible. ⚠️ Delega en `INV.ubic_str` (v306): esta función era una COPIA
     de la del backend, así que al hacer que el proyecto se guarde por ID solo se habría
     arreglado una de las dos y la lista seguiría enseñando `PRJ-0007` (el patrón de dos
     mecanismos para lo mismo que v140 mandó no repetir)."""
-    return INV.ubic_str(a, _etq)
+    return INV.ubic_str(a, _etq, nom)            # v691 · con `nom`, la persona por su nombre (H10)
+
+
+def _tipo_mov(tp) -> str:
+    """El tipo de un movimiento, para pantalla (v691: los avisos del campo y «visto» de la oficina)."""
+    return {"field: has it": t("Field: has it"), "field: returned": t("Field: returned it"),
+            "field: problem": t("Field: problem"), INV.VISTO: t("Office: seen")}.get(str(tp)) or _etq(str(tp))
+
+
+def _motivo_baja_txt(k) -> str:
+    """El motivo de una baja (v691, D4). La CLAVE es el dato."""
+    return {"lost": t("Lost"), "broken beyond repair": t("Broken beyond repair"), "stolen": t("Stolen"),
+            "sold": t("Sold"), "other": t("Other")}.get(str(k), str(k))
+
+
+def _cuando(fecha) -> str:
+    """«22/11/2026 10:20» de un «2026-11-22 10:20:05»."""
+    _f = str(fecha or "")
+    return _dmy(_f[:10]) + (" " + _f[11:16] if len(_f) >= 16 else "")
 
 
 def _indice_de(opciones, actual) -> int:
@@ -272,6 +291,8 @@ def render_inventario(grupo):
     # («Service ov…», a 859 px con el menú).
     f2, f3, f4 = st.columns(3)
     _cats_f = ["Todas"] + INV.categorias(grupo)
+    # v691 · y las que TIENEN los activos aunque ya no estén en la lista (ciclo 5, H14: no se podía filtrar por ella)
+    _cats_f += sorted({str(a.get("Category", "")).strip() for a in acts} - set(_cats_f) - {""})
     if st.session_state.get("inv_catf") not in _cats_f:     # una categoría ya quitada (o la de un informe)
         _cats_f.append(st.session_state.get("inv_catf"))
     cat_f = f2.selectbox(t("Category"), _cats_f,
@@ -319,7 +340,7 @@ def render_inventario(grupo):
             "Nombre":      a.get("Name", ""),
             "Category":   _etq(str(a.get("Category", ""))) or "—",
             "Estado":      _etq(str(a.get("Status", ""))),
-            "Location":   _ubic_txt(a),
+            "Location":   _ubic_txt(a, _nom),
             "Assigned to":  _nom.get(str(a.get("AssignedTo", "")), a.get("AssignedTo", "")) or "—",
             "Valor":       round(INV.valor_actual(a), 0),
         } for a in _rows])
@@ -368,14 +389,20 @@ def _detalle(grupo, aid):
     # quedaban debajo de los valores y del propio QR que acababas de escanear.
     _est = str(a.get("Status", "")).lower()
     _cp = _creado_por()
+    _avisos_del_campo(grupo, aid, _nom, _cp)          # v691 · D3: confirmar o dar por visto
     if _est == "written off":
         # v340: la vuelta. Antes un activo de baja no se podía reactivar desde la app.
         _mot = INV.motivo_baja(grupo, aid)
+        _mk, _, _mn = _mot.partition(" — ")
         st.warning(t(":material/block: This asset is **written off**: it does not appear in the inventory unless you tick «Show written-off ones too».")
-                   + (" " + t("Reason: {x}", x=_mot) if _mot else ""))
+                   + (" " + t("Reason: {x}", x=literal_md(_motivo_baja_txt(_mk) + (f" — {_mn}" if _mn else "")))
+                      if _mot else ""))
+        # v691 · vuelve a un ALMACÉN y sin responsable (ciclo 5, H11: volvía «available» y en manos de alguien)
+        _bod_r = st.text_input(t("Back to (store location)"), value=INV.ultima_bodega(grupo, aid) or "Store",
+                               key=f"inv_react_bod_{aid}")
         if st.button(t(":material/restore: Reactivate this asset"),
                      key=f"inv_react_{aid}", type="primary"):
-            ok, msg = INV.reactivar(aid, grupo, _cp)
+            ok, msg = INV.reactivar(aid, grupo, _cp, bodega=_bod_r)
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
@@ -401,15 +428,19 @@ def _detalle(grupo, aid):
                     # El VALOR es el ID (identidad); la etiqueta es el nombre (comodidad).
                     _pids, _plbl = _proyectos(grupo)
                     if _pids:
+                        # v691 · sin preselección (ciclo 5, H8: nacía con la primera obra de la lista)
                         _ref = st.selectbox(t("Project"), _pids, key=f"inv_srp_{aid}_{_ag}",
-                                            format_func=lambda i: _plbl.get(i, i))
+                                            format_func=lambda i: _plbl.get(i, i), index=None,
+                                            placeholder=t("— choose the project —"))
                     else:
                         st.info(t("There are no open jobs to send it to."))
                 elif _dt == "user":
                     _us = _usuarios(grupo)
                     if _us:
+                        # v691 · sin preselección (ciclo 5, H13: nacía con «asfgjjd (admin1)»)
                         _ref = st.selectbox(t("Person"), _us, key=f"inv_sru_{aid}_{_ag}",
-                                            format_func=lambda u: _nom.get(u, u))
+                                            format_func=lambda u: _nom.get(u, u), index=None,
+                                            placeholder=t("— choose the person —"))
                     else:
                         st.info(t("There are no users to hand it to."))
                 else:
@@ -417,6 +448,10 @@ def _detalle(grupo, aid):
                 _resp = st.selectbox(t("Person responsible"), ["—"] + _usuarios(grupo),
                                      key=f"inv_srsp_{aid}_{_ag}",
                                      format_func=lambda u: u if u == "—" else _nom.get(u, u))
+                if _dt == "project" and _resp == "—":
+                    # v691 · ciclo 5, H7: salía a la obra sin nadie a cargo y su vuelta no se veía en ninguna parte
+                    st.caption(t(":material/info: Nobody will be responsible for it on site: choose a person "
+                                 "responsible if someone should bring it back."))
                 _dev = _fecha_input(t("Expected return"), "", f"inv_sdev_{aid}_{_ag}", desde_hoy=True)
                 _n = st.text_input(t("Note"), key=f"inv_snota_{aid}_{_ag}")
                 if st.button(t(":material/check: Record check-out"), type="primary", key=f"inv_sbtn_{aid}_{_ag}",
@@ -504,12 +539,18 @@ def _detalle(grupo, aid):
         m1.metric(t("Purchase value"), f"${vc:,.0f}")
         m2.metric(t("Current value"), f"${va:,.0f}",
                   help=t("Straight-line depreciation over the useful life."))
-        st.markdown(t("**Location:** {u}  ·  **Condition:** {c}", u=_ubic_txt(a),
+        st.markdown(t("**Location:** {u}  ·  **Condition:** {c}", u=_ubic_txt(a, _nom),
                       c=_etq(str(a.get("Condition", ""))) or "—"))
         if str(a.get("AssignedTo", "")).strip():
             _asg = str(a.get("AssignedTo"))
-            st.markdown(f"**{t('Assigned to')}:** {_nom.get(_asg, _asg)}"
-                        + (f" · {t('due back')} {_dmy(a.get('ReturnDate'))}" if a.get("ReturnDate") else ""))
+            st.markdown(f"**{t('Assigned to')}:** {_nom.get(_asg, _asg)}")
+        # ⚠️ v691 · la VUELTA, con o sin responsable (ciclo 5, H7: solo salía junto a «Assigned to», y una salida
+        # a una obra sin responsable guardaba el 24/11 sin enseñarlo en ninguna parte)
+        _fdv, _ddv = INV.vuelta_de(a)
+        if _fdv and str(a.get("Status", "")) == "in use":
+            st.markdown((f":red[:material/event_busy: {t('Due back')}: {_dmy(_fdv.isoformat())} · "
+                         + t("{n} d late", n=-_ddv) + "]") if _ddv < 0 else
+                        f":material/event: {t('Due back')}: {_dmy(_fdv.isoformat())}")
         _pm = str(a.get("NextService", "")).strip()
         if _pm:
             _pd = INV._parse_date(_pm)
@@ -557,10 +598,16 @@ def _detalle(grupo, aid):
                 st.caption(t(":material/info: Set the APP_URL secret so the QR code opens the app."))
             try:
                 from core import asset_label_pdf
-                _pdf = asset_label_pdf.generate_label_pdf(a, _png, grupo)
+                from core import contable as _CB
+                # v691 · ciclo 5, H9: con el nombre LEGAL de la empresa (salía «cliente1», su identificador interno)
+                _pdf = asset_label_pdf.generate_label_pdf(a, _png, _CB.identidad(grupo).get("legal") or grupo)
                 st.download_button(t(":material/download: Label (PDF)"), data=_pdf,
                                    file_name=f"Asset_label_{aid}.pdf", mime="application/pdf",
                                    key=f"inv_lbl_{aid}")
+                if not _CB.tiene_razon_social(grupo):
+                    st.caption(t(":material/warning: The label shows «{g}»: the company has no legal name yet. The "
+                                 "account owner sets it in Administration → Groups → «Tax identity and payment "
+                                 "terms».", g=str(grupo)))
             except Exception as e:
                 st.caption(t("The label could not be generated: {e}", e=e))
         except Exception as e:
@@ -575,9 +622,9 @@ def _detalle(grupo, aid):
         _mr = sorted(movs, key=lambda m: str(m.get("Created", "")), reverse=True)
         st.dataframe(pd.DataFrame([{
             "Fecha":   _dmy(m.get("Date", "")),      # v599 · DD/MM/YYYY (iba en ISO)
-            "Tipo":    _etq(str(m.get("Type", ""))),
-            "Desde":   INV.ubic_texto(m.get("FromLocation", ""), _etq) or "—",
-            "Hacia":   INV.ubic_texto(m.get("ToLocation", ""), _etq) or "—",
+            "Tipo":    _tipo_mov(m.get("Type", "")),                                   # v691
+            "Desde":   INV.ubic_texto(m.get("FromLocation", ""), _etq, _nom) or "—",   # v691 · H10
+            "Hacia":   INV.ubic_texto(m.get("ToLocation", ""), _etq, _nom) or "—",
             "Usuario": _nom.get(str(m.get("User", "")), m.get("User", "")) or "—",
             # ⚠️ Cadena vacía, NO NaN: `st.dataframe` pinta cualquier nulo como el
             # literal «None» en gris y ninguna `column_config` lo evita — el cuadro
@@ -654,16 +701,158 @@ def _detalle(grupo, aid):
     if _est != "written off":
         with st.expander(t(":material/block: Write off"), key=f"exp_inv_baja_{aid}"):
             st.caption(t("Takes the asset out of the inventory (it stays in the history). To see it again, tick «Show written-off ones too»."))
-            _mot = st.text_input(t("Reason"), key=f"inv_baja_mot_{aid}")
+            # ⚠️ v691 · D4 del usuario (ciclo 5, H11): se daba de baja algo PRESTADO sin decirlo y sin motivo
+            if _est == "in use" or str(a.get("AssignedTo", "")).strip():
+                _q = _nom.get(str(a.get("AssignedTo", "")), str(a.get("AssignedTo", ""))) or "—"
+                _fdb, _ = INV.vuelta_de(a)
+                st.warning(t(":material/warning: It is out ({u}) with **{q}**{v}. Writing it off ends that; the "
+                             "history keeps who had it.", u=_ubic_txt(a, _nom), q=_q,
+                             v=(" " + t("until {f}", f=_dmy(_fdb.isoformat()))) if _fdb else ""))
+            _mk = st.selectbox(t("Reason"), list(INV.MOTIVOS_BAJA), index=None, format_func=_motivo_baja_txt,
+                               placeholder=t("— choose the reason —"), key=f"inv_baja_mk_{aid}")
+            _mot = st.text_input(t("Note (optional)"), key=f"inv_baja_mot_{aid}")
             # v599 · con confirmación y con aviso (salía sin preguntar y sin decir nada)
             _conf = ui.confirmar_borrado(f"inv_baja_conf_{aid}", t("I confirm I want to write off this asset"))
-            if st.button(t("Write off this asset"), key=f"inv_baja_{aid}", disabled=not _conf):
-                ok, msg = INV.dar_de_baja(aid, grupo, _mot, _creado_por())
+            if st.button(t("Write off this asset"), key=f"inv_baja_{aid}", disabled=not (_conf and _mk)):
+                _motivo = str(_mk or "") + (f" — {' '.join(str(_mot).split())}" if str(_mot).strip() else "")
+                ok, msg = INV.dar_de_baja(aid, grupo, _motivo, _creado_por())
                 if ok:
                     flash.exito(msg)
                     st.session_state.pop("_inv_open", None)
                     st.rerun()
                 st.error(msg)
+
+
+def _avisos_del_campo(grupo, aid, _nom, _cp):
+    """v691 · D3 del usuario: lo que el campo dijo de ESTE activo, para confirmarlo (el movimiento de verdad) o
+    darlo por visto."""
+    for x in INV.avisos_pendientes(grupo, aid):
+        _q = literal_md(_nom.get(x["usuario"], x["usuario"]))
+        _txt = {"has it": t("**{q}** says they have it ({c}).", q=_q, c=_cuando(x["fecha"])),
+                "returned": t("**{q}** says they returned it ({c}).", q=_q, c=_cuando(x["fecha"])),
+                "problem": t("**{q}** reports a problem ({c}): {n}", q=_q, c=_cuando(x["fecha"]),
+                             n=literal_md(x["nota"]))}.get(x["tipo"], "")
+        with st.container(border=True, key=f"cpx_inv_aviso_{x['id']}"):
+            st.markdown(":material/campaign: " + _txt)
+            _c1, _c2 = st.columns(2)
+            ok = msg = None
+            if x["tipo"] == "has it":
+                if _c1.button(t(":material/check: Confirm: it is with them"), key=f"inv_avok_{x['id']}",
+                              type="primary", width="stretch"):
+                    ok, msg = INV.pasar_a(aid, grupo, x["usuario"], _cp)
+            elif x["tipo"] == "returned":
+                _bod = INV.ultima_bodega(grupo, aid) or "Store"
+                if _c1.button(t(":material/check: Confirm the return ({b})", b=_bod), key=f"inv_avok_{x['id']}",
+                              type="primary", width="stretch"):
+                    ok, msg = INV.entrada(aid, grupo, bodega=_bod, nota="returned (from the field)", creado_por=_cp)
+            else:
+                _c1.caption(t("If it needs one, record a service above."))
+            if _c2.button(t(":material/close: Dismiss"), key=f"inv_avno_{x['id']}", width="stretch"):
+                ok, msg = INV.dar_por_visto(aid, grupo, x["id"], _cp)
+            if ok is not None:
+                (flash.exito if ok else st.error)(msg)
+                if ok:
+                    st.rerun()
+
+
+def render_equipo_campo(usuario, grupo):
+    """🧰 «My equipment» del CAMPO (v691, D3 del usuario, ciclo 5 H15/H12): lo que tiene a su cargo y, por el QR o por
+    el ID de la etiqueta, la ficha de cualquier equipo de su empresa en SOLO LECTURA, con «I have it», «I returned
+    it» y «Report a problem», que la oficina confirma. Escanear el QR no hacía nada para el campo."""
+    st.markdown(t("## :material/construction: My equipment"))
+    if not INV.is_configured():
+        st.info(t(":material/info: Configure Google Sheets for the inventory."))
+        return
+    _nom = _nombres(grupo)
+    if st.session_state.get("_equipo_open"):
+        _ficha_campo(grupo, usuario, str(st.session_state["_equipo_open"]), _nom)
+        return
+    _mios = sorted(INV.de_la_persona(grupo, usuario), key=lambda a: str(a.get("Name", "")).lower())
+    if not _mios:
+        st.caption(t("No company equipment is signed out to you."))
+    for a in _mios:
+        _fd, _dd = INV.vuelta_de(a)
+        _l = f"**{literal_md(a.get('Name', ''))}** · {a.get('ID', '')}"
+        if _fd:
+            _l += " · " + (t("{n} d late", n=-_dd) if _dd < 0 else t("back by {f}", f=_dmy(_fd.isoformat())))
+        if st.button(":material/construction: " + _l, key=f"inv_campo_{a.get('ID', '')}", width="stretch"):
+            st.session_state["_equipo_open"] = str(a.get("ID", ""))
+            st.rerun()
+    # un solo campo: Enter envía (la regla de v617 es para los de 2 o más)
+    with st.form("inv_campo_buscar"):
+        _id = st.text_input(t("Asset ID on the label"), placeholder=t("e.g. {id}", id="ACT-0001"),
+                            help=t("Or scan its QR code with the phone camera."))
+        if st.form_submit_button(t(":material/search: Open")):
+            _a = INV.get_activo(str(_id or "").strip().upper())
+            if _a and str(_a.get("Group", "")) == str(grupo):
+                st.session_state["_equipo_open"] = str(_a.get("ID", ""))
+                st.rerun()
+            st.error(t("There is no asset with that ID."))
+
+
+def _ficha_campo(grupo, usuario, aid, _nom):
+    """La ficha de un equipo para el campo: qué es, dónde está, quién lo tiene, cuándo vuelve y su revisión."""
+    if st.button(t(":material/arrow_back: Back to my equipment"), key="inv_campo_back"):
+        st.session_state.pop("_equipo_open", None)
+        st.rerun()
+    a = INV.get_activo(aid)
+    # el de OTRA empresa responde como si no existiera (regla v351)
+    if not a or str(a.get("Group", "")) != str(grupo):
+        st.warning(t("Asset not found."))
+        return
+    st.markdown(f"### {literal_md(a.get('Name', ''))}")
+    st.caption(f"{a.get('ID', '')} · {_etq(str(a.get('Category', ''))) or '—'} · {_etq(str(a.get('Status', '')))}")
+    if a.get("PhotoDriveID"):
+        try:
+            from core import drive_store
+            st.image(drive_store.download(a.get("PhotoDriveID")), width=220)
+        except Exception:
+            pass
+    _asg = str(a.get("AssignedTo", "") or "").strip()
+    st.markdown(t("**Where it is:** {u}", u=literal_md(_ubic_txt(a, _nom))))
+    st.markdown(t("**With:** {q}", q=literal_md(_nom.get(_asg, _asg)) if _asg else t("nobody")))
+    _fd, _dd = INV.vuelta_de(a)
+    if _fd and str(a.get("Status", "")) == "in use":
+        st.markdown((f":red[{t('Due back')}: {_dmy(_fd.isoformat())} · " + t("{n} d late", n=-_dd) + "]")
+                    if _dd < 0 else f"**{t('Due back')}:** {_dmy(_fd.isoformat())}")
+    _pm = INV._parse_date(a.get("NextService"))
+    if _pm:
+        st.markdown((f":red[:material/build: {t('Service overdue')}: {_dmy(_pm.isoformat())}]")
+                    if _pm < clock.today() else f":material/build: {t('Next service: {f}', f=_dmy(_pm.isoformat()))}")
+    _mio = _asg == str(usuario) or (str(a.get("LocationType", "")) == "user"
+                                    and str(a.get("LocationRef", "")).strip() == str(usuario))
+    _esp = {x["tipo"]: x for x in INV.avisos_pendientes(grupo, aid) if x["usuario"] == str(usuario)}
+    for _k, _txt in (("has it", t("You told the office you have it: waiting for them to confirm.")),
+                     ("returned", t("You told the office you returned it: waiting for them to confirm.")),
+                     ("problem", t("The office has your note about a problem."))):
+        if _k in _esp:
+            st.info(":material/schedule: " + _txt)
+    if str(a.get("Status", "")) == INV.BAJA:
+        st.caption(t("This asset is written off."))
+        return
+    ok = msg = None
+    _c1, _c2 = st.columns(2)
+    if not _mio and "has it" not in _esp:
+        if _c1.button(t(":material/back_hand: I have it"), key=f"inv_campo_tengo_{aid}", type="primary",
+                      width="stretch"):
+            ok, msg = INV.avisar_desde_campo(aid, grupo, usuario, "has it")
+    if _mio and "returned" not in _esp:
+        if _c1.button(t(":material/assignment_return: I returned it"), key=f"inv_campo_devolvi_{aid}",
+                      type="primary", width="stretch"):
+            ok, msg = INV.avisar_desde_campo(aid, grupo, usuario, "returned")
+    with st.expander(t(":material/report: Report a problem"), key=f"exp_inv_campo_prob_{aid}"):
+        # por GENERACIÓN: vaciar la caja quitando su valor no llega al navegador (trampa 31)
+        _gp = st.session_state.get(f"_inv_campo_pg_{aid}", 0)
+        _n = st.text_area(t("What is wrong with it?"), key=f"inv_campo_prob_{aid}_{_gp}", height=80)
+        if st.button(t(":material/send: Send to the office"), key=f"inv_campo_probbtn_{aid}",
+                     disabled=not str(_n or "").strip()):
+            ok, msg = INV.avisar_desde_campo(aid, grupo, usuario, "problem", _n)
+            if ok:
+                st.session_state[f"_inv_campo_pg_{aid}"] = _gp + 1
+    if ok is not None:
+        (flash.exito if ok else st.error)(msg)
+        if ok:
+            st.rerun()
 
 
 # ── Registro de un activo ────────────────────────────────────────
@@ -684,8 +873,9 @@ def _registro(grupo):
     with st.form(f"inv_reg_{_g}", enter_to_submit=False):
         c1, c2 = st.columns(2)
         nombre = c1.text_input(t("Asset name *"), key=f"inv_reg_nom_{_g}")
-        categoria = c2.selectbox(t("Category"), INV.categorias(grupo), format_func=_etq,
-                                 key=f"inv_reg_cat_{_g}")
+        # v691 · sin preselección (ciclo 5, H8: nacía con «Consumable»)
+        categoria = c2.selectbox(t("Category *"), INV.categorias(grupo), format_func=_etq,
+                                 key=f"inv_reg_cat_{_g}", index=None, placeholder=t("— choose the category —"))
         marca = c1.text_input(t("Brand"), key=f"inv_reg_mar_{_g}")
         modelo = c2.text_input(t("Model"), key=f"inv_reg_mod_{_g}")
         serie = c1.text_input(t("Serial no."), key=f"inv_reg_ser_{_g}")
@@ -718,6 +908,9 @@ def _registro(grupo):
     if crear:
         if not str(nombre).strip():
             st.error(t("The name is required."))
+            return
+        if not categoria:                            # v691 · H8
+            st.error(t("Choose the category."))
             return
         _dups = INV.homonimos(grupo, nombre, serie)
         if _dups and not st.session_state.get(_k_dup(nombre, serie)):
@@ -848,8 +1041,19 @@ def _categorias_expander(grupo):
             return
         _quitar = st.selectbox(t("Remove one of your categories"), ["—"] + _propias,
                                key="inv_cat_del")
-        if _quitar != "—" and st.button(t(":material/delete: Remove"), key="inv_cat_delbtn"):
-            ok, msg = INV.del_categoria(grupo, _quitar)
+        _uso, _dest = [], None
+        if _quitar != "—":
+            # ⚠️ v691 · ciclo 5, H14: se quitaba en uso sin avisar y el filtro dejaba de ofrecerla
+            _uso = INV.en_uso_categoria(grupo, _quitar)
+            if _uso:
+                st.warning(t(":material/warning: {n} asset(s) use «{c}»: choose the category to move them to.",
+                             n=len(_uso), c=_etq(_quitar)))
+                _dest = st.selectbox(t("Move them to"), [c for c in INV.categorias(grupo) if c != _quitar],
+                                     index=None, format_func=_etq, placeholder=t("— choose the category —"),
+                                     key="inv_cat_dest")
+        if _quitar != "—" and st.button(t(":material/delete: Remove"), key="inv_cat_delbtn",
+                                         disabled=bool(_uso) and not _dest):
+            ok, msg = INV.del_categoria(grupo, _quitar, mover_a=_dest or "")
             (flash.exito if ok else st.error)(msg)
             if ok:
                 st.rerun()
