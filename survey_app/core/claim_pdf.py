@@ -189,14 +189,17 @@ def generate_claim_pdf(rec: dict, variaciones: list = None, cliente: dict = None
         _ret_pct = _num(rec.get("RetentionPct"))
         _ret = _num(rec.get("Retention"))
         _bruto = _num(rec.get("ThisClaim"))
-        calc = Table([
-            [d("This claim"), d("Amount")],
-            [d("Work completed to date ({pct}%)", pct=f"{_pct:g}"), _money(_hecho)],
-            [d("Less previously claimed"), _menos(_antes)],
-            [d("Value of this claim"), _money(_bruto)],
-            [d("Less retention ({pct}%)", pct=f"{_ret_pct:g}"), _menos(_ret)],
-            [d("NET AMOUNT PAYABLE"), _money(_bruto - _ret)],
-        ], colWidths=[133 * mm, 45 * mm])
+        # v702 · D3 del ciclo 7: el depósito que esta certificación recupera (de SU factura), antes de la retención
+        _mdep = _num(rec.get("_menos_deposito"))
+        _filas_c = [[d("This claim"), d("Amount")],
+                    [d("Work completed to date ({pct}%)", pct=f"{_pct:g}"), _money(_hecho)],
+                    [d("Less previously claimed"), _menos(_antes)],
+                    [d("Value of this claim"), _money(_bruto)]]
+        if _mdep > 0:
+            _filas_c.append([d("Less deposit recovered"), _menos(_mdep)])
+        _filas_c += [[d("Less retention ({pct}%)", pct=f"{_ret_pct:g}"), _menos(_ret)],
+                     [d("NET AMOUNT PAYABLE"), _money(_bruto - _mdep - _ret)]]
+        calc = Table(_filas_c, colWidths=[133 * mm, 45 * mm])
         calc.setStyle(_est_tab)
         calc.setStyle(TableStyle([
             ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),

@@ -373,6 +373,10 @@ CL.variaciones = lambda pid, estado=None: []
 CL.retencion_pct = lambda g: 5.0
 I.is_configured = lambda: True
 I.facturado_por_proyecto = lambda g: {"PRJ-1": float(st.session_state.get("_FACT", 0.0))}
+# ⚠️ v702 · D3 del ciclo 7: el depósito ya se RESTA en la certificación, y el aviso de doble cobro queda para lo
+# facturado por Invoices que no es ni depósito ni certificación (`otras`): la factura «aparte» de esta prueba es eso.
+CL.deposito_de = lambda pid, g: {"deposito": 0.0, "recuperado": 0.0, "pendiente": 0.0, "numeros": [],
+                                 "otras": float(st.session_state.get("_FACT", 0.0))}
 CLU.render("PRJ-1", "G", {"ID": "PRJ-1", "Progress": "100"}, editable=False)
 '''
 at = AppTest.from_string(G9, default_timeout=60)
@@ -390,8 +394,11 @@ chk("…sin facturas aparte, como antes (sin aviso ni «already invoiced»)",
     any("claimable now)" in x and "already invoiced" not in x for x in _lab)
     and not any("charge it twice" in str(w.value) for w in at.warning), _lab)
 _cr = funcion("core/claims.py", "calcular")
+# ⚠️ v702 · D3 del ciclo 7: se resta el DEPÓSITO (y solo él, en proporción al avance) — es lo que se hace en obra; lo
+# facturado en general sigue sin restarse. Decía `"facturado" not in _cr`, y un comentario con esa palabra lo tumbaba.
 chk("…y la cuenta de la reclamación NO cambia (restar las facturas la descontaría dos veces)",
-    "_bruto = round(max(0.0, _hecho - _antes), 2)" in _cr and "facturado" not in _cr)
+    "_bruto = round(max(0.0, _hecho - _antes), 2)" in _cr and "facturado_por_proyecto" not in _cr
+    and "deposito_de(" in _cr)
 
 print("\n=== %d ok · %d fallo(s) ===" % (n_ok, len(fallos)))
 for f in fallos:

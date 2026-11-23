@@ -28,7 +28,14 @@ def _dinero(v) -> str:
     return theme.dinero(_num(v))
 
 
-def _descarga(pid, grupo, r, vars_, prj, d, key_prefix):
+def _abrir_factura(fid):
+    """v702 · D3: de la certificación a SU factura (en `on_click`: antes del cuerpo, la trampa 39)."""
+    st.session_state["_fac_open"] = fid
+    from core import home_ui
+    home_ui.navegar("finanzas", "🧾 Facturas")
+
+
+def _descarga(pid, grupo, r, vars_, prj, d, key_prefix, factura=None):
     """El botón que baja el PDF de ESTE documento (v510).
 
     ⚠️ Se genera en línea, sin caché: medido, son **4,7 ms** por documento (56 ms para
@@ -46,8 +53,12 @@ def _descarga(pid, grupo, r, vars_, prj, d, key_prefix):
             _cli = clientes.get_cliente(_cid) if _cid else {}
         except Exception:
             _cli = {}
+        # v702 · D3: el depósito que recupera esta certificación sale de SU factura (la fila no lo guarda)
+        from core import invoices as _I
+        _md = round(-sum(_num(ln.get("importe")) for ln in _I.lineas_de(factura or {})
+                         if str(ln.get("tipo", "")) == CL.L_DEPOSITO), 2)
         _bytes = claim_pdf.generate_claim_pdf(
-            r, vars_, _cli, grupo, prj,
+            dict(r, _menos_deposito=_md, _factura=str((factura or {}).get("Number", ""))), vars_, _cli, grupo, prj,
             {"retenido": d["retenido_acumulado"], "liberado": d["retenido_liberado"],
              "pendiente": d["retenido_pendiente"]})
         _es_lib = CL.es_liberacion(r)
@@ -162,22 +173,41 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                                        help=t("Defaults to the job's real progress. Lower it to claim less "
                                               "than what is done."))
             dv = d if abs(_pct - float(d["pct"])) < 1e-9 else CL.calcular(pid, grupo, _pct, prj)
-            st.markdown(
-                t("Progress **{p}%** → work done {h} · already claimed {a} · "
-                  "**this claim {b}** − retention {r} ({rp}%) = **net {n}**",
-                  p=("%.1f" % dv["pct"]), h=_dinero(dv["hecho"]), a=_dinero(dv["antes"]),
-                  b=_dinero(dv["bruto"]), r=_dinero(dv["retencion"]),
-                  rp=("%.1f" % dv["retencion_pct"]), n=_dinero(dv["neto"])))
+            # v702 · D3 del ciclo 7: con depósito, la certificación recupera su parte (en proporción al avance)
+            if dv.get("menos_deposito", 0) > 0:
+                st.markdown(
+                    t("Progress **{p}%** → work done {h} · already claimed {a} · "
+                      "**this claim {b}** − deposit {dp} − retention {r} ({rp}%) = **net {n}**",
+                      p=("%.1f" % dv["pct"]), h=_dinero(dv["hecho"]), a=_dinero(dv["antes"]),
+                      b=_dinero(dv["bruto"]), dp=_dinero(dv["menos_deposito"]), r=_dinero(dv["retencion"]),
+                      rp=("%.1f" % dv["retencion_pct"]), n=_dinero(dv["neto"])))
+                _dpi = dv.get("deposito") or {}
+                st.caption(t("The deposit ({x}, invoice No. {n}) is recovered in step with progress: {r} of it so far, "
+                             "all of it at 100%.", x=_dinero(_dpi.get("deposito", 0)),
+                             n=", ".join(_dpi.get("numeros") or []) or "—",
+                             r=_dinero(_num(_dpi.get("recuperado")) + _num(dv["menos_deposito"]))))
+            else:
+                st.markdown(
+                    t("Progress **{p}%** → work done {h} · already claimed {a} · "
+                      "**this claim {b}** − retention {r} ({rp}%) = **net {n}**",
+                      p=("%.1f" % dv["pct"]), h=_dinero(dv["hecho"]), a=_dinero(dv["antes"]),
+                      b=_dinero(dv["bruto"]), r=_dinero(dv["retencion"]),
+                      rp=("%.1f" % dv["retencion_pct"]), n=_dinero(dv["neto"])))
+            st.caption(t(":material/receipt_long: Issuing the claim issues its tax invoice too: it counts as invoiced "
+                         "and to collect, and goes to Xero like any other invoice."))
             # ⚠️ v670 · certificar MÁS de lo hecho se dice (H13: el 10 % con la obra al 0 % no avisaba de nada)
             if _pct > float(d["pct"]) + 1e-9 and dv["bruto"] > 0:
                 _adel = round(min(dv["bruto"], dv["valor"] * (_pct - float(d["pct"])) / 100.0), 2)
                 st.warning(t(":material/warning: This claims **{p}%** with the job at **{r}%**: {x} of it is work "
                              "not done yet — it would be claimed in advance.",
                              p=("%.1f" % _pct), r=("%.1f" % float(d["pct"])), x=_dinero(_adel)))
-            if _fact > 0.5 and dv["bruto"] > 0:
-                st.warning(t(":material/warning: **{f}** of this job is already invoiced through Invoices. Claims are "
-                             "worked out from the contract alone and do not subtract it: if those invoices already "
-                             "bill this work, this claim would charge it twice.", f=_dinero(_fact)))
+            # v702 · D3: el depósito ya se resta; solo se avisa de lo facturado por Invoices que NO es depósito ni
+            # certificación (una factura normal de trabajo: la certificación no sabe qué cobraba)
+            _otras = _num((dv.get("deposito") or {}).get("otras"))
+            if _otras > 0.5 and dv["bruto"] > 0:
+                st.warning(t(":material/warning: **{f}** of this job is invoiced through Invoices outside claims and "
+                             "deposits. Claims do not subtract it: if those invoices already bill this work, this "
+                             "claim would charge it twice.", f=_dinero(_otras)))
 
             if editable:
                 with st.form(f"{key_prefix}_new_{pid}", enter_to_submit=False):
@@ -218,11 +248,27 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                 if _est == CL.ANULADA:
                     st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, _estado_txt(CL.ANULADA)))   # v672 · «Cancelled» (H5)
                     continue
+                # v702 · D3: su factura (cobrar es registrar el pago en ella; «Mark paid» queda para las de antes)
+                try:
+                    _fac = CL.factura_de(r.get("ID"), grupo)
+                except Exception:
+                    _fac = {}
+                if _fac:
+                    from core import invoices as _I
+                    _neto_f = _num(_fac.get("Subtotal"))
+                    _txt += " · " + t("invoice No. {n}", n=_fac.get("Number", "")) + " · " + \
+                        _estado_txt(_I.estado_cobro(_fac))
+                    if abs(_neto_f - _neto) > 0.01 and not CL.es_liberacion(r):
+                        _txt += " · " + t("net after deposit {x}", x=_dinero(_neto_f))
                 st.markdown("%s %s" % (_ic, _txt))
-                _descarga(pid, grupo, r, vars_, prj, d, key_prefix)
+                _descarga(pid, grupo, r, vars_, prj, d, key_prefix, _fac)
                 if editable and _est == CL.EMITIDA:
                     b1, b2 = st.columns(2)
-                    if b1.button(t("Mark paid"), key=f"{key_prefix}_pay_{r.get('ID')}"):
+                    if _fac:
+                        b1.button(t(":material/receipt_long: Open invoice No. {n}", n=_fac.get("Number", "")),
+                                  key=f"{key_prefix}_fac_{r.get('ID')}", on_click=_abrir_factura,
+                                  args=(str(_fac.get("ID", "")),))
+                    elif b1.button(t("Mark paid"), key=f"{key_prefix}_pay_{r.get('ID')}"):
                         ok, msg = CL.marcar_pagada(r.get("ID"))
                         (flash.exito if ok else st.error)(msg)
                         if ok:
@@ -233,7 +279,9 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                         st.rerun()
                     if st.session_state.get(f"_{key_prefix}_clmconf") == r.get("ID"):
                         st.warning(t("Cancel claim #{n} (net {m})? It stops counting as claimed and stays in the "
-                                     "list as cancelled.", n=r.get("Number", "?"), m=_dinero(_neto)))
+                                     "list as cancelled.", n=r.get("Number", "?"), m=_dinero(_neto))
+                                   + ((" " + t("Its invoice No. {f} is voided too.", f=_fac.get("Number", "")))
+                                      if _fac else ""))
                         _y, _k = st.columns(2)
                         if _y.button(t("Yes, cancel it"), key=f"{key_prefix}_voidsi_{r.get('ID')}", type="primary"):
                             st.session_state.pop(f"_{key_prefix}_clmconf", None)

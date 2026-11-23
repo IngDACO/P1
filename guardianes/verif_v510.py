@@ -105,16 +105,19 @@ def _escribe(previas, prj, importe=None):
     escribe. Es la trampa nº1 —el paso en vacío— dentro del propio guardián.
     """
     _hoja = _WS()
-    _viejos = (CL._ws, CL._siguiente, CL._invalidate, CL.clock)
+    # ⚠️ v702 · + `_emitir_factura`: desde D3 del ciclo 7 la liberación EMITE su factura (es dinero que el cliente
+    # retuvo y ahora paga). Sin sustituirla, la factura real fallaba bajo el arnés y la liberación se anulaba.
+    _viejos = (CL._ws, CL._siguiente, CL._invalidate, CL.clock, CL._emitir_factura)
     CL._ws = lambda *a, **k: _hoja
     CL._siguiente = lambda *a, **k: 7
     CL._invalidate = lambda *a, **k: None
     CL.clock = _Reloj()
+    CL._emitir_factura = lambda *a, **k: (True, "0099")
     _con(previas)
     try:
         _ok, _msg = CL.crear_liberacion("P", "cliente1", importe, "", "Bobo", prj)
     finally:
-        CL._ws, CL._siguiente, CL._invalidate, CL.clock = _viejos
+        CL._ws, CL._siguiente, CL._invalidate, CL.clock, CL._emitir_factura = _viejos
     return _ok, _msg, (_hoja.filas[0] if _hoja.filas else None)
 
 

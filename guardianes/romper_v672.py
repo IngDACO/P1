@@ -111,7 +111,8 @@ ROTURAS = [
     ("H14 · el dinero de los avisos sin miles", CL,
      [('"{:,.2f}".format(round(_num(v), 2))', '"{:.2f}".format(round(_num(v), 2))')]),
     ("H14 · el aviso de emitir sin $", CL,
-     [('t("net payable"), _dinero(d["neto"]))', 't("net payable"), "%.2f" % d["neto"])')]),
+     # v702 · re-anclada: el aviso de emitir sigue con «· invoice No. N issued.» (D3 del ciclo 7)
+     [('t("net payable"), _dinero(d["neto"]),', 't("net payable"), "%.2f" % d["neto"],')]),
     ("⚠️ dos importes en un aviso, sin escapar (LaTeX, v309)", CL,
      [("amount=_dinero(_imp, escapado=True), held=_dinero(_pend, escapado=True))",
        "amount=_dinero(_imp), held=_dinero(_pend))")]),

@@ -720,10 +720,32 @@ def sacar_cobros(fid: str, destino: str, quien: str = "", anular_tambien: bool =
     return True, " ".join(partes)
 
 
-def anular(fid: str, destino_cobros: str = None, quien: str = "") -> tuple:
+def anular(fid: str, destino_cobros: str = None, quien: str = "", _desde_reclamacion: bool = False) -> tuple:
     """Anula la factura. ⚠️ v669 · Con dinero COBRADO hay que decir adónde va (`destino_cobros`: DEVOLVER o el ID
-    de otra factura del cliente): si no, se niega — antes el cobro se quedaba en el limbo (H20)."""
+    de otra factura del cliente): si no, se niega — antes el cobro se quedaba en el limbo (H20).
+
+    ⚠️ v702 · D3 del ciclo 7: la factura de una CERTIFICACIÓN se anula con ella (la certificación deja de contar), y
+    solo si es la última de su obra (las siguientes se calcularon encima)."""
     f = get_factura(fid)
+    _cids = [] if _desde_reclamacion else sorted({str(ln.get("reclamacion", "")) for ln in lineas_de(f or {})
+                                                  if ln.get("reclamacion")})
+    if _cids:
+        from core import claims as _CL
+        for _c in _cids:
+            _ok_u, _r = _CL.es_ultima(_c)
+            if _r and not _ok_u and str(_r.get("Status", "")) != _CL.ANULADA:
+                return False, t("This invoice belongs to claim #{n}, and only the latest claim of a job can be "
+                                "cancelled: the ones after it were issued on top of it.", n=_r.get("Number", "?"))
+    res = _anular_factura(f, fid, destino_cobros, quien)
+    if res[0] and _cids:
+        from core import claims as _CL
+        for _c in _cids:
+            _CL.anular(_c, _con_factura=False)
+        return True, res[1] + " " + t("Its claim was cancelled too.")
+    return res
+
+
+def _anular_factura(f, fid: str, destino_cobros: str = None, quien: str = "") -> tuple:
     if f and round(_num(f.get("Collected")), 2) > 0:
         if not destino_cobros:
             return False, t("This invoice has {m} collected: say what happens with that money first (refund it, "

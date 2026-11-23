@@ -639,9 +639,17 @@ def _nueva_factura(grupo):
     if len(_scope_prjs) == 1:
         _p1 = _scope_prjs[0]
         _pid1 = str(_p1.get("ID", ""))
+        _dep1 = {}
         try:
             from core import quotes as _Q
-            if I.es_cotizada(_pid1) and _num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) <= 0.005:
+            from core import claims as _CL
+            # ⚠️ v702 · D3 del ciclo 7 (H17): también con un DEPÓSITO facturado (y nada más): las líneas de la
+            # cotización salen con el depósito restado. Antes, tras el depósito solo quedaba una línea con el resto.
+            _dep1 = _CL.deposito_de(_pid1, grupo) if I.es_cotizada(_pid1) else {}
+            _solo_dep = (_num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) <= 0.005
+                         or (_dep1 and _dep1["otras"] <= 0.005 and _dep1["recuperado"] <= 0.005
+                             and abs(_num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) - _dep1["deposito"]) <= 0.01))
+            if I.es_cotizada(_pid1) and _solo_dep:
                 _cot1 = _Q.cotizacion_de_proyecto(_pid1) or {}
         except Exception as e:
             logger.warning("invoices_ui: la cotización de %s no se pudo leer: %s", _pid1, e)
@@ -684,6 +692,13 @@ def _nueva_factura(grupo):
             _notas.append(t(":material/request_quote: The lines of the accepted quote **No. {n}**, as the client "
                             "accepted them ({x} before tax).", n=_cot_num(_cot1),
                             x=_T0.dinero(_num(_cot1.get("Subtotal")))))
+            # v702 · D3 (H17): el depósito ya facturado se RESTA, como se hace (si no, se cobraría dos veces)
+            if _num((_dep1 or {}).get("pendiente")) > 0:
+                _pre.append({"Concepto": t("Less deposit (invoice No. {n})", n=", ".join(_dep1.get("numeros") or [])),
+                             "Importe": -round(_num(_dep1["pendiente"]), 2),
+                             "Project": _lbl.get(str(p.get("ID", "")), "")})
+                _notas.append(t(":material/savings: Less the deposit already invoiced ({x}).",
+                                x=_T0.dinero(_num(_dep1["pendiente"]))))
             continue
         if _modo == "deposito" and str(p.get("ID", "")) == _pid1:
             _pre.append({"Concepto": f"{d('Deposit')} {_dep:g}% — {p.get('Name', '')}",
@@ -729,7 +744,10 @@ def _nueva_factura(grupo):
         key="fac_lineas" if _modo == "resto" else f"fac_lineas_{_modo}_{_dep:g}",
         column_config=tabla.cfg(None, {
             "Concepto": st.column_config.TextColumn(t("Item"), width="medium"),
-            "Importe":  st.column_config.NumberColumn(t("Amount"), format="$%,.2f", min_value=0.0),
+            # v702 · D3: sin mínimo 0 — «Less deposit» resta (y un descuento también)
+            "Importe":  st.column_config.NumberColumn(
+                t("Amount"), format="$%,.2f",
+                help=t("Negative to take something off, like the deposit already invoiced.")),
             "Project": st.column_config.SelectboxColumn(
                 t("Project"), options=["(none)"] + prj_names, required=False),
         }))
@@ -791,6 +809,11 @@ def _nueva_factura(grupo):
     if st.button(t(":material/receipt_long: Issue invoice"), type="primary", key="fac_emit"):
         if not _lineas:
             st.error(t("Add at least one line with an amount."))
+            return
+        # v702 · ya admite líneas negativas (D3): una factura que en total no cobra nada no es una factura
+        if _sub <= 0:
+            st.error(t("The invoice total must be more than $0: a credit to the client is a credit note, not an "
+                       "invoice."))
             return
         ok, res = I.create_factura(
             grupo=grupo, cliente_id=cid, cliente_nombre=cli.get("Name", ""),

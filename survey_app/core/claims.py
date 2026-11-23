@@ -221,6 +221,75 @@ def contrato(pid) -> tuple:
 # ═════════════════════════════════════════════════════════════════
 # El cálculo: qué se puede reclamar ahora
 # ═════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════
+# v702 · D3 del ciclo 7 («como se hace normalmente»): la certificación ES la factura
+# ═════════════════════════════════════════════════════════════════
+# Una línea de factura que nace de una certificación lleva `reclamacion` = su ID (no hace falta columna nueva: el
+# enlace vive en la propia factura) y su `tipo`:
+L_CERT, L_DEPOSITO, L_RETENCION, L_LIBERACION = ("certificacion", "menos_deposito", "menos_retencion",
+                                                 "liberacion_retencion")
+
+
+def es_linea_deposito(ln) -> bool:
+    """¿Es la línea de un DEPÓSITO facturado por Invoices? Se crean como «Deposit 30% — obra» (v690): las líneas
+    pasan por una tabla editable y no llevan tipo, así que se reconocen por su concepto."""
+    return str((ln or {}).get("concepto", "")).strip().startswith("Deposit ")
+
+
+def _facturas_vivas(grupo) -> list:
+    try:
+        from core import invoices as _I
+        return [f for f in _I.list_facturas(grupo) if str(f.get("Status", "")).lower() != "anulada"]
+    except Exception as e:
+        logger.warning("claims: no se pudieron leer las facturas: %s", e)
+        return []
+
+
+def deposito_de(pid, grupo) -> dict:
+    """{deposito, recuperado, pendiente, numeros, otras}: el depósito facturado de la obra, lo que ya restaron sus
+    certificaciones, lo que falta por restar, en qué facturas está, y lo facturado por Invoices que NO es ni depósito
+    ni certificación (`otras`: eso sigue avisándose, porque una certificación no sabe qué trabajo cobraba)."""
+    from core import invoices as _I
+    dep = rec = otras = 0.0
+    nums = []
+    for f in _facturas_vivas(grupo):
+        for ln in _I.lineas_de(f):
+            if str(ln.get("proyecto_id", "")).strip() != str(pid):
+                continue
+            imp = _num(ln.get("importe"))
+            if ln.get("reclamacion"):
+                if str(ln.get("tipo", "")) == L_DEPOSITO:
+                    rec += -imp
+            elif es_linea_deposito(ln):
+                dep += imp
+                if str(f.get("Number", "")) not in nums:
+                    nums.append(str(f.get("Number", "")))
+            else:
+                otras += imp
+    dep, rec = round(dep, 2), round(rec, 2)
+    return {"deposito": dep, "recuperado": rec, "pendiente": round(max(0.0, dep - rec), 2), "numeros": nums,
+            "otras": round(otras, 2)}
+
+
+def factura_de(cid, grupo=None) -> dict:
+    """La factura (no anulada) que nació de esta certificación, o {}."""
+    from core import invoices as _I
+    for f in (_facturas_vivas(grupo) if grupo else
+              [x for x in _I.list_facturas() if str(x.get("Status", "")).lower() != "anulada"]):
+        if any(str(ln.get("reclamacion", "")) == str(cid) for ln in _I.lineas_de(f)):
+            return f
+    return {}
+
+
+def es_ultima(cid) -> tuple:
+    """`(es la última no anulada, registro)` — solo la última se puede anular (las siguientes cuelgan de ella)."""
+    r = next((x for x in _records(RECLAMACIONES) if str(x.get("ID", "")) == str(cid)), {})
+    if not r:
+        return False, {}
+    _ult = max([_num(x.get("Number")) for x in reclamaciones(str(r.get("ProjectID", "")))], default=0)
+    return _num(r.get("Number")) == _ult, r
+
+
 def calcular(pid, grupo, pct=None, prj=None) -> dict:
     """Lo que se puede reclamar HOY, sin escribir nada.
 
@@ -248,10 +317,20 @@ def calcular(pid, grupo, pct=None, prj=None) -> dict:
     _ret_pct = retencion_pct(grupo)
     _ret = round(_bruto * _ret_pct / 100.0, 2)
     _r = retenido(pid)
+    # ⚠️ v702 · D3 del ciclo 7: el DEPÓSITO facturado se recupera en proporción al avance (al 100 %, entero), como se
+    # hace en obra. Ciclo 7: C7 con $20,811.60 de depósito y una certificación al 10,6 % lo cobraba dos veces.
+    try:
+        _dp = deposito_de(pid, grupo) if _bruto > 0 else {"deposito": 0.0, "recuperado": 0.0, "pendiente": 0.0,
+                                                           "numeros": [], "otras": 0.0}
+    except Exception as e:
+        logger.warning("claims.calcular(%s): sin depósito: %s", pid, e)
+        _dp = {"deposito": 0.0, "recuperado": 0.0, "pendiente": 0.0, "numeros": [], "otras": 0.0}
+    _menos_dep = round(max(0.0, min(_dp["pendiente"], _dp["deposito"] * pct / 100.0 - _dp["recuperado"])), 2)
     return {
         "contrato": _c, "cotizacion": _cid, "variaciones": _var, "valor": _valor,
         "pct": round(pct, 2), "hecho": _hecho, "antes": _antes, "bruto": _bruto,
-        "retencion_pct": _ret_pct, "retencion": _ret, "neto": round(_bruto - _ret, 2),
+        "retencion_pct": _ret_pct, "retencion": _ret, "neto": round(_bruto - _ret - _menos_dep, 2),
+        "menos_deposito": _menos_dep, "deposito": _dp,
         "hay_contrato": bool(_cid),
         # v510: «retenido» es lo que se retuvo en total y NO cambia de significado —
         # el resto del módulo lo venía usando así. Lo que hacía falta era distinguirlo
@@ -338,8 +417,9 @@ def crear_reclamacion(pid, grupo, pct=None, periodo_hasta="", nota="",
         return False, t("There is nothing new to claim: the work done has already been "
                         "claimed in full.")
     n = _siguiente(RECLAMACIONES, C_HEADERS, pid)
+    _cid_n = f"CLM-{pid}-{n:03d}"
     try:
-        w.append_row([f"CLM-{pid}-{n:03d}", str(grupo), str(pid), str(n),
+        w.append_row([_cid_n, str(grupo), str(pid), str(n),
                       clock.now(grupo).strftime("%Y-%m-%d"), str(periodo_hasta or ""),
                       str(d["pct"]), str(d["contrato"]), str(d["variaciones"]),
                       str(d["hecho"]), str(d["antes"]), str(d["retencion_pct"]),
@@ -350,7 +430,63 @@ def crear_reclamacion(pid, grupo, pct=None, periodo_hasta="", nota="",
     except Exception as e:
         return False, f"{t('Error saving the claim')}: {e}"
     _invalidate()
-    return True, "%s %d: %s %s" % (t("Claim"), n, t("net payable"), _dinero(d["neto"]))   # v672 · H14: $ y miles
+    # v702 · D3: SU factura (Progress Claim / Tax Invoice): el valor de este periodo, menos el depósito que se
+    # recupera y menos la retención. Así cuenta como facturado y como «por cobrar», y viaja a Xero como las demás.
+    _nom = _nombre_obra(pid, prj)
+    _ls = [{"concepto": t("Progress claim #{n} — {p}% of {v}", n=n, p="%g" % d["pct"], v=_dinero(d["valor"]))
+            + (" — " + _nom if _nom else ""), "importe": d["bruto"], "proyecto_id": str(pid),
+            "tipo": L_CERT, "reclamacion": _cid_n}]
+    if d["menos_deposito"] > 0:
+        _ls.append({"concepto": t("Less deposit (invoice No. {n})", n=", ".join(d["deposito"]["numeros"]) or "—"),
+                    "importe": -d["menos_deposito"], "proyecto_id": str(pid), "tipo": L_DEPOSITO,
+                    "reclamacion": _cid_n})
+    if d["retencion"] > 0:
+        _ls.append({"concepto": t("Less retention ({p}%)", p="%g" % d["retencion_pct"]), "importe": -d["retencion"],
+                    "proyecto_id": str(pid), "tipo": L_RETENCION, "reclamacion": _cid_n})
+    ok_f, num_f = _emitir_factura(pid, grupo, _ls, prj, creado_por, nota)
+    if not ok_f:
+        # la certificación no se queda a medias: sin su factura no se cobraría
+        _f, _ = _fila(w, RECLAMACIONES, _cid_n)
+        if _f:
+            _set(w, _CCOL, _f, {"Status": ANULADA})
+        _invalidate()
+        return False, t("The claim could not be issued: its invoice failed ({e}).", e=num_f)
+    return True, "%s %d: %s %s · %s" % (t("Claim"), n, t("net payable"), _dinero(d["neto"]),   # v672 · H14: $ y miles
+                                        t("invoice No. {n} issued.", n=num_f))
+
+
+def _nombre_obra(pid, prj=None) -> str:
+    try:
+        from core import projects as P
+        return str((prj or P.get_project(pid) or {}).get("Name", "") or "")
+    except Exception:
+        return ""
+
+
+def _emitir_factura(pid, grupo, lineas, prj=None, creado_por="", nota="") -> tuple:
+    """`(ok, número | error)`: la factura de una certificación o de una liberación (v702, D3). Cliente de la obra,
+    impuesto de su cotización, vencimiento por el plazo de pago del grupo."""
+    try:
+        from datetime import timedelta
+        from core import invoices as _I, projects as P, quotes as Q, contable
+        _p = prj or P.get_project(pid) or {}
+        _cot = Q.cotizacion_de_proyecto(pid) or {}
+        try:
+            _plazo = int(contable.identidad(grupo).get("plazo") or 14)
+        except Exception:
+            _plazo = 14
+        _hoy = clock.today(grupo)
+        ok, fid = _I.create_factura(grupo, str(_p.get("ClientID", "") or _cot.get("ClientID", "")),
+                                    str(_p.get("Client", "") or _cot.get("ClientName", "")), lineas,
+                                    _num(_cot.get("TaxPct")), fecha=_hoy.isoformat(),
+                                    vencimiento=(_hoy + timedelta(days=_plazo)).isoformat(),
+                                    nota=str(nota or ""), creado_por=str(creado_por or ""))
+        if not ok:
+            return False, fid
+        return True, str((_I.get_factura(fid) or {}).get("Number", "") or fid)
+    except Exception as e:
+        logger.warning("claims._emitir_factura(%s): %s", pid, e)
+        return False, str(e)
 
 
 def puede_liberar(pid, prj=None) -> tuple:
@@ -414,8 +550,9 @@ def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None)
     _ult = [r for r in reclamaciones(pid) if not es_liberacion(r)]
     _prev = _ult[-1] if _ult else {}
     n = _siguiente(RECLAMACIONES, C_HEADERS, pid)
+    _cid_n = f"CLM-{pid}-{n:03d}"
     try:
-        w.append_row([f"CLM-{pid}-{n:03d}", str(grupo), str(pid), str(n),
+        w.append_row([_cid_n, str(grupo), str(pid), str(n),
                       clock.now(grupo).strftime("%Y-%m-%d"), "",
                       str(_num(_prev.get("PctComplete")) or 100.0),
                       str(_num(_prev.get("ContractValue"))),
@@ -430,7 +567,19 @@ def crear_liberacion(pid, grupo, importe=None, nota="", creado_por="", prj=None)
     except Exception as e:
         return False, f"{t('Error saving the release')}: {e}"
     _invalidate()
-    return True, "%s %d: %s %s" % (t("Retention release"), n, t("net payable"), _dinero(_imp))   # v672 · H14
+    # v702 · D3: la retención que se devuelve también se FACTURA (es dinero que el cliente retuvo y ahora paga)
+    _nom = _nombre_obra(pid, prj)
+    ok_f, num_f = _emitir_factura(pid, grupo, [{
+        "concepto": t("Retention release #{n}", n=n) + (" — " + _nom if _nom else ""), "importe": _imp,
+        "proyecto_id": str(pid), "tipo": L_LIBERACION, "reclamacion": _cid_n}], prj, creado_por, nota)
+    if not ok_f:
+        _f, _ = _fila(w, RECLAMACIONES, _cid_n)
+        if _f:
+            _set(w, _CCOL, _f, {"Status": ANULADA})
+        _invalidate()
+        return False, t("The release could not be issued: its invoice failed ({e}).", e=num_f)
+    return True, "%s %d: %s %s · %s" % (t("Retention release"), n, t("net payable"), _dinero(_imp),   # v672 · H14
+                                        t("invoice No. {n} issued.", n=num_f))
 
 
 def _fila(w, hoja, oid):
@@ -476,9 +625,13 @@ def marcar_pagada(cid) -> tuple:
     return True, t("Claim marked as paid.")
 
 
-def anular(cid) -> tuple:
+def anular(cid, _con_factura=True) -> tuple:
     """⚠️ Anular la ÚLTIMA es lo único seguro: las siguientes se emitieron restando el
-    `WorkDone` de ésta, así que anular una del medio dejaría un hueco en lo acumulado."""
+    `WorkDone` de ésta, así que anular una del medio dejaría un hueco en lo acumulado.
+
+    ⚠️ v702 · D3: con ella se anula SU factura. Si esa factura ya tiene cobros, no se hace aquí: hay que decir qué
+    pasa con ese dinero, y eso se decide al anular la factura en Invoices (que también cancela esta certificación).
+    `_con_factura=False` lo usa `invoices.anular`, que ya está anulando la factura."""
     w = _ws(RECLAMACIONES, C_HEADERS)
     if w is None:
         return False, _motivo_sin_hoja()
@@ -490,8 +643,19 @@ def anular(cid) -> tuple:
     if _num(r.get("Number")) != _ultima:
         return False, t("Only the latest claim can be cancelled: the ones after it were "
                         "issued on top of this one.")
+    _fac = factura_de(cid, str(r.get("Group", "")) or None) if _con_factura else {}
+    if _fac:
+        if round(_num(_fac.get("Collected")), 2) > 0:
+            return False, t("Invoice No. {n} of this claim has {m} collected: void it in Finance → Invoices, where "
+                            "you choose what happens with that money. That cancels this claim too.",
+                            n=_fac.get("Number", ""), m=_dinero(_num(_fac.get("Collected"))))
+        from core import invoices as _I
+        ok_v, msg_v = _I.anular(str(_fac.get("ID", "")), _desde_reclamacion=True)
+        if not ok_v:
+            return False, msg_v
     ok, err = _set(w, _CCOL, fila, {"Status": ANULADA})
     if not ok:
         return False, err
     _invalidate()
-    return True, t("Claim cancelled.")
+    return True, (t("Claim cancelled, and its invoice No. {n} voided.", n=_fac.get("Number", "")) if _fac
+                  else t("Claim cancelled."))

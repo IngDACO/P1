@@ -71,7 +71,8 @@ ROTURAS = [
     ("⚠️ la factura de una obra cotizada no ofrece sus líneas ni un depósito", IU,
      [('        if _cot1 and I.por_certificar(_pid1, grupo, _p1)["pendiente"] > 0:', "        if False:")]),
     ("se ofrecen las líneas con la obra ya facturada en parte", IU,
-     [("            if I.es_cotizada(_pid1) and _num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) <= 0.005:",
+     # v702 · re-anclada: la condición es ahora «nada facturado, o solo un depósito» (`_solo_dep`, D3 del ciclo 7)
+     [("            if I.es_cotizada(_pid1) and _solo_dep:",
        "            if I.es_cotizada(_pid1):")]),
     ("las líneas de la cotización con su COSTE, no su precio", IU,
      [('                             "Importe": round(_num(_l.get("precio_total")), 2),',
