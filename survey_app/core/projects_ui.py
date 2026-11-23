@@ -2759,11 +2759,27 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
         cierre, "The project details were updated.")
     if _reanuda:
         _txt = "This job has restarted. You are back on it: the office will put your days on the board."
-    try:
-        alerts.notify_change(pid, grupo, _txt, st.session_state.get("auth", {}).get("usuario", ""),
-                             asignados if cierre else [x for x in asignados if x not in nuevos], nombre)
-    except Exception:
-        pass
+    _dest = asignados if cierre else [x for x in asignados if x not in nuevos]
+    # ⚠️ v706 · V4 del ciclo 7 (lo de V1, del lado del CAMPO): «the office will put your days on the board» llegaba
+    # aunque la pausa dejó sus días en el tablero (C7: 8 días). A quien sigue en él desde hoy se le dice que siguen.
+    _envios = [(_txt, _dest)]
+    if _reanuda:
+        try:
+            from core import roster as _R
+            _dias = _R.dias_desde(grupo, pid, clock.today(grupo))
+        except Exception:
+            _dias = {}
+        _con = [x for x in _dest if _dias.get(x)]
+        _envios = [(_txt, [x for x in _dest if x not in _con]),
+                   ("This job has restarted. You are back on it: your days on the board stay as they were.", _con)]
+    for _t_av, _d_av in _envios:
+        if not _d_av:
+            continue
+        try:
+            alerts.notify_change(pid, grupo, _t_av, st.session_state.get("auth", {}).get("usuario", ""),
+                                 _d_av, nombre)
+        except Exception:
+            pass
     # v219: sincronizar el planificador — poner a los nuevos en el
     # proyecto entre sus fechas y quitar del roster a los desasignados.
     _quitados = [x for x in actuales if x not in asignados]
@@ -4909,7 +4925,10 @@ def render_field_projects(usuario: str, grupo: str):
     except Exception:
         _npend = 0
     if _npend and _sec != "🏗 Avance":
-        st.warning(t(":material/edit_note: **{n} unsaved ticks in «Progress».** They only count "
+        # v706 · V5 del ciclo 7: con una, «1 unsaved ticks»
+        st.warning(t(":material/edit_note: **1 unsaved tick in «Progress».** It only counts once saved.")
+                   if _npend == 1 else
+                   t(":material/edit_note: **{n} unsaved ticks in «Progress».** They only count "
                      "once saved.", n=_npend))
         st.button(t(":material/trending_up: Go to Progress and save"), key=f"fld_ir_pend_{pid}",
                   on_click=_ir_avance_campo)

@@ -188,7 +188,8 @@ chk("...y una sin acreditar, sin «?»", _w(at.checkbox, "fld_PRJ-1_1_1").proto.
 _w(at.checkbox, "fld_PRJ-1_1_1").check()
 at.run()
 chk("marcar sin guardar: la etapa dice «1 unsaved»", "1 unsaved" in _tit(at, "Set Up"), _tit(at, "Set Up"))
-chk("...arriba, el aviso y «Save all (1)»", any("1 unsaved ticks" in x for x in _todo(at))
+# v706 · al día: con una casilla, en singular («1 unsaved tick», V5 del ciclo 7; decía «1 unsaved ticks»)
+chk("...el aviso y «Save all (1)»", any("1 unsaved tick." in x for x in _todo(at))
     and _w(at.button, "fld_save_all_PRJ-1") is not None)
 _bs = _w(at.button, "fld_save_PRJ-1_1")
 # v695 · H11 del ciclo 6: en singular, «(1 change)»
@@ -197,8 +198,9 @@ chk("...y el botón de la etapa lo dice y se resalta", _bs is not None and "(1 c
 chk("nada escrito todavía", at.session_state["_acr"] == [])
 at.session_state["cpxseg_fld_sec"] = "📝 Parte"
 at.run()
-chk("⚠️ en OTRA pestaña: «1 unsaved ticks in «Progress»» y la vuelta a un toque",
-    any("unsaved ticks in «Progress»" in x for x in _todo(at)) and _w(at.button, "fld_ir_pend_PRJ-1") is not None,
+# v706 · al día: en singular («1 unsaved tick in «Progress»», V5 del ciclo 7)
+chk("⚠️ en OTRA pestaña: «1 unsaved tick in «Progress»» y la vuelta a un toque",
+    any("1 unsaved tick in «Progress»" in x for x in _todo(at)) and _w(at.button, "fld_ir_pend_PRJ-1") is not None,
     _todo(at)[-4:])
 _w(at.button, "fld_ir_pend_PRJ-1").click()
 at.run()

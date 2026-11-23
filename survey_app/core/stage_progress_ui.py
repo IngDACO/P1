@@ -225,7 +225,10 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                         st.rerun()
     # v703 · H18: lo marcado sin guardar, DEBAJO de la lista (aparecer aquí no mueve ninguna casilla)
     if _pend and editable:
-        st.warning(t(":material/edit_note: **{n} unsaved ticks.** They stay while you move around "
+        # v706 · V5 del ciclo 7: con una, «1 unsaved ticks»
+        st.warning(t(":material/edit_note: **1 unsaved tick.** It stays while you move around this job, but it "
+                     "only counts once saved.") if len(_pend) == 1 else
+                   t(":material/edit_note: **{n} unsaved ticks.** They stay while you move around "
                      "this job, but they only count once saved.", n=len(_pend)))
         if st.button(t(":material/save: Save all ({n})", n=len(_pend)),
                      key="%s_save_all_%s" % (key_prefix, pid), type="primary", width="stretch"):
