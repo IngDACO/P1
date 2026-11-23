@@ -2722,6 +2722,11 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
     aviso a la gente lo DICE (ciclo 2: les llegó «The project details were updated.») y, con `liberar`, se les quita
     del tablero desde hoy. Acaba en `st.rerun()`."""
     nombre, asignados, actuales = ctx["nombre"], list(ctx["asignados"]), list(ctx["actuales"])
+    # ⚠️ v703 · H14 del ciclo 7: al REANUDAR una obra en pausa (o cancelada) solo salía «Changes saved.», y a la
+    # cuadrilla —a la que se le dijo «You are off it until it restarts»— le llegaba «The project details were updated.»
+    _parada = ("On hold", "Cancelled")
+    _reanuda = bool(not cierre and str(prj.get("ManualStatus", "") or "") in _parada
+                    and str(campos.get("ManualStatus", "") or "") not in _parada)
     P.update_project(pid, campos)
     # Notificar a los usuarios de campo recién asignados
     nuevos = [x for x in asignados if x not in actuales]
@@ -2752,6 +2757,8 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
     _txt = {"Cancelled": "This job has been cancelled. You are off it from today.",
             "On hold": "This job is on hold from today. You are off it until it restarts."}.get(
         cierre, "The project details were updated.")
+    if _reanuda:
+        _txt = "This job has restarted. You are back on it: the office will put your days on the board."
     try:
         alerts.notify_change(pid, grupo, _txt, st.session_state.get("auth", {}).get("usuario", ""),
                              asignados if cierre else [x for x in asignados if x not in nuevos], nombre)
@@ -2765,6 +2772,12 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
     # mientras el alta sí dice «2 field user(s) notified»)
     if cierre:
         flash.exito(t("Job cancelled.") if cierre == "Cancelled" else t("Job put on hold."))
+    elif _reanuda:
+        # v703 · H14: la confirmación va con «Plan it» encima del formulario (`_aviso_reanudada`), no como aviso suelto
+        st.session_state[f"_prj_reanudada_{pid}"] = {
+            "n": len([x for x in asignados if x not in nuevos]), "nuevos": _sent,
+            "avisados": ", ".join(_nombres_de(_avisados, grupo))}
+        st.session_state["_reanudada_bajar"] = True
     else:
         flash.exito(t("Changes saved.") + (" " + t(":material/send: {n} field user(s) notified: {l}.",
                                                   n=_sent, l=", ".join(_nombres_de(_avisados, grupo)))
@@ -2780,6 +2793,36 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
             flash.aviso(t("The board could not be cleared: do it in Planning."))
     _autoagenda(grupo, pid, [] if cierre else nuevos, _quitados, ctx["f_ini"], ctx["f_fin"], al_flash=True)
     st.rerun()
+
+
+def _aviso_reanudada(pid, info):
+    """v703 · H14 del ciclo 7: «Job restarted.» con a quién se avisó y «Plan it» (la pausa quitó a la cuadrilla del
+    tablero desde ese día: nadie vuelve a él solo). Encima del formulario de datos, donde se pulsó «Save changes»."""
+    with st.container(border=True, key="cpx_obra_reanudada"):
+        _bajar_a("cpx_obra_reanudada", "_reanudada_bajar")
+        _n = int(info.get("n") or 0)
+        st.success(t(":material/play_circle: **Job restarted.**") + " "
+                   + (t("{n} field user(s) told they are back on it.", n=_n) if _n
+                      else t("Nobody is assigned to it yet.")))
+        if info.get("nuevos"):
+            st.caption(t(":material/send: {n} field user(s) notified: {l}.", n=info["nuevos"], l=info.get("avisados", "")))
+        # Planning es de la oficina (el propietario no lo tiene, como en `_plan_semana_section`)
+        _plan = str((st.session_state.get("auth") or {}).get("rol", "")) == "administrator"
+        if _plan:
+            st.caption(t("The pause took the crew off the board: plan their days again."))
+        _y, _k = st.columns(2)
+        if _plan:
+            _y.button(t(":material/bolt: Plan it"), key=f"reanudada_plan_{pid}", type="primary", width="stretch",
+                      on_click=_planificar_reanudada, args=(str(pid),))
+        if _k.button(t("Not now") if _plan else t("OK"), key=f"reanudada_no_{pid}", width="stretch"):
+            st.session_state.pop(f"_prj_reanudada_{pid}", None)
+            st.rerun()
+
+
+def _planificar_reanudada(pid) -> None:
+    """v703 · «Plan it» tras reanudar: olvida el aviso y va a Planning → Assign con la obra (callback)."""
+    st.session_state.pop(f"_prj_reanudada_{pid}", None)
+    _planificar_obra(pid)
 
 
 def _confirmar_cierre(pid, grupo, prj, pend):
@@ -3554,6 +3597,9 @@ def _detalle_proyecto(pid: str, grupo: str = None):
         _cierre_pend = st.session_state.get(f"_prj_cierre_{pid}")
         if _cierre_pend:
             _confirmar_cierre(pid, grupo, prj, _cierre_pend)
+        _reanudada = st.session_state.get(f"_prj_reanudada_{pid}")
+        if _reanudada and not _cierre_pend:
+            _aviso_reanudada(pid, _reanudada)
         with st.form(f"edit_{pid}", enter_to_submit=False):
             st.markdown(t("**Project data**"))
             nombre   = st.text_input(t("Name"), value=prj.get("Name", ""))
@@ -4902,19 +4948,24 @@ def _barras_html(pares, total, color=None) -> str:
         return ""
     color = color or theme.AZUL
     out = []
+    # ⚠️ v703 · H8 del ciclo 7: con anchos FIJOS (118 + 96 + 42 px y los huecos, 286 px sin la barra), en una ventana
+    # de escritorio estrecha con el menú abierto la columna medía menos: la barra quedaba a 0 y «100%» se salía, con
+    # scroll horizontal en la página. Ahora la etiqueta cede (con «…») y la barra guarda un mínimo; cifra y % no se parten.
+    # Y la etiqueta, ESCAPADA: llegan nombres de cliente y categorías de la hoja.
+    from html import escape as _esc
     for et, val in pares:
         pct = 100.0 * float(val) / total
         out.append(
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-            f'<div style="width:118px;flex:none;font-size:12px;color:{theme.TXT};'
-            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{et}</div>'
-            f'<div style="flex:1;height:9px;background:{theme.PISTA};border-radius:20px;'
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;min-width:0;max-width:100%;">'
+            f'<div style="flex:0 1 118px;min-width:40px;font-size:12px;color:{theme.TXT};'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{_esc(str(et))}</div>'
+            f'<div style="flex:1 1 40px;min-width:28px;height:9px;background:{theme.PISTA};border-radius:20px;'
             'overflow:hidden;">'
             f'<div style="height:9px;width:{max(1.5, pct):.1f}%;background:{color};'
             f'border-radius:20px;"></div></div>'
-            f'<div style="width:96px;flex:none;text-align:right;font-size:12px;'
+            f'<div style="flex:0 0 auto;white-space:nowrap;text-align:right;font-size:12px;'
             f'color:{theme.TXT};font-weight:600;">${float(val):,.0f}</div>'
-            f'<div style="width:42px;flex:none;text-align:right;font-size:11px;'
+            f'<div style="flex:0 0 auto;min-width:30px;white-space:nowrap;text-align:right;font-size:11px;'
             f'color:{theme.GRIS_SUAVE};">{pct:.0f}%</div></div>')
     return "".join(out)
 
@@ -5005,7 +5056,9 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                                  .replace("{r}", theme.dinero(_rv))
                                  .replace("{d}", ("+" if _df > 0 else "−") + theme.dinero(abs(_df))))
                 st.markdown(_lin)
-                st.caption(f"{_oid} · {_etq(_est)} · ordered {_fmt_fecha(o.get('Date', ''))}")
+                # v703 · H6 del ciclo 7: el estado suelto, con mayúscula («Pending»), como en el resto (v672)
+                from core.i18n import estado as _est_txt
+                st.caption(f"{_oid} · {_est_txt(_est)} · ordered {_fmt_fecha(o.get('Date', ''))}")
 
                 if _est == O.RECIBIDA and not str(o.get("ExpenseID", "")).strip():
                     # ⚠️ Se marcó recibida pero su gasto no llegó a escribirse: ese
@@ -5074,7 +5127,12 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
             st.caption(t("No orders recorded on this project yet."))
 
         if editable:
-            with st.form(f"{key_prefix}_ordnew_{pid}", enter_to_submit=False):
+            # ⚠️ v703 · H5 del ciclo 7: tras «Record order» el formulario conservaba todo y otro clic creaba una orden
+            # IDÉNTICA (ORD-00006, $77,000 comprometidos). Se vacía al GUARDAR (otra generación de formulario: con
+            # `clear_on_submit` se vaciaría también cuando la orden se rechaza, y habría que teclearla entera otra vez)
+            # y avisa de una igual de hace minutos.
+            _ogen = int(st.session_state.get(f"_{key_prefix}_ordgen_{pid}", 0))
+            with st.form(f"{key_prefix}_ordnew_{pid}_{_ogen}", enter_to_submit=False):
                 st.markdown(t("**New order**"))
                 _c1, _c2 = st.columns(2)
                 _prov = _c1.text_input(t("Supplier"))
@@ -5100,14 +5158,22 @@ def _ordenes_section(pid, grupo, editable=True, key_prefix="ord"):
                            "for and until when, both in Status and to the field team."))
                 if st.form_submit_button(t(":material/add_circle: Record order"),
                                          width="stretch"):
+                    _igual = O.igual_reciente(pid, _prov, _val, _desc)      # ANTES de crear la nueva
                     ok, msg = O.crear(
                         pid, grupo, _prov, _val, descripcion=_desc, categoria=_cat,
                         fecha_esperada=_fe.strftime("%Y-%m-%d") if _fe else "",
                         actividad=("" if _act == _SIN_ACT else _act.split(" · ", 1)[0]),
                         creado_por=st.session_state.get("auth", {}).get("usuario", ""))
-                    (flash.exito if ok else st.error)(msg)
                     if ok:
+                        flash.exito(msg)
+                        if _igual:
+                            flash.aviso(t("An identical order was recorded {m} min ago ({o}): check it is not the "
+                                          "same one twice. Cancel the one you do not need.",
+                                          m=_igual["minutos"], o=_igual["id"]))
+                        st.session_state[f"_{key_prefix}_ordgen_{pid}"] = _ogen + 1
                         st.rerun()
+                    else:
+                        st.error(msg)
 
 
 def _ganancia_section(pid, grupo):
@@ -7044,6 +7110,14 @@ def dia_olvidado_section(grupo: str):
             if _nom:
                 st.warning(t(":material/receipt_long: That day is already in payslip **{x}**: these hours will show in "
                              "Finance → Payroll as clocked after their payslip, to settle there.", x=_nom))
+        # ⚠️ v703 · H10 del ciclo 7: el 21/11 entró en C7, que empieza el 23/11, sin decir nada (8.5 h y $468 de coste
+        # ANTES del inicio). El aviso de H17 del ciclo 6 (el parte), aquí: avisa, no bloquea.
+        if _pid:
+            from core.num import parse_date as _pd_ini
+            _ini_o = _pd_ini(next((p.get("StartDate") for p in _proys if str(p.get("ID", "")) == str(_pid)), ""))
+            if _ini_o and _dia < _ini_o:
+                st.warning(t(":material/event: This job starts on {s}: is the day right?",
+                             s=_ini_o.strftime("%d/%m/%Y")))
         if st.button(t(":material/more_time: Add the day"), key=f"gh_dia_ok_{_g}", type="primary",
                      disabled=bool(_no or not _usr or not _pid or not str(_mot or "").strip())):
             ok, msg, _nom = correcciones.anadir_dia_oficina(

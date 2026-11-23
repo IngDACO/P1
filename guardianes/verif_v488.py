@@ -243,10 +243,13 @@ FACT = [
 CLI = [{"ID": "CLI-1", "Name": "Acme Pty", "Email": "a@example.com", "Address": "1 St"},
        {"ID": "CLI-2", "Name": "Beta, \"Ltd\"", "Email": "", "Address": "2\nSt"}]
 ETQ = {"PRJ-1": "Torre Norte", "PRJ-2": "Torre Norte (PRJ-2)", "PRJ-LARGO": "X" * 60}
+# ⚠️ v703 · al día: con seguimiento, 2 avisos (eran 3). El de las opciones de seguimiento ya no lo dice cada CSV: lo dice
+# UNO Accounting, con las opciones de los dos ficheros (`contable.aviso_opciones`, H15 del ciclo 7: salían dos casi
+# iguales, «…these 2 options» y «…these 5 options»). El CSV, la huella, no cambia.
 ORACULO = {
-    ("xero", True): ("568b3696907e9d957d91a7f013acc59cd757584d27060c861bedb4b5f667c514", 6, 3, 3),
+    ("xero", True): ("568b3696907e9d957d91a7f013acc59cd757584d27060c861bedb4b5f667c514", 6, 3, 2),
     ("xero", False): ("e917ebc5e6840a68b947b408fa4d5ad1303681e58c72283ba43591a1a257ec2b", 6, 3, 2),
-    ("myob", True): ("893232336d52b45a0e863df59b6664405ea164b9615af80c75a1afe964cd8a5e", 6, 3, 3),
+    ("myob", True): ("893232336d52b45a0e863df59b6664405ea164b9615af80c75a1afe964cd8a5e", 6, 3, 2),
     ("myob", False): ("449820d49c60f6aa410c2c4d8628ea0fbc54c949925281ae187fb6be58b1f646", 6, 3, 2),
 }
 _orig = (contable.invoices.list_facturas, contable.clientes.list_clientes,

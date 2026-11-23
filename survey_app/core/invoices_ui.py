@@ -379,6 +379,19 @@ def _detalle_factura(grupo, fid):
         if not _anulada:
             with st.expander(t(":material/block: Void invoice"), key=f"exp_fac_anul_{fid}"):
                 st.caption(t("It is taken out of accounts receivable. This cannot be undone."))
+                # ⚠️ v703 · H26 del ciclo 7: la factura de una CERTIFICACIÓN se anula con ella (D3, v702), y la caja no
+                # lo decía: se enteraba uno después, por el aviso «Its claim was cancelled too.»
+                _cl_n = ""
+                try:
+                    _cids = sorted({str(ln.get("reclamacion", "")) for ln in I.lineas_de(f) if ln.get("reclamacion")})
+                    if _cids:
+                        from core import claims as _CL
+                        _cl_n = ", #".join(str((_CL.es_ultima(c)[1] or {}).get("Number", "?")) for c in _cids)
+                except Exception:
+                    _cl_n = ""
+                if _cl_n:
+                    st.caption(t(":material/link: It is the invoice of claim #{n}: voiding it cancels that claim "
+                                 "too, and it stops counting as claimed.", n=_cl_n))
                 # ⚠️ v669 · con dinero COBRADO, antes se dice adónde va (H20)
                 _dest = None
                 if cob > 0.005:
@@ -388,12 +401,13 @@ def _detalle_factura(grupo, fid):
                 # ⚠️ v569 · PREGUNTA antes (un clic anulaba, sin vuelta atrás) y la acción
                 # va diferida a `render_facturas` (trampa 37).
                 if st.session_state.get("_fac_anular_conf") == fid:
+                    _y_cl = (" " + t("Claim #{n} is cancelled too.", n=_cl_n)) if _cl_n else ""
                     if cob > 0.005:
                         st.warning(t("Void invoice No. {n}, with {m} collected? It cannot be undone.",
-                                     n=str(f.get("Number", "")), m=_T.dinero(cob)))
+                                     n=str(f.get("Number", "")), m=_T.dinero(cob)) + _y_cl)
                     else:
                         st.warning(t("Void invoice No. {n}? It cannot be undone.")
-                                   .replace("{n}", str(f.get("Number", ""))))
+                                   .replace("{n}", str(f.get("Number", ""))) + _y_cl)
                     _y, _k = st.columns(2)
                     if _y.button(t(":material/block: Yes, void it"), key=f"fac_anul_si_{fid}",
                                  type="primary"):
@@ -745,8 +759,9 @@ def _nueva_factura(grupo):
         column_config=tabla.cfg(None, {
             "Concepto": st.column_config.TextColumn(t("Item"), width="medium"),
             # v702 · D3: sin mínimo 0 — «Less deposit» resta (y un descuento también)
+            # v703 · H24 del ciclo 7: con «$%,.2f» (printf) el negativo salía «$-20,811.60»; «dollar», «-$20,811.60»
             "Importe":  st.column_config.NumberColumn(
-                t("Amount"), format="$%,.2f",
+                t("Amount"), format="dollar",
                 help=t("Negative to take something off, like the deposit already invoiced.")),
             "Project": st.column_config.SelectboxColumn(
                 t("Project"), options=["(none)"] + prj_names, required=False),

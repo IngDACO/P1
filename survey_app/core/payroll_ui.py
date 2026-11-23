@@ -355,6 +355,17 @@ def _generar(grupo):
     _ya = {str(n.get("User", "")): n for n in payroll.list_nominas(grupo)
            if str(n.get("PeriodFrom", "")) == desde.isoformat() and str(n.get("PeriodTo", "")) == hasta.isoformat()}
     horas_sin_pagar_section(grupo, "nom_gen", desde.isoformat(), hasta.isoformat())
+    # ⚠️ v703 · H9 del ciclo 7: la vista previa solo multiplicaba horas × tarifa, y la colilla salió con un día de
+    # vacaciones pagadas ($14.85 en la vista previa, $454.85 la colilla); y con alguien SOLO de vacaciones el botón
+    # ni se activaba («Nobody has workday hours»). Las ausencias pagadas, de la MISMA función que usa `generar`.
+    try:
+        from core import ausencias as _AUP
+        _aus = _AUP.horas_pagadas_grupo(grupo, desde, hasta) or {}
+    except Exception:
+        _aus = {}                         # es una vista previa: que falle no puede impedir generar
+    _aus = {k: v for k, v in _aus.items() if _num((v or {}).get("horas")) > 0}
+    for _k, _v in _aus.items():
+        horas.setdefault(_k, {"nombre": str(_v.get("nombre") or _k), "horas": 0.0})
     if horas:
         st.markdown(t("**{n} user(s)** with workday hours in the period:", n=len(horas)))
         # ⚠️ v574 · quien no tiene tarifa se dice ANTES de generar (salía a $0 en la
@@ -377,6 +388,11 @@ def _generar(grupo):
             "Usuario": v["nombre"], "Horas": round(v["horas"], 2),            # v663: 2 decimales
             "Rate/h": round(_num(rates.get(k, 0)), 2),
             "Base": (None if (k in _fuera and k not in _ya) else round(v["horas"] * _num(rates.get(k, 0)), 2)),
+            # v703 · H9: lo que la colilla pagará además, de ausencias pagadas (vacaciones, baja). Las dos columnas solo
+            # si alguien tiene ausencias pagadas en el periodo (una columna entera vacía se pinta «None», verif_v467)
+            **({"Leave": round(_num((_aus.get(k) or {}).get("horas")), 2),
+                "LeavePay": round(_num((_aus.get(k) or {}).get("horas")) * _num(rates.get(k, 0)), 2)}
+               if _aus else {}),
             # v671 · H15: ya tiene colilla de ESE periodo (no se duplica: «already exists»)
             "Nota": (t("already on {n} ({h} h)", n=_ya[k].get("ID", ""), h=f"{_num(_ya[k].get('Hours')):.2f}")
                      if k in _ya else t("Left out: fix the workday of more than 16 h first") if k in _fuera
@@ -385,6 +401,8 @@ def _generar(grupo):
             column_config=tabla.cfg(None, {"Usuario": st.column_config.TextColumn(t("Employee")),
                            "Rate/h": st.column_config.NumberColumn(t("Rate/h"), format="$%,.2f"),
                            "Base": st.column_config.NumberColumn(t("Base pay"), format="$%,.2f"),
+                           "Leave": st.column_config.NumberColumn(t("Paid leave (h)")),
+                           "LeavePay": st.column_config.NumberColumn(t("Leave pay"), format="$%,.2f"),
                            "Nota": st.column_config.TextColumn(t("Note"))}))
     else:
         st.info(t("Nobody has workday hours in that period."))

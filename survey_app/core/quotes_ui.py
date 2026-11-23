@@ -281,16 +281,31 @@ def _editor_lineas(grupo, key: str, lineas: list) -> list:
     # ⚠️ La cantidad se reaplica sobre el artículo del catálogo (el costo depende de
     # ella); la ganancia, sobre el costo ya congelado.
     nuevas = []
+    _cambio_cant = False
     for i, l in enumerate(lineas):
         if i >= len(ed) or bool(ed.iloc[i]["Quitar"]):
             continue
         cant, gan = _num(ed.iloc[i]["Cant."]), _num(ed.iloc[i]["Ganancia $"])
         if cant <= 0:
             continue
+        _c0, _g0 = _num(l.get("cantidad")), Q.ganancia_de(l)
+        if abs(cant - _c0) > 1e-9:
+            _cambio_cant = True
+            # ⚠️ v703 · D2 del ciclo 7 («Que escale»): al cambiar SOLO la cantidad se conserva el % de la línea —
+            # 8 puertas ganan 8 × $250—; antes la ganancia se quedaba en $250 y la línea pasaba al 2,5 % sin aviso.
+            # Si la ganancia también cambió (la teclearon), manda lo tecleado (v355).
+            if abs(gan - _g0) < 0.005 and _c0 > 0:
+                gan = round(_g0 * cant / _c0, 2)
         # ⚠️ v356: se escala sobre el costo unitario CONGELADO, sin volver al catálogo.
         # Antes se reconstruía desde el artículo, así que tocar una celda adoptaba en
         # silencio los precios nuevos. Adoptarlos es ahora un botón explícito.
         nuevas.append(Q.escalar(l, cant, ganancia=gan))
+    if _cambio_cant:
+        # ⚠️ v703 · H1 del ciclo 7: con la misma clave, la fila seguía enseñando el costo, el % y el precio de antes
+        # mientras el total ya contaba lo nuevo. Otra generación de tabla, y se guarda donde el llamador lo lee.
+        st.session_state[f"{key}_lineas"] = nuevas
+        st.session_state[f"{key}_edgen"] = st.session_state.get(f"{key}_edgen", 0) + 1
+        st.rerun()
     return nuevas
 
 
@@ -846,6 +861,19 @@ def _ubicar_obra(pid: str, direccion: str) -> None:
         logger.warning("quotes_ui._ubicar_obra %s: %s", pid, e)
 
 
+def _ns_por_parada(lineas) -> int:
+    """Las paradas que dice una cotización SIN plano: la cantidad mayor de sus líneas «por parada» (la unidad «stop»
+    o «per stop», o «per stop» en el concepto), o 0. v703 · H3 del ciclo 7: C7 llevaba «Landing door set (per stop)»
+    ×8 y el alta de la obra proponía 2 paradas."""
+    ns = 0
+    for _l in lineas or []:
+        _uni = str(_l.get("unidad", "") or "").strip().lower()
+        _u = (_uni + " " + str(_l.get("concepto", "") or "")).lower()
+        if "per stop" in _u or _uni in ("stop", "stops"):
+            ns = max(ns, int(_num(_l.get("cantidad"))))
+    return ns
+
+
 def _crear_proyecto(grupo, c, _tot):
     """Aceptada y sin obra todavía: darla de alta con lo ya pactado."""
     from core import projects as P
@@ -867,6 +895,11 @@ def _crear_proyecto(grupo, c, _tot):
     # de la FICHA del cliente (ciclo 1: NS venía a 2 con un plano de 10 y la ubicación vacía).
     from core import quote_from_plan as _QP
     _ns_pl = _QP._ns(Q.plano_de(c))
+    # ⚠️ v703 · H3 del ciclo 7: sin plano, las paradas de una línea POR PARADA (C7: «Landing door set (per stop)» ×8
+    # proponía 2 paradas)
+    _ns_ln = _ns_por_parada(Q.lineas_de(c)) if _ns_pl < 2 else 0
+    if _ns_ln >= 2:
+        _ns_pl = _ns_ln
     try:
         _dir0 = str((C.get_cliente(str(c.get("ClientID", ""))) or {}).get("Address", "") or "")
     except Exception:
@@ -885,7 +918,9 @@ def _crear_proyecto(grupo, c, _tot):
             ns = c4.number_input(t("Stops (NS) *"), min_value=2, max_value=50, step=1,
                                  value=min(50, _ns_pl) if _ns_pl >= 2 else 2,
                                  help=t("It sets the schedule: which activities and how long they take."))
-            if _ns_pl >= 2:
+            if _ns_pl >= 2 and _ns_ln >= 2:
+                c4.caption(t(":material/architecture: From the «per stop» lines of the quote."))
+            elif _ns_pl >= 2:
                 c4.caption(t(":material/architecture: From the drawing this quote was priced with."))
             fin = None
         else:

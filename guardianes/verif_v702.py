@@ -199,8 +199,12 @@ _iu = open("core/invoices_ui.py", encoding="utf-8").read()
 chk("New invoice: «Invoice it as» también tras un depósito, y «Less deposit» restando",
     "if I.es_cotizada(_pid1) and _solo_dep:" in _iu and 'if _num((_dep1 or {}).get("pendiente")) > 0:' in _iu
     and 'Less deposit (invoice No. {n})' in _iu and '"Importe": -round(_num(_dep1["pendiente"]), 2)' in _iu)
+# ⚠️ v703 · al día: el formato de la columna pasó a «dollar» (H24 del ciclo 7) y la comprobación miraba el texto con
+# «$%,.2f»: un `min_value` con el formato nuevo pasaba en verde. Ahora mira la columna, sea cual sea su formato.
+_i0 = _iu.find('"Importe":  st.column_config.NumberColumn(')
+_col_imp = _iu[_i0:_iu.find('"Project": st.column_config.SelectboxColumn', _i0)] if _i0 >= 0 else ""
 chk("…la columna «Amount» admite negativos, y una factura de total ≤ 0 no se emite",
-    'format="$%,.2f", min_value=0.0' not in _iu and "if _sub <= 0:" in _iu)
+    bool(_col_imp) and "min_value" not in _col_imp and "if _sub <= 0:" in _iu, _col_imp)
 
 print()
 print("verif_v702: %d FALLOS" % len(FALLOS) if FALLOS else "verif_v702: TODO OK")

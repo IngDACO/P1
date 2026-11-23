@@ -496,9 +496,9 @@ def csv_ventas(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
                 "impuesto_codigo": IMPUESTOS_MYOB[doc["clave_impuesto"]],
                 "proyecto": opcion,
             }))
-    avisos += _avisos_comunes(perfil, cuentas, [VENTAS], cfg, seg, opciones)
+    avisos += _avisos_comunes(perfil, cuentas, [VENTAS], cfg, seg, opciones, con_opciones=False)
     return {"csv": _escribe(p["ventas"], filas), "filas": len(filas),
-            "documentos": docs, "avisos": avisos, "opciones": sorted(opciones)}
+            "documentos": docs, "avisos": avisos, "opciones": sorted(opciones), "seguimiento": seg}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -566,13 +566,18 @@ def csv_compras(grupo: str, perfil: str, desde=None, hasta=None) -> dict:
             avisos.append(t("The supplier «{p}» is written {n} different ways; they "
                             "will become separate contacts.",
                             p=sorted(variantes)[0], n=len(variantes)))
-    avisos += _avisos_comunes(perfil, cuentas, sorted(usadas), cfg, seg, opciones)
+    avisos += _avisos_comunes(perfil, cuentas, sorted(usadas), cfg, seg, opciones, con_opciones=False)
     return {"csv": _escribe(p["compras"], filas), "filas": len(filas),
-            "documentos": len(filas), "avisos": avisos, "opciones": sorted(opciones)}
+            "documentos": len(filas), "avisos": avisos, "opciones": sorted(opciones), "seguimiento": seg}
 
 
-def _avisos_comunes(perfil, cuentas, claves, cfg, seg, opciones) -> list:
-    """Lo que va a fallar AL IMPORTAR, dicho antes de descargar."""
+def _avisos_comunes(perfil, cuentas, claves, cfg, seg, opciones, con_opciones=True) -> list:
+    """Lo que va a fallar AL IMPORTAR, dicho antes de descargar.
+
+    ⚠️ v703 · H15 del ciclo 7: cada fichero (facturas y gastos) decía el suyo de las opciones de seguimiento, y
+    Accounting enseñaba dos casi iguales («…with these 2 options» y «…with these 5 options») sin decir de qué fichero
+    era cada uno, junto a una cifra y una lista que cuentan las de LOS DOS. Los CSV ya no lo dicen
+    (`con_opciones=False`): la pantalla dice UNO, con las opciones de los dos (`aviso_opciones`)."""
     avisos = []
     faltan = [k for k in claves if not str(cuentas.get(k, "")).strip()]
     if faltan:
@@ -580,6 +585,15 @@ def _avisos_comunes(perfil, cuentas, claves, cfg, seg, opciones) -> list:
         avisos.append(t("No account is set for: {c}. MYOB rejects a row without a valid "
                         "account; Xero leaves it unallocated.",
                         c=", ".join(legibles)))
+    if con_opciones:
+        avisos += aviso_opciones(perfil, cfg, seg, opciones)
+    return avisos
+
+
+def aviso_opciones(perfil, cfg, seg, opciones) -> list:
+    """El aviso de las opciones de seguimiento (Xero) o de las obras (MYOB) que tienen que existir antes de importar.
+    v703 · uno solo, con las opciones de los dos ficheros, desde Accounting (ver `_avisos_comunes`)."""
+    avisos = []
     if seg and opciones and perfil == "xero":
         # v584 · el plural (salía «with these 1 options»)
         _c = cfg.get("categoria_seguimiento", "Project")

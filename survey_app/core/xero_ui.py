@@ -262,7 +262,11 @@ def boton_factura(grupo, f):
     xid = str(f.get("XeroInvoiceID", "") or "").strip()
     if xid:
         est = X.estado(grupo)
-        st.caption(t(":material/cloud_done: In Xero since {d}", d=f.get("XeroSentAt", "") or "—"))
+        # v703 · H22 del ciclo 7: salía en ISO, «2026-11-23 17:38:31»; como el resto de la app, «23/11/2026 17:38»
+        from core.num import dmy as _dmy
+        _xs = str(f.get("XeroSentAt", "") or "").strip()
+        st.caption(t(":material/cloud_done: In Xero since {d}",
+                     d=(_dmy(_xs) + (" " + _xs[11:16] if len(_xs) >= 16 else "")) if _xs else "—"))
         st.link_button(t(":material/open_in_new: Open in Xero"),
                        X.url_factura(est.get("short_code", ""), xid))
         return

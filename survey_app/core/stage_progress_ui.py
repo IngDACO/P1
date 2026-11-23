@@ -145,19 +145,8 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
     for _ck in list(_pend):
         if _ck not in _guardado or _pend[_ck] == _guardado[_ck]:
             _pend.pop(_ck, None)
-    if _pend and editable:
-        st.warning(t(":material/edit_note: **{n} unsaved ticks.** They stay while you move around "
-                     "this job, but they only count once saved.", n=len(_pend)))
-        if st.button(t(":material/save: Save all ({n})", n=len(_pend)),
-                     key="%s_save_all_%s" % (key_prefix, pid), type="primary", width="stretch"):
-            _todos = [{"etapa": int(ck.split("|", 1)[0]), "actividad": ck.split("|", 1)[1],
-                       "pct": 100.0 if v else 0.0} for ck, v in _pend.items()]
-            with st.spinner(t("Saving…")):
-                ok, msg = SP.acreditar(pid, grupo, prj, _todos, quien=_quien)
-            (flash.exito if ok else st.error)(msg)
-            if ok:
-                _pend.clear()
-                st.rerun()
+    # ⚠️ v703 · H18 del ciclo 7: el aviso y «Save all» iban AQUÍ, encima de la lista: al marcar la primera casilla
+    # aparecían y la lista bajaba ~110 px, y un toque cayó en «Save all» y ACREDITÓ una actividad. Van al final.
     # v616 · quién y cuándo, para el «?» de cada casilla acreditada (la última fila de cada
     # actividad, como `stage_progress._mapa`: el texto cuenta lo mismo que la casilla)
     try:
@@ -234,4 +223,18 @@ def render(pid, grupo, prj, editable=True, key_prefix="sp"):
                         for _ck in [ck for ck in _pend if ck.split("|", 1)[0] == str(e["orden"])]:
                             _pend.pop(_ck, None)
                         st.rerun()
+    # v703 · H18: lo marcado sin guardar, DEBAJO de la lista (aparecer aquí no mueve ninguna casilla)
+    if _pend and editable:
+        st.warning(t(":material/edit_note: **{n} unsaved ticks.** They stay while you move around "
+                     "this job, but they only count once saved.", n=len(_pend)))
+        if st.button(t(":material/save: Save all ({n})", n=len(_pend)),
+                     key="%s_save_all_%s" % (key_prefix, pid), type="primary", width="stretch"):
+            _todos = [{"etapa": int(ck.split("|", 1)[0]), "actividad": ck.split("|", 1)[1],
+                       "pct": 100.0 if v else 0.0} for ck, v in _pend.items()]
+            with st.spinner(t("Saving…")):
+                ok, msg = SP.acreditar(pid, grupo, prj, _todos, quien=_quien)
+            (flash.exito if ok else st.error)(msg)
+            if ok:
+                _pend.clear()
+                st.rerun()
     return True

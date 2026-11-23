@@ -118,6 +118,29 @@ def list_for(pid, estado=None) -> list:
     return sorted(out, key=lambda r: str(r.get("Date", "")), reverse=True)
 
 
+def igual_reciente(pid, proveedor, valor, descripcion, minutos: int = 15):
+    """{id, minutos} de una orden IGUAL (proveedor, importe y descripción) de esta obra, no cancelada, de hace menos
+    de `minutos`; o None. v703 · H5 del ciclo 7: un segundo «Record order» creó ORD-00006 idéntica sin aviso."""
+    from datetime import datetime
+    _n = lambda s: " ".join(str(s or "").lower().split())      # noqa: E731
+    for r in list_for(pid):
+        ahora = clock.now(r.get("Group"))          # la hora LOCAL del grupo, la de «Created»
+        if str(r.get("Status", "")) == CANCELADA:
+            continue
+        if (_n(r.get("Supplier")) != _n(proveedor) or abs(_num(r.get("Amount")) - _num(valor)) > 0.005
+                or _n(r.get("Description")) != _n(descripcion)):
+            continue
+        _c = str(r.get("Created", "") or "")[:16]
+        try:
+            _dt = datetime.strptime(_c, "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        _m = (ahora.replace(tzinfo=None) - _dt).total_seconds() / 60.0
+        if 0 <= _m <= minutos:
+            return {"id": str(r.get("ID", "")), "minutos": max(1, int(round(_m)))}
+    return None
+
+
 def list_group(grupo, estado=None) -> list:
     out = [r for r in _records() if str(r.get("Group", "")) == str(grupo)]
     if estado:
@@ -328,7 +351,8 @@ def marcar_recibida(oid, valor_real=None, creado_por="") -> tuple:
                        + t("Complete it from the orders list."))
     _set(w, row, {"ExpenseID": msg_g})
     _invalidate()
-    return True, f"{t('Order received and charged to the project')} ({valor:,.2f})."
+    # v703 · H7 del ciclo 7: con su «$» («(39,000.00)» salía sin él; la familia de v674)
+    return True, f"{t('Order received and charged to the project')} (${valor:,.2f})."
 
 
 def _crear_gasto(r, valor, creado_por="") -> tuple:

@@ -28,6 +28,15 @@ def _dinero(v) -> str:
     return theme.dinero(_num(v))
 
 
+def _linea_claim(r, neto, deposito=0.0) -> str:
+    """La línea de una certificación de avance en «Claims issued»: número, fecha, %, el neto (UNO: con depósito, el de
+    su factura) y lo que se le restó. v672 · H14: la fecha DD/MM/YYYY y el % sin «.0». v703 · H25: un solo neto."""
+    _menos = ("%s %s · " % (t("deposit"), _dinero(deposito))) if deposito > 0.005 else ""
+    return "**#%s** %s · %s%% · %s %s — %s%s %s" % (
+        r.get("Number", "?"), _dmy(r.get("Date", "")), "%g" % _num(r.get("PctComplete", 0)), t("net"),
+        _dinero(neto), _menos, t("retention"), _dinero(r.get("Retention")))
+
+
 def _abrir_factura(fid):
     """v702 · D3: de la certificación a SU factura (en `on_click`: antes del cuerpo, la trampa 39)."""
     st.session_state["_fac_open"] = fid
@@ -241,11 +250,10 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                                                      t("retention release"), _dinero(r.get("ThisClaim")))
                     _ic = ":violet[:material/lock_open:]" if _est != CL.ANULADA else _ic
                 else:
-                    # v672 · H14: la fecha DD/MM/YYYY y el % sin «.0» («10%», no «10.0%»)
-                    _txt = "**#%s** %s · %s%% · %s %s — %s %s" % (
-                        r.get("Number", "?"), _dmy(r.get("Date", "")), "%g" % _num(r.get("PctComplete", 0)), t("net"),
-                        _dinero(_neto), t("retention"), _dinero(r.get("Retention")))
+                    _txt = None                  # v703 · H25: se compone abajo, con lo que dice su factura
                 if _est == CL.ANULADA:
+                    if _txt is None:
+                        _txt = _linea_claim(r, _neto)
                     st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, _estado_txt(CL.ANULADA)))   # v672 · «Cancelled» (H5)
                     continue
                 # v702 · D3: su factura (cobrar es registrar el pago en ella; «Mark paid» queda para las de antes)
@@ -253,13 +261,19 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                     _fac = CL.factura_de(r.get("ID"), grupo)
                 except Exception:
                     _fac = {}
+                # ⚠️ v703 · H25 del ciclo 7: con depósito, la línea decía DOS netos («net $7,420.78 … net after deposit
+                # $5,214.75»). Ahora uno, el de su factura (lo que se cobra), con el depósito recuperado al lado.
+                _dep_l = 0.0
+                if _fac and not CL.es_liberacion(r):
+                    _neto_f = _num(_fac.get("Subtotal"))
+                    if abs(_neto_f - _neto) > 0.01:
+                        _dep_l = _neto - _neto_f
+                if _txt is None:
+                    _txt = _linea_claim(r, _neto - _dep_l, _dep_l)
                 if _fac:
                     from core import invoices as _I
-                    _neto_f = _num(_fac.get("Subtotal"))
                     _txt += " · " + t("invoice No. {n}", n=_fac.get("Number", "")) + " · " + \
                         _estado_txt(_I.estado_cobro(_fac))
-                    if abs(_neto_f - _neto) > 0.01 and not CL.es_liberacion(r):
-                        _txt += " · " + t("net after deposit {x}", x=_dinero(_neto_f))
                 st.markdown("%s %s" % (_ic, _txt))
                 _descarga(pid, grupo, r, vars_, prj, d, key_prefix, _fac)
                 if editable and _est == CL.EMITIDA:
@@ -279,7 +293,7 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                         st.rerun()
                     if st.session_state.get(f"_{key_prefix}_clmconf") == r.get("ID"):
                         st.warning(t("Cancel claim #{n} (net {m})? It stops counting as claimed and stays in the "
-                                     "list as cancelled.", n=r.get("Number", "?"), m=_dinero(_neto))
+                                     "list as cancelled.", n=r.get("Number", "?"), m=_dinero(_neto - _dep_l))
                                    + ((" " + t("Its invoice No. {f} is voided too.", f=_fac.get("Number", "")))
                                       if _fac else ""))
                         _y, _k = st.columns(2)

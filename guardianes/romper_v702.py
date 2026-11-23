@@ -50,7 +50,8 @@ ROTURAS = [
      [('            if I.es_cotizada(_pid1) and _solo_dep:',
        '            if I.es_cotizada(_pid1) and _num(I.facturado_por_proyecto(grupo).get(_pid1, 0)) <= 0.005:')]),
     ("«Amount» vuelve a no admitir negativos", IU,
-     [('                t("Amount"), format="$%,.2f",\n', '                t("Amount"), format="$%,.2f", min_value=0.0,\n')]),
+     # ⚠️ v703 · re-anclada: el formato pasó a «dollar» (H24 del ciclo 7: el negativo salía «$-20,811.60»)
+     [('                t("Amount"), format="dollar",\n', '                t("Amount"), format="dollar", min_value=0.0,\n')]),
     ("una factura de total ≤ 0 se emite", IU,
      [("        if _sub <= 0:", "        if False:")]),
 ]

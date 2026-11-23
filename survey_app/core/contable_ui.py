@@ -283,7 +283,10 @@ def render_contable(grupo):
 
     # ⚠️ Lo que va a fallar AL IMPORTAR, dicho antes de descargar: un importador
     # rechaza la fila y no siempre explica el motivo.
-    avisos = list(dict.fromkeys(ventas["avisos"] + compras["avisos"]))
+    # v703 · H15: el de las opciones de seguimiento, UNO con las de los dos ficheros (eran dos, «2» y «5»)
+    avisos = list(dict.fromkeys(ventas["avisos"] + compras["avisos"] + contable.aviso_opciones(
+        perfil, contable.mapa(grupo), ventas.get("seguimiento") or compras.get("seguimiento"),
+        sorted(set(ventas["opciones"]) | set(compras["opciones"])))))
     for a in avisos:
         st.warning(a)
 
