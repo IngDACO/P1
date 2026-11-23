@@ -271,11 +271,16 @@ def deposito_de(pid, grupo) -> dict:
             "otras": round(otras, 2)}
 
 
-def factura_de(cid, grupo=None) -> dict:
-    """La factura (no anulada) que nació de esta certificación, o {}."""
+def factura_de(cid, grupo=None, incluir_anuladas=False) -> dict:
+    """La factura (no anulada) que nació de esta certificación, o {}. v704 · con `incluir_anuladas`, también la
+    anulada: el neto de una certificación ANULADA con depósito salía sin él (V2 del ciclo 7, $7,420.78 por $5,214.75)."""
     from core import invoices as _I
-    for f in (_facturas_vivas(grupo) if grupo else
-              [x for x in _I.list_facturas() if str(x.get("Status", "")).lower() != "anulada"]):
+    if incluir_anuladas:
+        _todas = _I.list_facturas(grupo) if grupo else _I.list_facturas()
+    else:
+        _todas = (_facturas_vivas(grupo) if grupo else
+                  [x for x in _I.list_facturas() if str(x.get("Status", "")).lower() != "anulada"])
+    for f in _todas:
         if any(str(ln.get("reclamacion", "")) == str(cid) for ln in _I.lineas_de(f)):
             return f
     return {}

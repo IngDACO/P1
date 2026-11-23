@@ -61,6 +61,9 @@ SHEET = "XeroConnections"
 HEADERS = ["Group", "TenantID", "TenantName", "ShortCode", "ConnectionID",
            "TokenEnc", "Status", "ConnectedBy", "ConnectedAt", "RefreshedAt"]
 CONECTADA, CADUCADA = "connected", "expired"
+# ⚠️ v704 · H21 del ciclo 7: el acceso se renueva bien pero Xero ya no deja entrar en ESA organización (la demo se
+# reinicia cada 28 días, o quitaron a COPEX en Xero). Antes la pantalla seguía «Connected… since» en verde.
+RECONECTAR = "reconnect"
 
 # Cómo llegan las facturas a Xero. El dato es el CÓDIGO de Xero; la etiqueta se
 # traduce al pintar (v442: traducir la opción dejaría la comparación muerta).
@@ -425,6 +428,10 @@ def _token(grupo: str, forzar: bool = False) -> tuple:
                        (None, {}))
         if n is None or not fila.get("TokenEnc") or not fila.get("TenantID"):
             return False, t("This company is not connected to Xero.")
+        # v704 · H21: marcada «reconnect», no se usa (renovar el acceso la volvería a poner «connected» en la hoja sin
+        # que la organización hubiera vuelto); solo `completar_conexion` la recupera
+        if str(fila.get("Status", "") or "") == RECONECTAR:
+            return False, aviso_reconectar()
 
         paquete = _PENDIENTES.get(_norm(grupo)) or _descifra(fila["TokenEnc"])
         if paquete is None:
@@ -530,7 +537,56 @@ def _api(grupo: str, metodo: str, ruta: str, *, params=None, cuerpo=None,
                 time.sleep(segundos)
                 continue
         break
+    # ⚠️ v704 · H21 del ciclo 7: un 401 con el acceso RECIÉN renovado (o un 403) puede ser que la organización ya no
+    # esté conectada. Se pregunta a Xero; si no está, la conexión queda «reconnect» y el aviso dice por qué (antes:
+    # «AuthenticationUnsuccessful» y la pantalla en verde). Si sigue, es un permiso de esa parte (p. ej. la nómina).
+    if (r.status_code == 401 and refrescado) or r.status_code == 403:
+        if _organizacion_sigue(tok) is False:
+            _marcar_estado(grupo, RECONECTAR)
+            return 0, {"Message": aviso_reconectar(), "_reconectar": True}, {}
     return r.status_code, _json(r), dict(getattr(r, "headers", {}) or {})
+
+
+def aviso_reconectar() -> str:
+    """Lo que se dice cuando Xero ya no acepta la conexión (v704 · H21): la causa en palabras y qué hacer."""
+    return t("Xero no longer accepts this connection: the organisation was reset or removed there (a Xero demo "
+             "company resets every 28 days), or COPEX's access was removed in Xero. Reconnect it in Finance → "
+             "Accounting.")
+
+
+def _organizacion_sigue(tok: dict):
+    """¿Sigue la organización entre las conexiones de este acceso? True / False / None (no se pudo saber).
+
+    `GET /Connections` lista las organizaciones que este acceso puede usar: si la de COPEX ya no está, ningún
+    reintento la va a devolver. Un 401 aquí también es False (el acceso no vale para nada)."""
+    try:
+        r = _http("GET", CONNECTIONS_URL, headers={"Authorization": f"Bearer {tok['access']}",
+                                                   "Accept": "application/json"})
+    except Exception as e:
+        logger.warning("xero: GET /Connections falló: %s", type(e).__name__)
+        return None
+    if r.status_code == 401:
+        return False
+    if r.status_code != 200:
+        return None
+    js = _json(r)
+    return any(str((c or {}).get("tenantId", "")) == str(tok.get("tenant_id", "")) for c in (js or [])
+               if isinstance(c, dict))
+
+
+def _marcar_estado(grupo: str, estado: str) -> None:
+    """Apunta el estado de la conexión de la empresa (v704 · H21: «reconnect»). Nunca lanza."""
+    try:
+        ws = _ws(crear=False)
+        if ws is not None:
+            cab, filas = _leer(ws)
+            n = next((i for i, r in filas if _norm(r.get("Group")) == _norm(grupo)), None)
+            if n is not None:
+                _escribe(ws, n, cab, {"Status": estado})
+    except Exception as e:
+        logger.error("xero: no se pudo marcar la conexión como %s: %s", estado, e)
+    _VIVOS.pop(_norm(grupo), None)
+    _invalida()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -792,7 +848,7 @@ def enviar_facturas(grupo: str, fids: list) -> dict:
     """
     from core import contable, invoices
 
-    res = {"enviadas": [], "vinculadas": [], "errores": [], "avisos": []}
+    res = {"enviadas": [], "vinculadas": [], "errores": [], "avisos": [], "cobros": []}
     with _cerrojo(grupo):
         cfg = contable.mapa(grupo)
         cuenta = str(cfg.get("cuentas", {}).get("xero", {}).get(contable.VENTAS, "")).strip()
@@ -906,7 +962,203 @@ def enviar_facturas(grupo: str, fids: list) -> dict:
                 res["avisos"].append(t("The invoices reached Xero but could not be marked "
                                        "here ({e}); sending them again links them instead of "
                                        "duplicating.", e=msg))
+            _cobros_al_enviar(grupo, marcas, estado_xero, res)
     return res
+
+
+def _cobros_al_enviar(grupo: str, marcas: dict, estado_xero: str, res: dict) -> None:
+    """v704 · D4 del ciclo 7: lo cobrado en COPEX de las facturas recién enviadas (o enlazadas) va a Xero con ellas.
+
+    La 0007 llegó a Xero sin los $10,050 cobrados aquí, y «Bring payments» la habría dejado a $0. Xero solo acepta un
+    pago en una factura APROBADA: en borrador se dice y va después, desde «Bring payments»; sin la cuenta del banco
+    elegida, se dice dónde elegirla."""
+    from core import invoices
+    from core import theme as T
+    con_cobro = []
+    for fid in marcas:
+        f = invoices.get_factura(fid) or {}
+        if round(_num(f.get("Collected")), 2) > 0.005:
+            con_cobro.append((fid, f))
+    if not con_cobro:
+        return
+    if estado_xero != APROBADA:
+        for _fid, f in con_cobro:
+            res["avisos"].append(t("Invoice {n} went to Xero as a draft with {m} collected in COPEX. Xero only takes "
+                                   "a payment on an approved invoice: once it is approved there, «Bring payments "
+                                   "from Xero» offers to send it.", n=f.get("Number", ""),
+                                   m=T.dinero(_num(f.get("Collected")))))
+        return
+    if not cuenta_banco(grupo):
+        for _fid, f in con_cobro:
+            res["avisos"].append(t("Invoice {n} has {m} collected in COPEX that is not in Xero yet: choose the Xero "
+                                   "bank account under «Payments» (Accounting → Xero connection) and send it from "
+                                   "there.", n=f.get("Number", ""), m=T.dinero(_num(f.get("Collected")))))
+        return
+    rc = mandar_cobros(grupo, [fid for fid, _f in con_cobro])
+    res["cobros"] += rc["mandados"]
+    res["errores"] += rc["errores"]
+    res["avisos"] += rc["avisos"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v704 · D4 del ciclo 7: los cobros de COPEX van a Xero, y COPEX nunca baja uno sin preguntar
+# ─────────────────────────────────────────────────────────────────────────────
+def cuenta_banco(grupo: str) -> dict:
+    """{id, codigo, nombre} de la cuenta del banco de Xero donde van los cobros de COPEX, o {} si no se eligió."""
+    from core import contable
+    v = contable.mapa(grupo).get("xero_cuenta_banco") or {}
+    return dict(v) if isinstance(v, dict) and str(v.get("id", "") or "").strip() else {}
+
+
+def cuentas_banco(grupo: str) -> tuple:
+    """([{id, codigo, nombre}], error): las cuentas de banco ACTIVAS de la organización conectada."""
+    status, js, _h = _api(grupo, "GET", "/Accounts", params={"where": 'Type=="BANK"'})
+    if status != 200:
+        return [], "; ".join(mensajes_error(js)) or f"HTTP {status}"
+    out = []
+    for a in (js or {}).get("Accounts") or []:
+        if str(a.get("Type", "")).upper() != "BANK" or str(a.get("Status", "ACTIVE")).upper() != "ACTIVE":
+            continue
+        out.append({"id": str(a.get("AccountID", "") or ""), "codigo": str(a.get("Code", "") or ""),
+                    "nombre": str(a.get("Name", "") or a.get("BankAccountNumber", "") or "")})
+    return [x for x in out if x["id"]], ""
+
+
+def cobros_para_xero(f: dict, pagado_xero) -> list:
+    """Los pagos que COPEX manda a Xero para que lo cobrado cuadre: [{fecha, monto}]. Función PURA.
+
+    Con Xero a 0 y el historial de COPEX entero, uno por cobro con SU fecha (el contable los casa con el banco); si
+    Xero ya tiene una parte, o el historial no suma lo cobrado, UNO por la diferencia, con la fecha del último cobro.
+    Nunca más de lo que falta: mandar dos veces no cobra dos veces."""
+    from core import invoices
+    copex = round(_num(f.get("Collected")), 2)
+    pagado = round(_num(pagado_xero), 2)
+    falta = round(copex - pagado, 2)
+    if falta <= 0.005:
+        return []
+    hist = [c for c in invoices.cobros_de(f) if isinstance(c, dict) and str(c.get("origen", "")) != "xero"]
+    if (pagado <= 0.005 and hist
+            and all(_num(c.get("monto")) > 0 and _parse_date(c.get("fecha")) for c in hist)
+            and abs(sum(_num(c.get("monto")) for c in hist) - copex) < 0.01):
+        return [{"fecha": _parse_date(c.get("fecha")).isoformat(), "monto": round(_num(c.get("monto")), 2)}
+                for c in hist]
+    fechas = [_parse_date(c.get("fecha")) for c in hist if _parse_date(c.get("fecha"))]
+    if _parse_date(f.get("CollectionDate")):
+        fechas.append(_parse_date(f.get("CollectionDate")))
+    fecha = max(fechas) if fechas else clock.today()
+    return [{"fecha": fecha.isoformat(), "monto": falta}]
+
+
+def _leer_facturas_xero(grupo: str, xids: list) -> tuple:
+    """({InvoiceID: factura de Xero}, error) — de 40 en 40."""
+    out, error = {}, ""
+    ids = sorted({str(x) for x in xids if str(x or "").strip()})
+    for i in range(0, len(ids), _POR_CONSULTA):
+        status, js, _h = _api(grupo, "GET", "/Invoices", params={"IDs": ",".join(ids[i:i + _POR_CONSULTA])})
+        if status != 200:
+            error = "; ".join(mensajes_error(js)) or f"HTTP {status}"
+            continue
+        for inv in (js or {}).get("Invoices") or []:
+            out[str(inv.get("InvoiceID", "") or "")] = inv
+    return out, error
+
+
+def mandar_cobros(grupo: str, fids: list) -> dict:
+    """Manda a Xero lo cobrado en COPEX que Xero aún no tiene. {mandados: [(fid, número, total)], errores, avisos}.
+
+    Lee cada factura en Xero ANTES (estado y `AmountPaid`): solo las APROBADAS aceptan un pago, y se manda solo la
+    diferencia (`cobros_para_xero`). Nunca lanza."""
+    from core import invoices
+    res = {"mandados": [], "errores": [], "avisos": []}
+    cb = cuenta_banco(grupo)
+    if not cb:
+        res["avisos"].append(t("Choose the Xero bank account for COPEX payments first (Accounting → Xero connection "
+                               "→ Payments)."))
+        return res
+    with _cerrojo(grupo):
+        try:
+            todas = {str(f.get("ID", "")): f for f in invoices.list_facturas(grupo)}
+        except Exception as e:
+            res["errores"].append(("", "", [str(e)]))
+            return res
+        objetivo = []
+        for fid in dict.fromkeys(str(x) for x in (fids or [])):
+            f = todas.get(fid)
+            xid = str((f or {}).get("XeroInvoiceID", "") or "").strip()
+            if not f or not xid or _norm(f.get("Status")) == "anulada":
+                res["errores"].append((fid, str((f or {}).get("Number", "")), [t("It is not in Xero.")]))
+                continue
+            objetivo.append((fid, f, xid))
+        if not objetivo:
+            return res
+        en_xero, err = _leer_facturas_xero(grupo, [x for _f, _ff, x in objetivo])
+        if err:
+            res["errores"] += [(fid, str(f.get("Number", "")), [t("Xero could not be read ({e}); no payment was "
+                                                                  "sent.", e=err)]) for fid, f, _x in objetivo]
+            return res
+        pagos, de_quien = [], []
+        for fid, f, xid in objetivo:
+            numero = str(f.get("Number", ""))
+            inv = en_xero.get(xid)
+            if not inv:
+                res["errores"].append((fid, numero, [t("Not found in Xero.")]))
+                continue
+            est = str(inv.get("Status", "")).upper()
+            if est != "AUTHORISED":
+                res["errores"].append((fid, numero, [t("It is {e} in Xero: a payment can only go to an approved "
+                                                       "invoice.", e=est.lower() or "—")]))
+                continue
+            for p in cobros_para_xero(f, inv.get("AmountPaid")):
+                pagos.append({"Invoice": {"InvoiceID": xid}, "Account": {"AccountID": cb["id"]},
+                              "Date": p["fecha"], "Amount": p["monto"], "Reference": f"COPEX {numero}"[:255]})
+                de_quien.append((fid, numero))
+        for i in range(0, len(pagos), _POR_LOTE):
+            lote, quien = pagos[i:i + _POR_LOTE], de_quien[i:i + _POR_LOTE]
+            cuerpo = {"Payments": lote}
+            status, js, _h = _api(grupo, "PUT", "/Payments", params={"summarizeErrors": "false"}, cuerpo=cuerpo,
+                                  cabeceras={"Idempotency-Key": _clave_idempotencia(grupo, cuerpo)})
+            devueltos = (js or {}).get("Payments") if isinstance(js, dict) else None
+            if status not in (200, 400) or not isinstance(devueltos, list) or len(devueltos) != len(lote):
+                msgs = mensajes_error(js) or [f"HTTP {status}"]
+                res["errores"] += [(fid, numero, msgs) for fid, numero in dict.fromkeys(quien)]
+                continue
+            hechos = {}
+            for (fid, numero), p, dev in zip(quien, lote, devueltos):
+                errs = [str(v.get("Message")) for v in (dev or {}).get("ValidationErrors") or [] if v.get("Message")]
+                pid = str((dev or {}).get("PaymentID", "") or "")
+                if errs or not pid or pid == "00000000-0000-0000-0000-000000000000":
+                    res["errores"].append((fid, numero, errs or [t("Xero rejected the payment.")]))
+                else:
+                    hechos[(fid, numero)] = round(hechos.get((fid, numero), 0.0) + p["Amount"], 2)
+            res["mandados"] += [(fid, numero, total) for (fid, numero), total in hechos.items()]
+        if not pagos and not res["errores"]:
+            res["avisos"].append(t("Xero already has every payment recorded in COPEX for these invoices."))
+    return res
+
+
+def aceptar_cifra_xero(grupo: str, fid: str) -> tuple:
+    """(ok, mensaje): pone en COPEX lo cobrado que dice Xero aunque sea MENOS — solo cuando la persona lo confirma
+    (v704 · D4: COPEX nunca baja un cobro sin preguntar)."""
+    from core import invoices
+    from core import theme as T
+    f = invoices.get_factura(fid) or {}
+    xid = str(f.get("XeroInvoiceID", "") or "").strip()
+    if not f or not xid or _norm(f.get("Group")) != _norm(grupo):
+        return False, t("Invoice not found.")
+    en_xero, err = _leer_facturas_xero(grupo, [xid])
+    inv = en_xero.get(xid)
+    if err or not inv:
+        return False, t("Xero could not be read ({e}); nothing was changed.", e=err or t("not found"))
+    est = str(inv.get("Status", "")).upper()
+    if est not in _COBRABLES:
+        return False, t("It is {e} in Xero, so its figure is not a payment: nothing was changed.", e=est.lower())
+    pagado = round(_num(inv.get("AmountPaid")), 2)
+    fecha = de_fecha(inv.get("FullyPaidOnDate")) or clock.today()
+    ok, r = invoices.sincronizar_cobros({str(fid): {"cobrado": pagado, "fecha": fecha.isoformat()}},
+                                        clock.today().isoformat(), bajar={str(fid)})
+    if not ok:
+        return False, str(r)
+    return True, t("Invoice {n}: collected set to {m}, as in Xero.", n=f.get("Number", ""), m=T.dinero(pagado))
 
 
 def traer_cobros(grupo: str) -> dict:
@@ -928,7 +1180,7 @@ def traer_cobros(grupo: str) -> dict:
     from core import invoices
 
     res = {"actualizadas": [], "iguales": [], "en_borrador": [], "muertas": [],
-           "con_credito": [], "no_encontradas": [], "errores": [], "avisos": []}
+           "con_credito": [], "no_encontradas": [], "errores": [], "avisos": [], "por_mandar": []}
     with _cerrojo(grupo):
         try:
             facturas = [f for f in invoices.list_facturas(grupo)
@@ -969,6 +1221,12 @@ def traer_cobros(grupo: str) -> dict:
                 if credito > 0:
                     res["con_credito"].append((f.get("ID"), numero, credito))
                 fecha = de_fecha(inv.get("FullyPaidOnDate")) or clock.today()
+                # ⚠️ v704 · D4 del ciclo 7: Xero con MENOS que COPEX no baja nada: se ofrece mandar el cobro a Xero o
+                # confirmar la cifra de Xero (`aceptar_cifra_xero`)
+                _copex = round(_num(f.get("Collected")), 2)
+                if pagado < _copex - 0.005:
+                    res["por_mandar"].append((f.get("ID"), numero, _copex, pagado))
+                    continue
                 cambios[str(f.get("ID"))] = {"cobrado": pagado, "fecha": fecha.isoformat()}
         for xid, f in por_xid.items():
             if xid not in vistos and not res["errores"]:
@@ -982,4 +1240,7 @@ def traer_cobros(grupo: str) -> dict:
                 res["actualizadas"] = [(fid, num.get(fid, fid), antes, ahora)
                                        for fid, antes, ahora in r["cambiadas"]]
                 res["iguales"] = [(fid, num.get(fid, fid)) for fid in r["iguales"]]
+                # la lectura FRESCA de la hoja manda: si allí había más que en la caché, tampoco se baja
+                res["por_mandar"] += [(fid, num.get(fid, fid), antes, ahora)
+                                      for fid, antes, ahora in r.get("no_bajadas", [])]
     return res

@@ -277,6 +277,16 @@ def datos(grupo: str) -> dict:
                              params={"page": pagina})
         if st_ != 200:
             _e = _msg(js, st_)
+            # ⚠️ v704 · H21 del ciclo 7: la nómina daba OTRA causa para el mismo fallo (la organización ya no estaba
+            # conectada); ahora dice lo mismo que el resto de Xero. Y un 404 no se arregla esperando: no hay Payroll AU.
+            if isinstance(js, dict) and js.get("_reconectar"):
+                out["error"] = _e
+                return out
+            if st_ == 404:
+                out["error"] = t("This Xero organisation has no Payroll AU: Xero answers «not found» (HTTP 404) to "
+                                 "the payroll part, and waiting does not change that. Payroll stays in COPEX, and "
+                                 "its timesheet can still go by file (Accounting → «Timesheet for payroll»).")
+                return out
             # ⚠️ v584 · decía una sola causa («needs Payroll AU set up»). Xero contesta igual
             # —401 / AuthenticationUnsuccessful— cuando quien conectó no tiene permiso de
             # NÓMINA en Xero, y eso no se arregla montando Payroll: se dicen las dos.

@@ -40,6 +40,10 @@ def _flash_resultado(res: dict):
     if res["vinculadas"]:
         flash.info(t("{n} invoice(s) were already in Xero with the same number and were "
                      "linked instead of duplicated.", n=len(res["vinculadas"])))
+    # v704 · D4 del ciclo 7: lo cobrado en COPEX que fue a Xero con la factura
+    from core import theme as T
+    for _fid, numero, total in res.get("cobros", []):
+        flash.exito(t("Invoice {n}: {m} collected in COPEX sent to Xero.", n=numero or "—", m=T.dinero(total)))
     for _fid, numero, msgs in res["errores"]:
         flash.error(t("Invoice {n}: {m}", n=numero or "—", m=" · ".join(msgs)))
     for a in res["avisos"]:
@@ -157,10 +161,15 @@ def render_conexion(grupo, desde=None, hasta=None):
 
     est = X.estado(grupo)
     if not est["conectada"]:
-        if est["estado"] == X.CADUCADA:
+        # v704 · H21 del ciclo 7: si Xero ya no acepta la organización, se dice por qué y el botón dice «Reconnect»
+        # (antes la pantalla seguía «Connected… since» en verde y el envío decía «AuthenticationUnsuccessful»)
+        _reconectar = est["estado"] == X.RECONECTAR
+        if _reconectar:
+            st.warning(":material/link_off: " + X.aviso_reconectar())
+        elif est["estado"] == X.CADUCADA:
             st.warning(t(":material/link_off: The Xero connection expired (unused for 60 "
                          "days, or revoked in Xero). Connect again."))
-        st.link_button(t(":material/link: Connect to Xero"),
+        st.link_button(t(":material/link: Reconnect to Xero") if _reconectar else t(":material/link: Connect to Xero"),
                        X.url_autorizacion(grupo, _usuario()), type="primary")
         st.caption(t("Xero opens in a new tab. Approve the organisation there and COPEX "
                      "comes back in that tab already connected; this tab can be closed."))
@@ -220,6 +229,7 @@ def render_conexion(grupo, desde=None, hasta=None):
     st.markdown(t("**Payments**"))
     st.caption(t("Your accountant reconciles the bank in Xero; this brings what is "
                  "collected there into COPEX, so «to collect» here is not left stale."))
+    _cuenta_banco_section(grupo)            # v704 · D4: adónde van en Xero los cobros de COPEX
     # ⚠️ v584 · sin ninguna factura enviada el botón solo contestaba «no hay nada»: se dice
     # sin hacer pulsar (las facturas salen de un lector ya cacheado, 0 lecturas nuevas)
     from core import invoices as _INV
@@ -233,7 +243,10 @@ def render_conexion(grupo, desde=None, hasta=None):
         if not any(res[k] for k in res):
             flash.info(t("No invoice of this company has been sent to Xero yet."))
         _flash_cobros(res)
+        st.session_state["_xero_por_mandar"] = list(res.get("por_mandar") or [])   # v704 · D4
+        st.session_state.pop("_xero_pm_conf", None)
         st.rerun()
+    _por_mandar_section(grupo)
 
     # ⚠️ v489: era un desplegable TITULADO «Disconnect Xero» con una casilla y el botón
     # dentro. El título parecía el botón y solo abría el desplegable: en producción el
@@ -254,6 +267,112 @@ def render_conexion(grupo, desde=None, hasta=None):
     if c2.button(t("Cancel"), key="xero_desconectar_no"):
         st.session_state.pop("_xero_confirmar_desconexion", None)
         st.rerun()
+
+
+def _cuenta_banco_section(grupo):
+    """v704 · D4 del ciclo 7: la cuenta del banco de Xero donde van los cobros de COPEX, elegida UNA vez.
+
+    La lista se lee de Xero con un botón (leerla en cada visita gastaría llamadas a Xero), y se guarda en los ajustes
+    contables de la empresa (`xero_cuenta_banco`)."""
+    from core import contable
+    cb = X.cuenta_banco(grupo)
+    _elegir = bool(st.session_state.get("_xero_cb_elegir"))
+    if cb and not _elegir:
+        c1, c2 = st.columns([4, 1])
+        c1.caption(t(":material/account_balance: Payments recorded in COPEX go to «{c}» in Xero.",
+                     c=_md(cb.get("nombre") or cb.get("codigo"))))
+        if c2.button(t("Change"), key="xero_cb_cambiar"):
+            st.session_state["_xero_cb_elegir"] = True
+            st.rerun()
+        return
+    if not cb:
+        st.caption(t(":material/account_balance: Choose the Xero bank account where payments recorded in COPEX go: "
+                     "without it, money collected here does not reach Xero."))
+    lista = st.session_state.get("_xero_cb_lista")
+    if lista is None:
+        if st.button(t(":material/account_balance: Read the bank accounts from Xero"), key="xero_cb_leer"):
+            with st.spinner(t("Reading Xero…")):
+                cuentas, err = X.cuentas_banco(grupo)
+            if err:
+                flash.error(t("The bank accounts could not be read in Xero ({e}).", e=_md(err)))
+            else:
+                st.session_state["_xero_cb_lista"] = cuentas
+                st.session_state["_xero_cb_elegir"] = True
+            st.rerun()
+        return
+    if not lista:
+        st.info(t("This Xero organisation has no active bank account. Add it in Xero, then read them again."))
+        if st.button(t("Read again"), key="xero_cb_releer"):
+            st.session_state.pop("_xero_cb_lista", None)
+            st.rerun()
+        return
+    _et = {x["id"]: x["nombre"] + (f" ({x['codigo']})" if x["codigo"] else "") for x in lista}
+    sel = st.selectbox(t("Xero bank account for COPEX payments"), list(_et), format_func=lambda i: _et.get(i, i),
+                       index=None, placeholder=t("— choose the account —"), key="xero_cb_sel")
+    c1, c2 = st.columns(2)
+    if c1.button(t("Use this account"), key="xero_cb_ok", type="primary", disabled=not sel):
+        x = next(z for z in lista if z["id"] == sel)
+        ok, msg = contable.guardar_claves(grupo, {"xero_cuenta_banco": {"id": x["id"], "codigo": x["codigo"],
+                                                                         "nombre": x["nombre"]}})
+        (flash.exito if ok else flash.error)(
+            t("Payments recorded in COPEX will go to «{c}» in Xero.", c=_md(x["nombre"])) if ok else msg)
+        if ok:
+            st.session_state.pop("_xero_cb_elegir", None)
+            st.session_state.pop("_xero_cb_lista", None)
+        st.rerun()
+    if c2.button(t("Cancel"), key="xero_cb_no"):
+        st.session_state.pop("_xero_cb_elegir", None)
+        st.session_state.pop("_xero_cb_lista", None)
+        st.rerun()
+
+
+def _por_mandar_section(grupo):
+    """v704 · D4 del ciclo 7: lo cobrado en COPEX que Xero no tiene. COPEX NO lo baja: se manda a Xero o, confirmado
+    factura por factura, se queda la cifra de Xero (`X.aceptar_cifra_xero`)."""
+    from core import theme as T
+    pm = st.session_state.get("_xero_por_mandar") or []
+    if not pm:
+        return
+    with st.container(border=True, key="cpx_xero_por_mandar"):
+        st.warning(t(":material/sync_problem: **Collected in COPEX but not in Xero.** COPEX did not lower them: send "
+                     "the payments to Xero, or keep Xero's figure.") + "\n\n" + "\n".join(
+            "- " + t("Invoice {n}: COPEX {c} · Xero {x}", n=_md(n), c=T.dinero(c), x=T.dinero(x))
+            for _fid, n, c, x in pm))
+        cb = X.cuenta_banco(grupo)
+        if st.button(t(":material/upload: Send these payments to Xero ({n})", n=len(pm)), key="xero_pm_mandar",
+                     type="primary", disabled=not cb):
+            with st.spinner(t("Sending to Xero…")):
+                rc = X.mandar_cobros(grupo, [str(z[0]) for z in pm])
+            for _fid, numero, total in rc["mandados"]:
+                flash.exito(t("Invoice {n}: {m} sent to Xero.", n=numero or "—", m=T.dinero(total)))
+            for _fid, numero, msgs in rc["errores"]:
+                flash.error(t("Invoice {n}: {m}", n=numero or "—", m=" · ".join(_md(m) for m in msgs)))
+            for a in rc["avisos"]:
+                flash.aviso(a)
+            st.session_state.pop("_xero_por_mandar", None)
+            st.rerun()
+        if not cb:
+            st.caption(t("Choose the Xero bank account above to send them."))
+        _conf = st.session_state.get("_xero_pm_conf")
+        for fid, n, c, x in pm:
+            if _conf == str(fid):
+                st.warning(t("Set invoice {n} to {x} collected, as in Xero? COPEX has {c}: the difference stops "
+                             "counting as collected here.", n=_md(n), x=T.dinero(x), c=T.dinero(c)))
+                y, k = st.columns(2)
+                if y.button(t("Yes, use Xero's figure"), key=f"xero_pm_si_{fid}", type="primary"):
+                    ok, msg = X.aceptar_cifra_xero(grupo, str(fid))
+                    (flash.exito if ok else flash.error)(msg)
+                    st.session_state.pop("_xero_pm_conf", None)
+                    if ok:
+                        st.session_state["_xero_por_mandar"] = [z for z in pm if str(z[0]) != str(fid)]
+                    st.rerun()
+                if k.button(t("Keep COPEX's"), key=f"xero_pm_no_{fid}"):
+                    st.session_state.pop("_xero_pm_conf", None)
+                    st.rerun()
+            elif st.button(t("Use Xero's figure for invoice {n}", n=_md(n)), key=f"xero_pm_x_{fid}",
+                           type="tertiary"):
+                st.session_state["_xero_pm_conf"] = str(fid)
+                st.rerun()
 
 
 def boton_factura(grupo, f):

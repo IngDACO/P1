@@ -287,6 +287,27 @@ def _ids_nuevos(mx: int, n: int) -> list:
         return [f"NOM-{mx + k:04d}" for k in range(1, n + 1)]
 
 
+def solapes_de(grupo, d_iso, h_iso) -> dict:
+    """{usuario: [{id, desde, hasta, nombre}]}: colillas (no anuladas) cuyo periodo SOLAPA con [d_iso, h_iso] sin ser
+    el mismo. `generar` salta a esa persona (v364: se pagaban dos veces); v704 · V3 del ciclo 7: la vista previa lo
+    dice ANTES (con 16/11–22/11 y la NOM-0006 de 17/11–22/11, la nota salía vacía)."""
+    _d, _h = _parse_date(d_iso), _parse_date(h_iso)
+    solapes = {}
+    if _d and _h:
+        for f in list_nominas(grupo):            # ya excluye las anuladas (v347)
+            fd, fh = _parse_date(f.get("PeriodFrom")), _parse_date(f.get("PeriodTo"))
+            if not fd or not fh:
+                continue                          # sin fechas legibles no se puede afirmar
+            if str(f.get("PeriodFrom", "")) == d_iso and str(f.get("PeriodTo", "")) == h_iso:
+                continue                          # el duplicado EXACTO ya lo trata `existentes`
+            if fd <= _h and _d <= fh:             # intersección de intervalos cerrados
+                solapes.setdefault(str(f.get("User", "")), []).append(
+                    {"id": str(f.get("ID", "")), "desde": str(f.get("PeriodFrom", "")),
+                     "hasta": str(f.get("PeriodTo", "")),
+                     "nombre": str(f.get("Name", "") or f.get("User", ""))})
+    return solapes
+
+
 def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> dict:
     """Crea una nómina por usuario con horas en [desde, hasta]. (batch, 1 escritura).
 
@@ -335,20 +356,7 @@ def generar(grupo, desde, hasta, super_pct=0.0, ret_pct=0.0, creado_por="") -> d
     # 21/07-19/08); a `campo1` se le pagaron 567 h habiendo trabajado 354.
     # La conciliación de v313 lo detectaba («sin explicar −$36.035»), pero DESPUÉS de
     # emitir: aquí se corta antes.
-    _d, _h = _parse_date(d_iso), _parse_date(h_iso)
-    solapes = {}
-    if _d and _h:
-        for f in list_nominas(grupo):            # ya excluye las anuladas (v347)
-            fd, fh = _parse_date(f.get("PeriodFrom")), _parse_date(f.get("PeriodTo"))
-            if not fd or not fh:
-                continue                          # sin fechas legibles no se puede afirmar
-            if str(f.get("PeriodFrom", "")) == d_iso and str(f.get("PeriodTo", "")) == h_iso:
-                continue                          # el duplicado EXACTO ya lo trata `existentes`
-            if fd <= _h and _d <= fh:             # intersección de intervalos cerrados
-                solapes.setdefault(str(f.get("User", "")), []).append(
-                    {"id": str(f.get("ID", "")), "desde": str(f.get("PeriodFrom", "")),
-                     "hasta": str(f.get("PeriodTo", "")),
-                     "nombre": str(f.get("Name", "") or f.get("User", ""))})
+    solapes = solapes_de(grupo, d_iso, h_iso)      # v704 · una definición, la usa también la vista previa
 
     # ⚠️ v430: las AUSENCIAS PAGADAS. La base sale de las horas FICHADAS, y quien está
     # de vacaciones o de baja no ficha: sin esto, aprobarle unas vacaciones a alguien

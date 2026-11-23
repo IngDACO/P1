@@ -483,8 +483,11 @@ ck("un 401 fuerza UN refresco y reintenta una vez",
 _reset([("GET", "/Invoices", lambda kw: Resp(401, {"Detail": "no"})),
         ("POST", "connect/token", _token_ok("OTRO", "R-403"))])
 st_, js, _h = X._api(G, "GET", "/Invoices")
+# ⚠️ v704 · al día: tras el segundo 401 se pregunta UNA vez `GET /Connections` (H21 del ciclo 7: ¿sigue conectada la
+# organización?); aquí no está simulada (599) y no se marca nada. «No bucle» se cuenta en las llamadas a /Invoices.
 ck("…dos 401 seguidos ya se devuelven (no bucle)",
-   (st_, len([c for c in LLAMADAS if c[0] == "GET"])), (401, 2))
+   (st_, len([c for c in LLAMADAS if c[0] == "GET" and "/Invoices" in c[1]]),
+    len([c for c in LLAMADAS if X.CONNECTIONS_URL in c[1]])), (401, 2, 1))
 
 # ═════ 6 · mandar facturas ═══════════════════════════════════════════════════
 print("\n[6] enviar facturas")

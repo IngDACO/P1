@@ -429,8 +429,11 @@ from core import flash
 flash.mostrar()
 U.render_credenciales("u1", "g", editable=True, key_prefix="zz")
 ''' % RAIZ
+# ⚠️ 24/11/2026 · el «por vencer» se contaba desde el día REAL (`dt.date.today()`) y la app desde su reloj, fijado arriba
+# al 02/11/2026: el 24/11 la credencial quedó a 31 días (fuera de la ventana de 30) y el guardián se puso rojo sin
+# tocar nada. Desde el MISMO reloj que la app (`clock.today()`), da igual el día en que corra.
 _FC = lambda: [{"ID": "CR-1", "Type": "White Card", "Number": "W1", "IssueDate": "2024-02-01", "ExpiryDate": "", "Note": "", "DriveID": ""},
-               {"ID": "CR-2", "Type": "Working at Heights", "Number": "H1", "IssueDate": "2024-02-01", "ExpiryDate": (dt.date.today() + dt.timedelta(days=9)).isoformat(), "Note": "", "DriveID": ""},
+               {"ID": "CR-2", "Type": "Working at Heights", "Number": "H1", "IssueDate": "2024-02-01", "ExpiryDate": (C.clock.today() + dt.timedelta(days=9)).isoformat(), "Note": "", "DriveID": ""},
                {"ID": "CR-3", "Type": "First Aid", "Number": "A1", "IssueDate": "2023-02-01", "ExpiryDate": "2024-09-30", "Note": "", "DriveID": ""},
                {"ID": "CR-4", "Type": "Forklift (LF)", "Number": "F1", "IssueDate": "2025-03-10", "ExpiryDate": "2029-03-10", "Note": "", "DriveID": ""}]
 

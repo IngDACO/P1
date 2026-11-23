@@ -253,7 +253,16 @@ def render(pid, grupo, prj, editable=True, key_prefix="clm"):
                     _txt = None                  # v703 · H25: se compone abajo, con lo que dice su factura
                 if _est == CL.ANULADA:
                     if _txt is None:
-                        _txt = _linea_claim(r, _neto)
+                        # v704 · V2 del ciclo 7: con su factura (anulada) se sabe el depósito que restó; sin ella, el
+                        # neto salía sin él ($7,420.78 en vez de $5,214.75)
+                        _dep_a = 0.0
+                        try:
+                            _fa = CL.factura_de(r.get("ID"), grupo, incluir_anuladas=True)
+                        except Exception:
+                            _fa = {}
+                        if _fa and abs(_num(_fa.get("Subtotal")) - _neto) > 0.01:
+                            _dep_a = _neto - _num(_fa.get("Subtotal"))
+                        _txt = _linea_claim(r, _neto - _dep_a, _dep_a)
                     st.markdown("%s ~~%s~~ · %s" % (_ic, _txt, _estado_txt(CL.ANULADA)))   # v672 · «Cancelled» (H5)
                     continue
                 # v702 · D3: su factura (cobrar es registrar el pago en ella; «Mark paid» queda para las de antes)

@@ -293,8 +293,8 @@ if _r:
         and "reanudada_no_PRJ-T" in _btn and "Job restarted." in " ".join(str(x.value) for x in r.success), _btn)
     _dp = seg(fuente("core/projects_ui.py"), "_detalle_proyecto")
     chk("la ficha lo pinta encima del formulario de datos (y no a la vez que la pausa)",
-        "_aviso_reanudada(pid, _reanudada)" in _dp and "if _reanudada and not _cierre_pend:" in _dp
-        and _dp.index("_aviso_reanudada(pid, _reanudada)") < _dp.index('with st.form(f"edit_{pid}"'))
+        "_aviso_reanudada(pid, _reanudada" in _dp and "if _reanudada and not _cierre_pend:" in _dp
+        and _dp.index("_aviso_reanudada(pid, _reanudada") < _dp.index('with st.form(f"edit_{pid}"'))
 
     print("\nF. H18: lo marcado sin guardar, debajo de la lista")
     _sp = fuente("core/stage_progress_ui.py")

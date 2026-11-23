@@ -2795,7 +2795,7 @@ def _guardar_datos_obra(pid, grupo, prj, campos, ctx, cierre="", liberar=False):
     st.rerun()
 
 
-def _aviso_reanudada(pid, info):
+def _aviso_reanudada(pid, info, grupo=None):
     """v703 · H14 del ciclo 7: «Job restarted.» con a quién se avisó y «Plan it» (la pausa quitó a la cuadrilla del
     tablero desde ese día: nadie vuelve a él solo). Encima del formulario de datos, donde se pulsó «Save changes»."""
     with st.container(border=True, key="cpx_obra_reanudada"):
@@ -2809,7 +2809,18 @@ def _aviso_reanudada(pid, info):
         # Planning es de la oficina (el propietario no lo tiene, como en `_plan_semana_section`)
         _plan = str((st.session_state.get("auth") or {}).get("rol", "")) == "administrator"
         if _plan:
-            st.caption(t("The pause took the crew off the board: plan their days again."))
+            # v704 · V1 del ciclo 7: lo que HAY en el tablero desde hoy, al pintar (tras guardar ya está al día). La
+            # casilla de quitarlo al pausar se puede desmarcar: «The pause took the crew off the board» no era verdad.
+            _tab = None
+            if grupo:
+                try:
+                    from core import roster as _R
+                    _tab = sum(_R.dias_desde(grupo, pid, clock.today(grupo)).values())
+                except Exception:
+                    _tab = None
+            st.caption(t("Nobody is on the board for it from today: plan their days.") if _tab == 0
+                       else t("{n} day(s) on the board for it from today: check they still hold.", n=_tab)
+                       if _tab else t("Check its days on the board."))
         _y, _k = st.columns(2)
         if _plan:
             _y.button(t(":material/bolt: Plan it"), key=f"reanudada_plan_{pid}", type="primary", width="stretch",
@@ -3599,7 +3610,7 @@ def _detalle_proyecto(pid: str, grupo: str = None):
             _confirmar_cierre(pid, grupo, prj, _cierre_pend)
         _reanudada = st.session_state.get(f"_prj_reanudada_{pid}")
         if _reanudada and not _cierre_pend:
-            _aviso_reanudada(pid, _reanudada)
+            _aviso_reanudada(pid, _reanudada, grupo)
         with st.form(f"edit_{pid}", enter_to_submit=False):
             st.markdown(t("**Project data**"))
             nombre   = st.text_input(t("Name"), value=prj.get("Name", ""))

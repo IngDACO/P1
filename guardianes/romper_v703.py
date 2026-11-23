@@ -56,7 +56,8 @@ ROTURAS = [
      [('        _plan = str((st.session_state.get("auth") or {}).get("rol", "")) == "administrator"',
        '        _plan = True')]),
     ("H14: la ficha no pinta «Job restarted.»", PU,
-     [("            _aviso_reanudada(pid, _reanudada)", "            pass")]),
+     # ⚠️ v704 · re-anclada: la llamada lleva el grupo (V1: los días del tablero se leen al pintar el aviso)
+     [("            _aviso_reanudada(pid, _reanudada, grupo)", "            pass")]),
     ("H18: el aviso de lo no guardado vuelve encima de la lista", SP,
      [("    # ⚠️ v703 · H18 del ciclo 7: el aviso y «Save all» iban AQUÍ",
        '    if _pend and editable:\n        st.warning(t("{n} unsaved ticks.", n=len(_pend)))\n'

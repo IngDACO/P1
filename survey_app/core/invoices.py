@@ -440,12 +440,16 @@ def registrar_cobro(fid: str, monto, fecha="") -> tuple:
     return True, t("Payment recorded.")
 
 
-def sincronizar_cobros(cobrado_xero: dict, cuando: str) -> tuple:
+def sincronizar_cobros(cobrado_xero: dict, cuando: str, bajar=None) -> tuple:
     """Pone el cobrado que dice Xero: 1 lectura FRESCA + 1 escritura. (ok, resultado).
 
     `cobrado_xero` = {ID de COPEX: {"cobrado": float, "fecha": "YYYY-MM-DD"}}.
-    Devuelve `{"cambiadas": [(fid, antes, ahora)], "iguales": [fid]}` — así la pantalla
-    puede decir qué se movió, y una segunda pasada no vuelve a apuntar nada.
+    Devuelve `{"cambiadas": [(fid, antes, ahora)], "iguales": [fid], "no_bajadas": [(fid, antes, ahora)]}` — así la
+    pantalla puede decir qué se movió, y una segunda pasada no vuelve a apuntar nada.
+
+    ⚠️ v704 · D4 del ciclo 7: NUNCA baja un cobro de COPEX sin confirmar (la 0007 fue a Xero sin sus $10,050 y «Bring
+    payments» la habría dejado a $0). Solo baja las facturas de `bajar` (las que la persona confirmó); las demás
+    vuelven en `no_bajadas`, para mandar su cobro a Xero o confirmarlo.
 
     ⚠️ Xero es el que ve el banco, así que MANDA (decisión del usuario): si aquí había
     otra cifra, se sustituye y la pantalla lo avisa. Por eso el llamador solo debe pasar
@@ -458,7 +462,7 @@ def sincronizar_cobros(cobrado_xero: dict, cuando: str) -> tuple:
     contra el techo de 60/min (v339).
     """
     if not cobrado_xero:
-        return True, {"cambiadas": [], "iguales": []}
+        return True, {"cambiadas": [], "iguales": [], "no_bajadas": []}
     w, err = _ws()
     if err:
         return False, err
@@ -474,7 +478,8 @@ def sincronizar_cobros(cobrado_xero: dict, cuando: str) -> tuple:
             return False, t("The invoices sheet has no Xero columns yet.")
     ci, cc = cab.index("ID"), cab.index("Collected")
     cf, cj = cab.index("CollectionDate"), cab.index("CollectionsJSON")
-    res = {"cambiadas": [], "iguales": []}
+    res = {"cambiadas": [], "iguales": [], "no_bajadas": []}
+    _bajar = {str(x) for x in (bajar or ())}
     rangos = []
     for n, fila in enumerate(vals[1:], start=2):
         fid = fila[ci] if ci < len(fila) else ""
@@ -485,6 +490,9 @@ def sincronizar_cobros(cobrado_xero: dict, cuando: str) -> tuple:
         ahora = round(_num(dato.get("cobrado")), 2)
         if abs(ahora - antes) < 0.005:
             res["iguales"].append(fid)
+            continue
+        if ahora < antes and fid not in _bajar:          # v704 · D4: bajar, solo confirmado
+            res["no_bajadas"].append((fid, antes, ahora))
             continue
         fch = str(dato.get("fecha") or cuando)[:10]
         try:

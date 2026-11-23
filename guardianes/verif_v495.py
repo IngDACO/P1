@@ -160,8 +160,10 @@ try:
         ws, _l = _montar([_fila("FAC-0003", "0003", 500, 300, "X3")],
                          [{"InvoiceID": "X3", "Status": est, "AmountPaid": 0, "AmountCredited": 0}])
         r = X.traer_cobros(G)
-        ck(f"{est} en Xero: se avisa y no se cambia nada aquí",
-           ([(x[1], x[2]) for x in r["muertas"]], len(ws.escrituras)), ([("0003", est)], 0))
+        # ⚠️ v704 · al día: con D4 una anulada que se colara ya no BAJARÍA el cobro (no se escribe nada), pero saldría
+        # en «por_mandar» ofreciendo mandar un pago a una factura anulada en Xero (romper_v495 escapó así)
+        ck(f"{est} en Xero: se avisa y no se cambia nada aquí (ni se ofrece mandarle un pago)",
+           ([(x[1], x[2]) for x in r["muertas"]], len(ws.escrituras), r.get("por_mandar")), ([("0003", est)], 0, []))
 
     ws, _l = _montar([_fila("FAC-0004", "0004", 1000, 0, "X4")],
                      [{"InvoiceID": "X4", "Status": "PAID", "AmountPaid": 400,
@@ -175,11 +177,18 @@ try:
                      [{"InvoiceID": "X5", "Status": "AUTHORISED", "AmountPaid": 200,
                        "AmountCredited": 0}])
     r = X.traer_cobros(G)
-    ck("si en Xero hay MENOS cobrado, manda Xero y se avisa del antes/después",
-       ([(x[2], x[3]) for x in r["actualizadas"]], _dicc(ws.filas[1])["Collected"]),
-       ([(900.0, 200.0)], "200.0"))
-    ck("...y el historial guarda el movimiento NEGATIVO",
-       json.loads(_dicc(ws.filas[1])["CollectionsJSON"])[-1]["monto"], -700.0)
+    # ⚠️ v704 · al día (D4 del ciclo 7, decisión del usuario «mandar los cobros también»): COPEX ya NO baja un cobro
+    # sin preguntar. La 0007 fue a Xero sin sus $10,050 y «Bring payments» la habría dejado a $0. Ahora va a
+    # «por_mandar» (mandarlo a Xero, o confirmar la cifra de Xero) y la hoja no se toca.
+    ck("si en Xero hay MENOS cobrado, COPEX NO lo baja: va a «por_mandar» con las dos cifras",
+       ([(x[1], x[2], x[3]) for x in r["por_mandar"]], _dicc(ws.filas[1])["Collected"], len(ws.escrituras),
+        r["actualizadas"]),
+       ([("0005", 900.0, 200.0)], 900, 0, []))
+    _okb, _rb = invoices.sincronizar_cobros({"FAC-0005": {"cobrado": 200.0, "fecha": "2026-11-23"}}, "2026-11-23",
+                                            bajar={"FAC-0005"})
+    ck("...y CONFIRMADO (`bajar`), baja y el historial guarda el movimiento NEGATIVO",
+       (_dicc(ws.filas[1])["Collected"], json.loads(_dicc(ws.filas[1])["CollectionsJSON"])[-1]["monto"]),
+       ("200.0", -700.0))
 
     # ═════ 4 · lo que no se consulta, y lo que no se acusa ═══════════════════
     print("\n[4] qué facturas se consultan y qué NO se afirma")
@@ -216,7 +225,9 @@ try:
     ws = _WS([_fila("FAC-0011", "0011", 100, 0, "XB")])
     invoices._ws = lambda: (ws, "")
     ok_, r = invoices.sincronizar_cobros({}, "2026-09-16")
-    ck("sin cambios no lee ni escribe nada", (ok_, r, ws.lecturas), (True, {"cambiadas": [], "iguales": []}, 0))
+    # v704 · al día: el resultado trae también «no_bajadas» (D4: lo que COPEX no baja sin confirmar)
+    ck("sin cambios no lee ni escribe nada", (ok_, r, ws.lecturas),
+       (True, {"cambiadas": [], "iguales": [], "no_bajadas": []}, 0))
     ws2 = _WS([_fila("FAC-0011", "0011", 100, 0, "XB")])
     ws2.filas[0] = [c for c in CAB if c != "CollectionsJSON"]
     invoices._ws = lambda: (ws2, "")

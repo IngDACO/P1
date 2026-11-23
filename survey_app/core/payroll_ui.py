@@ -355,6 +355,11 @@ def _generar(grupo):
     _ya = {str(n.get("User", "")): n for n in payroll.list_nominas(grupo)
            if str(n.get("PeriodFrom", "")) == desde.isoformat() and str(n.get("PeriodTo", "")) == hasta.isoformat()}
     horas_sin_pagar_section(grupo, "nom_gen", desde.isoformat(), hasta.isoformat())
+    # v704 · V3 del ciclo 7: un periodo que SOLAPA con una colilla ya emitida, dicho en la nota (Generate la salta)
+    try:
+        _sol = payroll.solapes_de(grupo, desde.isoformat(), hasta.isoformat())
+    except Exception:
+        _sol = {}
     # ⚠️ v703 · H9 del ciclo 7: la vista previa solo multiplicaba horas × tarifa, y la colilla salió con un día de
     # vacaciones pagadas ($14.85 en la vista previa, $454.85 la colilla); y con alguien SOLO de vacaciones el botón
     # ni se activaba («Nobody has workday hours»). Las ausencias pagadas, de la MISMA función que usa `generar`.
@@ -396,6 +401,8 @@ def _generar(grupo):
             # v671 · H15: ya tiene colilla de ESE periodo (no se duplica: «already exists»)
             "Nota": (t("already on {n} ({h} h)", n=_ya[k].get("ID", ""), h=f"{_num(_ya[k].get('Hours')):.2f}")
                      if k in _ya else t("Left out: fix the workday of more than 16 h first") if k in _fuera
+                     else t("Overlaps {n} ({d} → {a}): it will be skipped", n=_sol[k][0]["id"],
+                            d=_dmy(_sol[k][0]["desde"]), a=_dmy(_sol[k][0]["hasta"])) if _sol.get(k)
                      else _nota_tarifa(rates.get(k, 0))),
         } for k, v in sorted(horas.items())]), width="stretch", hide_index=True,
             column_config=tabla.cfg(None, {"Usuario": st.column_config.TextColumn(t("Employee")),
