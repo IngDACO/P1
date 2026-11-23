@@ -1019,7 +1019,11 @@ def comparacion(cid) -> dict:
     # $893 cotizados, en verde — un número cierto que cuenta una historia falsa (la
     # familia de v320 y v324). Lo que sí es accionable es la PROYECCIÓN al ritmo
     # actual, igual que `expenses.cost_projection` hace con el presupuesto (v144).
-    costo_proy = round(real["total"] * 100.0 / av, 2) if av > 0 and real["total"] > 0 else None
+    # ⚠️ v701 · H19 del ciclo 7: la definición ÚNICA (`expenses.costo_al_terminar`: la mano de obra al ritmo, las
+    # compras sin extrapolar, al menos lo cotizado de material), y desde el 10 % de avance como en Costs (v697).
+    from core import expenses as _E
+    costo_proy = (_E.costo_al_terminar(real, av, _E.desglose_cotizado(pid))["proyectado"]
+                  if av >= _E.AVANCE_MIN_PROYECCION else None)
     gan_proy = round(_tot["subtotal"] - costo_proy, 2) if costo_proy is not None else None
     return {
         "proyecto_id": pid, "proyecto": str(prj.get("Name", "")),

@@ -102,8 +102,10 @@ ROTURAS = [
     ("las filas de By project dejan de abrir la obra", PU,
      [('} for r in rows]), hide_index=True, width="stretch", on_select="rerun",',
        '} for r in rows]), hide_index=True, width="stretch", on_select="ignore",')]),
+    # v701 · re-anclada: la línea del % de la tarjeta va ahora dentro de la condición de «en dinero» (H12 del ciclo 7)
     ("la tarjeta KPI vuelve a «vs. periodo anterior»", PU,
-     [('+ t("{f} {p}% vs previous").replace("{f}", _f)', '+ t("{f} {p}% vs. periodo anterior").replace("{f}", _f)')]),
+     [('t("{f} {p}% vs previous").replace("{f}", _f).replace("{p}", f\'{abs(var["pct"]):.0f}\'))',
+       't("{f} {p}% vs. periodo anterior").replace("{f}", _f).replace("{p}", f\'{abs(var["pct"]):.0f}\'))')]),
     ("una etiqueta de la conciliación pierde su `t()` (va por una tupla)", PU,
      [('(t("Charged to jobs (hours booked × rate)"), cc["cargado"], ""),',
        '("Charged to jobs (hours booked × rate)", cc["cargado"], ""),')]),

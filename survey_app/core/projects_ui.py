@@ -349,15 +349,18 @@ def _kpi_card(label, value, color=None, pie=None, var=None):
     elif _lv >= 7:
         _val += "font-size:21px;"
     _sub = ""
-    if var and var.get("pct") is not None:
+    if var and (var.get("pct") is not None or var.get("en_dinero")):
         # ⚠️ El color lo decide `mejor`, que NO siempre es "subió": en un costo,
         # subir es peor. Quien llama pasa el sentido correcto.
         _c = theme.VERDE if var.get("mejor") else theme.ROJO
         _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
         _sub = (f'<div class="sub" style="color:{theme.texto_seguro(_c)}">'
                 # v566 · en inglés (decía «vs. periodo anterior»)
-                + t("{f} {p}% vs previous").replace("{f}", _f)
-                .replace("{p}", f'{abs(var["pct"]):.0f}') + '</div>')
+                # v701 · H12: con la base pequeña o el signo cambiado, la diferencia en dinero
+                + (theme._esc(t("{f} {d} vs previous").replace("{f}", _f).replace("{d}", theme.dinero_html(abs(var["dif"]), 0)))
+                   if var.get("en_dinero") else
+                   t("{f} {p}% vs previous").replace("{f}", _f).replace("{p}", f'{abs(var["pct"]):.0f}'))
+                + '</div>')
     elif pie:
         _sub = f'<div class="sub">{theme._esc(pie)}</div>'
     return (
@@ -5134,14 +5137,30 @@ def _ganancia_section(pid, grupo):
     with st.expander(t(":material/savings: How much you make on this job"),
                      expanded=bool(rev.get("sin_ganancia")) or _a_costo, key=f"exp_ganancia_{pid}_{bool(rev.get('sin_ganancia')) or _a_costo}"):
         if _modelo == "cotizado":
-            st.success(t(":material/check_circle: This job's revenue is the **agreed price** on "
-                         "quote **{q}**. The {m}% follows from that price.")
-                       .replace("{q}", str(rev.get("cotizacion", "")))
-                       .replace("{m}", f"{rev['margen_pct']:g}"))
+            # ⚠️ v701 · H4 del ciclo 7: decía «quote COT-0018» (el ID interno; el usuario ve «No. 0009 v2») y «The 0%
+            # follows from that price» sin decir de qué. Ahora: el número que se ve, el precio, la ganancia esperada y
+            # contra QUÉ costo sale (H11: lo que costará al terminar, el cotizado hasta el 10 %, o el final).
+            _qn = str(rev.get("cotizacion_numero", "") or rev.get("cotizacion", ""))
+            _qv = int(rev.get("cotizacion_version") or 1)
+            _qlbl = t("No. {n}", n=_qn) + (f" v{_qv}" if _qv > 1 else "")
+            _base = rev.get("ganancia_base")
+            _cst = _T.dinero(rev.get("costo_estimado", rev.get("costo", 0)), 0)
+            _bt = (t("on the cost expected at completion, {c}", c=_cst) if _base == "proyectada" else
+                   t("on the quoted cost, {c}: the cost at completion is projected from {x}% progress",
+                     c=_cst, x=E.AVANCE_MIN_PROYECCION) if _base == "presupuesto" else
+                   t("on the cost so far, {c}", c=_cst))
+            st.success(t(":material/check_circle: This job's revenue is the **agreed price** of quote **{q}** "
+                         "({p}). Expected profit: **{g}**, {m}% {b}.")
+                       .replace("{q}", _qlbl).replace("{p}", _T.dinero(rev.get("ingreso", 0), 0))
+                       .replace("{g}", _T.dinero(rev.get("ganancia", 0), 0))
+                       .replace("{m}", f"{rev['margen_pct']:.0f}").replace("{b}", _bt))
             if P._num(rev.get("fija_ignorada")) > 0:
                 st.warning(t(":material/info: This job has a fixed profit of {x} that is **not "
                              "used**: the price the client signed wins. Set it to 0 to remove the "
                              "noise.").replace("{x}", _T.dinero(rev["fija_ignorada"])))
+                _ganancia_fija_ui(pid, rev, _fija, _T, _modelo)
+            # v701 · H4: con precio pactado, ni la ganancia por hora ni la fija cuentan: no se ofrecen
+            return
         elif _modelo == "a_costo":
             # ⚠️ Aquí iba el aviso del MODELO VIEJO (un % sobre la mano de obra),
             # eliminado a petición del usuario. Ahora, sin ganancia definida, la obra
@@ -5421,6 +5440,12 @@ def _costos_section(pid, grupo, gastos, can_delete, key_prefix):
     st.markdown('<div class="cpx-kpis" style="--cpx-min:110px;margin:0 0 10px">'
                 + "".join(tarj) + "</div>", unsafe_allow_html=True)
     _fn(_t)
+    # v701 · H19 del ciclo 7: cómo sale la cifra de cierre (era una regla de tres sobre TODO lo gastado)
+    if proy and cp.get("metodo") in ("cotizada", "sin_cotizacion"):
+        st.caption({"cotizada": t("Cost at completion: labour at the current rate, plus purchases as bought and "
+                                  "ordered — at least what the quote has for materials."),
+                    "sin_cotizacion": t("Cost at completion: labour at the current rate, plus purchases as bought "
+                                        "and ordered. Materials not bought or ordered yet are not in it.")}[cp["metodo"]])
     if cp["total"] > 0 and pres <= 0 and not _loc and can_delete:
         if st.button(t(":material/edit: Set the budget in Data"), key=f"cst_ir_datos_{pid}",
                      type="tertiary"):
@@ -6058,6 +6083,11 @@ def _pnl_kpis(grupo, d, desde, hasta, modo, F, T):
 
     def _sub(var, pie):
         """(texto del pie, color o None)."""
+        if var and var.get("en_dinero"):
+            # v701 · H12 del ciclo 7: «▲ 13337%» sobre una base de ~$250 no dice nada: la diferencia en dinero
+            _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
+            return (t("{f} {d} vs previous").replace("{f}", _f).replace("{d}", T.dinero(abs(var["dif"]), 0)),
+                    T.VERDE if var.get("mejor") else T.ROJO)
         if var and var.get("pct") is not None:
             _f = "▲" if var["dif"] > 0 else ("▼" if var["dif"] < 0 else "=")
             return (t("{f} {p}% vs previous").replace("{f}", _f)
@@ -6258,6 +6288,10 @@ def render_group_profitability(grupo: str):
                  "charge: the agreed price if it came from a quote, or cost + the profit set on "
                  "each item — per hour for each person, plus any fixed profit. You can also see "
                  "how much of that estimate is already invoiced."))
+    # v701 · H11 del ciclo 7: la ganancia de una obra con precio pactado ya no es «precio − lo gastado hasta hoy»
+    st.caption(t("For a job with an agreed price that is not finished, the profit is worked out on what it will "
+                 "cost at completion (the quoted cost until {x}% progress), not on what it has cost so far.",
+                 x=AVANCE_MIN_PROYECCION))
     data = F.group_profitability(grupo)
     if not data["rows"]:
         st.info(t(":material/info: No projects with recorded cost yet (hours or purchases)."))
@@ -6396,6 +6430,8 @@ def render_group_profitability(grupo: str):
             _ev = st.dataframe(pd.DataFrame([{
                 "Proyecto":   _rot(r),
                 "Cost":       r["costo"],
+                # v701 · H11 del ciclo 7: la ganancia de una cotizada sin terminar sale contra ESTE costo
+                "AtEnd":      r.get("costo_estimado", r["costo"]),
                 "Revenue":    r["ingreso"],
                 "Profit":     r["ganancia"],
                 # texto a la derecha: sin ingreso no hay margen («None» en 1.64, v567)
@@ -6407,6 +6443,11 @@ def render_group_profitability(grupo: str):
                 column_config=tabla.cfg(None, {
                     "Proyecto":   st.column_config.TextColumn(t("Project"), pinned=True),
                     "Cost":       st.column_config.NumberColumn(t("Cost"), format="dollar"),
+                    "AtEnd":      st.column_config.NumberColumn(
+                        t("Cost at completion"), format="dollar",
+                        help=t("What the job will cost when finished: labour at the current rate, purchases as "
+                               "bought and ordered (at least what the quote has for materials). Until {x}% progress, "
+                               "the quoted cost. Est. profit = Est. revenue − this.", x=AVANCE_MIN_PROYECCION)),
                     "Revenue":    st.column_config.NumberColumn(t("Est. revenue"), format="dollar"),
                     "Profit":     st.column_config.NumberColumn(t("Est. profit"), format="dollar"),
                     "Margin":     tabla.derecha(t("Margin %")),

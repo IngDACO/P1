@@ -242,19 +242,70 @@ def cost_projection(pid, grupo) -> dict:
     av  = _num(P.get_project(pid).get("Progress"))
     out = dict(c)
     out["avance"] = av
-    if av <= 0 or c["total"] <= 0:
+    # ⚠️ v701 · H19 del ciclo 7: ya no es `total × 100 / avance` (ver `costo_al_terminar`)
+    _ct = costo_al_terminar(c, av, desglose_cotizado(pid))
+    if _ct["proyectado"] is None:
         out.update({"proyectado": None, "desvio": None, "pct_proj": None,
-                    "por_punto": None})
+                    "por_punto": None, "metodo": None})
         return out
-    proy = round(c["total"] * 100.0 / av, 2)
+    proy = _ct["proyectado"]
     pres = c["presupuesto"]
     out.update({
         "proyectado": proy,
         "desvio":   round(proy - pres, 2) if pres > 0 else None,
         "pct_proj": round(100 * proy / pres) if pres > 0 else None,
         "por_punto": round(c["total"] / av, 2),      # costo por punto de avance
+        "metodo": _ct["metodo"],
     })
     return out
+
+
+# ⚠️ v701 · el mismo umbral que `projects_ui.AVANCE_MIN_PROYECCION` (v697): por debajo, proyectar es ruido
+AVANCE_MIN_PROYECCION = 10
+
+
+def desglose_cotizado(pid) -> dict:
+    """{servicio, material} del COSTO cotizado de la obra (la versión aceptada vigente), o {} si no viene de una
+    cotización. Servicio = las líneas de tipo servicio (las horas); material = el resto (equipos, suministros)."""
+    try:
+        from core import quotes as _Q, catalogo as _CAT
+        _cot = _Q.cotizacion_de_proyecto(pid)
+        if not _cot:
+            return {}
+        _ls = _Q.lineas_de(_cot)
+    except Exception as e:
+        logger.warning("desglose_cotizado(%s): %s", pid, e)
+        return {}
+    srv = round(sum(_num(ln.get("costo_total")) for ln in _ls if str(ln.get("tipo", "")) == _CAT.SERVICIO), 2)
+    mat = round(sum(_num(ln.get("costo_total")) for ln in _ls if str(ln.get("tipo", "")) != _CAT.SERVICIO), 2)
+    return {"servicio": srv, "material": mat} if (srv > 0 or mat > 0) else {}
+
+
+def costo_al_terminar(c: dict, av, desglose=None) -> dict:
+    """Lo que costará la obra AL TERMINAR. Puro: `c` es `project_cost`, `av` el avance (%). {proyectado, metodo}.
+
+    ⚠️ v701 · H19 del ciclo 7: era `total × 100 / avance` para TODO, y las compras no crecen con el avance — el
+    ascensor ($39,000) se compra al principio. C7 al 11 % decía «$373,315, $311,905 over budget». Ahora:
+    - la MANO DE OBRA, al ritmo actual (gastada × 100 / avance);
+    - las COMPRAS, lo comprado más lo pedido, sin extrapolar; si la obra viene de una cotización, al menos lo que
+      la cotización tiene de material (`desglose_cotizado`). Sin cotización, lo que falta por comprar no se conoce y
+      no se inventa (probado en la foto: «al menos el presupuesto» ponía Parramatta, al 74 % con $3,661, en $95,000);
+    - terminada (100 %), lo real. Sin avance o sin costo, None.
+    Una sola definición para Costs, la vista del grupo, «Quoted vs. actual» y el beneficio estimado (Profitability,
+    el asistente): eran tres reglas de tres copiadas.
+    """
+    av = _num(av)
+    total, mo = _num(c.get("total")), _num(c.get("mano_obra"))
+    compras, comp = _num(c.get("compras")), _num(c.get("comprometido"))
+    if av >= 100:
+        return {"proyectado": round(total, 2), "metodo": "real"}
+    if av <= 0 or total <= 0:
+        return {"proyectado": None, "metodo": None}
+    mo_proj = mo * 100.0 / av
+    if desglose:
+        proy = mo_proj + max(compras + comp, _num(desglose.get("material")))
+        return {"proyectado": round(proy, 2), "metodo": "cotizada"}
+    return {"proyectado": round(mo_proj + compras + comp, 2), "metodo": "sin_cotizacion"}
 
 
 def spend_curve(pid, grupo) -> dict:
@@ -395,8 +446,8 @@ def group_expenses(grupo) -> dict:
     for p in proys:
         c  = project_cost(p.get("ID"), grupo, comprometido=_comp.get(str(p.get("ID", "")), 0.0))
         av = _num(p.get("Progress"))
-        proyectado = (round(c["total"] * 100.0 / av, 2)
-                      if av > 0 and c["total"] > 0 else None)
+        # ⚠️ v701 · H19 del ciclo 7: la misma definición que la obra (`costo_al_terminar`), no `total × 100 / avance`
+        proyectado = costo_al_terminar(c, av, desglose_cotizado(p.get("ID")))["proyectado"]
         filas.append({"id": p.get("ID"), "nombre": p.get("Name"),
                       "compras": c["compras"], "mano_obra": c["mano_obra"],
                       "total": c["total"], "presupuesto": c["presupuesto"],

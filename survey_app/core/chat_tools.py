@@ -816,12 +816,20 @@ def _dinero(entrada, ctx) -> dict:
         # «check whether it has been billed» de una obra facturada entera)
         _suyas = [f for f in INV.list_facturas(g)
                   if any(str(ln.get("proyecto_id", "")).strip() == pid for ln in INV.lineas_de(f))]
+        _cp = E.cost_projection(pid, g)
+        _facs = [_factura_de_obra(f, pid) for f in _suyas]
         return {"project_id": pid, "name": prj.get("Name", ""), "budget": c["presupuesto"], "spent": c["total"], "materials": c["compras"],
                 "labour": c["mano_obra"], "committed_orders": c["comprometido"], "pct_of_budget": c["pct"], "over_budget": c["over"],
                 "will_go_over_with_orders": c["over_comp"], "estimated_revenue": r.get("ingreso"), "estimated_profit": r.get("ganancia"),
+                # v701 · H11/H13 del ciclo 7: contra QUÉ costo sale el beneficio, y lo que costará al terminar
+                "estimated_profit_is_on": {"proyectada": "the cost expected at completion", "presupuesto":
+                                           "the quoted cost (too early to project)", "real": "the cost so far"}.get(
+                                               r.get("ganancia_base", "real"), "the cost so far"),
+                "cost_at_completion": _cp.get("proyectado"),
                 "invoiced_ex_tax": round(_num(INV.facturado_por_proyecto(g).get(pid, 0.0)), 2),
+                "collected_for_this_job": round(sum(x["this_job_collected"] for x in _facs), 2),
                 "pending_to_invoice": round(_num(INV.pendiente_de_facturar(pid, g, prj)), 2),
-                "invoices": [_factura_de_obra(f, pid) for f in _suyas[:MAX_LISTA]],
+                "invoices": _facs[:MAX_LISTA],
                 "how_to_read": _COMO_LEER_DINERO}
     hoy = clock.today(g)
     d0 = _parse_date(entrada.get("from")) if entrada.get("from") else hoy.replace(day=1)
@@ -865,16 +873,25 @@ def _dinero(entrada, ctx) -> dict:
 
 _COMO_LEER_DINERO = ("These are all the figures the books have. Do not explain a figure with a cause that is not in this "
                      "data (no «because it was cancelled» unless it says so), and do not guess what is not here: say you "
-                     "cannot see it. An invoice can cover several jobs: «collected» is the whole invoice's.")
+                     "cannot see it. An invoice can cover several jobs: «invoice_collected» is the whole invoice's and "
+                     "«this_job_collected» the job's share (all of it when «only_this_job»). A job's «estimated_profit» "
+                     "is on «estimated_profit_is_on», never on what is spent so far while the job is not finished.")
 
 
 def _factura_de_obra(f, pid) -> dict:
     """Una factura vista desde UNA obra (v673): su estado y su cobro, y lo que lleva de ESA obra (sin impuesto)."""
     from core import invoices as INV
     _esta = sum(_num(ln.get("importe")) for ln in INV.lineas_de(f) if str(ln.get("proyecto_id", "")).strip() == str(pid))
+    # ⚠️ v701 · H13 del ciclo 7: «I can't tell how much of it belongs to this job» de la 0007, que es ENTERA de la obra.
+    # Lo cobrado de ESTA obra = lo cobrado de la factura en la proporción de sus líneas (todo, si solo lleva esta obra).
+    _sub = _num(f.get("Subtotal")) or sum(_num(ln.get("importe")) for ln in INV.lineas_de(f))
+    _cob = _num(f.get("Collected"))
     return {"number": f.get("Number", ""), "date": dmy(f.get("Date", "")), "status": INV.estado_cobro(f),
             "this_job_lines_ex_tax": round(_esta, 2), "invoice_total_incl_tax": round(_num(f.get("Total")), 2),
-            "invoice_collected": round(_num(f.get("Collected")), 2), "due": dmy(f.get("ExpiryDate", ""))}
+            "invoice_collected": round(_cob, 2),
+            "only_this_job": abs(_esta - _sub) < 0.01,
+            "this_job_collected": round(_cob * _esta / _sub, 2) if _sub > 0 else 0.0,
+            "due": dmy(f.get("ExpiryDate", ""))}
 
 
 def _obras_de_factura(f) -> list:

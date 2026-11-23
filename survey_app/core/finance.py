@@ -95,11 +95,32 @@ def project_revenue(pid: str, grupo: str, prj: dict = None) -> dict:
             _var = 0.0
         _ing = round(_num(_cot.get("Subtotal")) + _var, 2)
         _costo = round(_mo + mat, 2)
+        # ⚠️ v701 · H11 del ciclo 7: la ganancia era `precio − costo HASTA HOY`, así que cuanto MENOS avanzada la obra,
+        # MÁS ganaba: C7 al 0 % con $39,554 gastados (el ascensor), +$34,138 con $12,282 cotizados; Darling Park al 0 %,
+        # +$79,034 (y el asistente lo repetía). Lo que falta por gastar cuenta: sin terminar, el mayor entre lo gastado
+        # y lo que costará al terminar (`expenses.costo_al_terminar`, desde el 10 % de avance); antes, el presupuesto
+        # (el costo cotizado). Terminada, lo real. `costo` sigue siendo lo GASTADO (lo leen las otras pantallas).
+        _ref, _base = _costo, "real"
+        _av = _num(_p_est.get("Progress"))
+        if _av < 100:
+            try:
+                _c = E.project_cost(pid, grupo)
+                if _av >= E.AVANCE_MIN_PROYECCION:
+                    _pr = E.costo_al_terminar(_c, _av, E.desglose_cotizado(pid))["proyectado"]
+                    if _pr is not None and _pr > _ref:
+                        _ref, _base = round(_pr, 2), "proyectada"
+                elif _num(_c.get("presupuesto")) > _ref:
+                    _ref, _base = round(_num(_c.get("presupuesto")), 2), "presupuesto"
+            except Exception as e:
+                logger.warning("project_revenue: sin costo al terminar para %s: %s", pid, e)
         return {"costo_mo": round(_mo, 2), "materiales": round(mat, 2), "costo": _costo,
                 # el % es CONSECUENCIA del precio pactado, no una entrada
-                "margen_pct": round(100.0 * (_ing - _costo) / _costo, 2) if _costo > 0 else 0.0,
+                "margen_pct": round(100.0 * (_ing - _ref) / _ref, 2) if _ref > 0 else 0.0,
                 "mo_facturable": round(_mo, 2), "ingreso": round(_ing, 2),
-                "ganancia": round(_ing - _costo, 2), "modelo": "cotizado",
+                "ganancia": round(_ing - _ref, 2), "modelo": "cotizado",
+                # v701 · con qué costo sale la ganancia: «real» (terminada o sin nada mejor), «proyectada» o «presupuesto»
+                "costo_estimado": _ref, "ganancia_base": _base,
+                "cotizacion_numero": str(_cot.get("Number", "")), "cotizacion_version": int(_num(_cot.get("Version"), 1)) or 1,
                 "cotizacion": str(_cot.get("ID", "")), "variaciones": _var,
                 # ⚠️ La ganancia fija NO se suma aquí: la cotización ES el precio que el
                 # cliente firmó. Sumarle algo encima inventaría un ingreso que nadie
@@ -196,6 +217,8 @@ def group_profitability(grupo: str) -> dict:
         costo, ingreso = rev["costo"], rev["ingreso"]
         _mod = rev.get("modelo", "margen")
         rows.append({"id": pid, "nombre": r["nombre"], "costo": costo,
+                     # v701 · H11: el costo con el que sale la ganancia (en una cotizada sin terminar, al terminar)
+                     "costo_estimado": rev.get("costo_estimado", costo),
                      # v669 · para marcar en la tabla la cancelada (vale lo facturado) y la archivada
                      "estado": str((prjs.get(pid) or {}).get("Status", "")),
                      "margen": rev["margen_pct"], "ingreso": ingreso,
@@ -222,9 +245,11 @@ def group_profitability(grupo: str) -> dict:
                                           if str(_mod).startswith("rubro") else [])})
         t_costo += costo
         t_ing += ingreso
+    # ⚠️ v701 · H11: la ganancia total es la SUMA de las de cada obra; ya no es ingreso − costo gastado (una obra
+    # cotizada sin terminar resta lo que costará al terminar, no lo gastado hasta hoy)
     return {"rows": rows,
             "totales": {"costo": round(t_costo, 2), "ingreso": round(t_ing, 2),
-                        "ganancia": round(t_ing - t_costo, 2)}}
+                        "ganancia": round(sum(_num(x["ganancia"]) for x in rows), 2)}}
 
 
 def _fecha(txt):
@@ -309,7 +334,11 @@ def variacion(actual, previo) -> dict:
     a, p = _num(actual), _num(previo)
     dif = round(a - p, 2)
     pct = round(100.0 * dif / abs(p), 1) if abs(p) > 0.005 else None
-    return {"dif": dif, "pct": pct, "mejor": dif > 0}
+    # ⚠️ v701 · H12 del ciclo 7: «▲ 13337% vs previous» (una base de ~$250) y «▼ 19502%» (un beneficio que cambia
+    # de signo) no dicen nada. Con la base por debajo del 10 % de la cifra de hoy, o con el signo cambiado, se dice
+    # la DIFERENCIA en dinero (`en_dinero`), no el %.
+    en_dinero = bool(abs(dif) > 0.005 and (abs(p) < 0.1 * abs(a) or (a * p < 0)))
+    return {"dif": dif, "pct": None if en_dinero else pct, "mejor": dif > 0, "en_dinero": en_dinero}
 
 
 def pnl_comparado(grupo: str, desde=None, hasta=None, modo=None) -> dict:

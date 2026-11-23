@@ -187,7 +187,10 @@ from core import quotes as Q, projects as P                      # noqa: E402
 # ⚠️ El guion de la sección 3 dejó `aceptar_y_crear_proyecto` SUSTITUIDO (AppTest corre en
 # este mismo proceso, la lección de v574): sin recargar, se probaba el doble.
 Q = importlib.reload(Q)
-_o = {n: getattr(Q, n) for n in ("get_cotizacion", "lineas_de", "totales", "_ws", "_fila")}
+# ⚠️ v701 · + `obra_del_trato`: la cotización falsa es la «0009» de cliente1, y desde el ciclo 7 (23/11) existe un trato
+# REAL 0009 con obra (PRJ-0048): el motor contestaba «This job already exists: PRJ-0048» antes de mirar las paradas, y
+# este guardián se puso rojo por los DATOS, no por el código (la lección de v586). Sin trato real detrás, como antes.
+_o = {n: getattr(Q, n) for n in ("get_cotizacion", "lineas_de", "totales", "_ws", "_fila", "obra_del_trato")}
 _cp = P.create_project
 _L = []
 try:
@@ -197,6 +200,7 @@ try:
     Q.totales = lambda l, imp=0: {"costo": 100.0, "subtotal": 150.0}
     Q._ws = lambda: None
     Q._fila = lambda w, cid: (None, None)
+    Q.obra_del_trato = lambda c: ("", {})          # su forma real cuando no hay obra (ver arriba)
     P.create_project = lambda *a, **k: (_L.append(k) or (True, "PRJ-9997"))
     I = dt.date(2026, 10, 26)
     r = Q.aceptar_y_crear_proyecto("COT-9", tipo="Installation", fecha_inicio=I, ns=0)
