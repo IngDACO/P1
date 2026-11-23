@@ -283,9 +283,11 @@ def datos(grupo: str) -> dict:
                 out["error"] = _e
                 return out
             if st_ == 404:
+                # v705 · decía que el parte «can still go by file», y la sección de al lado dice que Xero Payroll no
+                # importa ficheros: el parte se teclea en Xero (decisión del usuario, 24/11)
                 out["error"] = t("This Xero organisation has no Payroll AU: Xero answers «not found» (HTTP 404) to "
-                                 "the payroll part, and waiting does not change that. Payroll stays in COPEX, and "
-                                 "its timesheet can still go by file (Accounting → «Timesheet for payroll»).")
+                                 "the payroll part, and waiting does not change that. Payroll stays in COPEX; its "
+                                 "timesheet is in «Timesheet for payroll», just above, to key into Xero.")
                 return out
             # ⚠️ v584 · decía una sola causa («needs Payroll AU set up»). Xero contesta igual
             # —401 / AuthenticationUnsuccessful— cuando quien conectó no tiene permiso de
