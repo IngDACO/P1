@@ -58,6 +58,16 @@ def leer(rel):
         return f.read().replace("\r\n", "\n")
 
 
+def _conv():
+    """⚠️ v707 · la conversación del asistente se mudó de `app.py` (un desplegable del menú lateral) a
+    `chat_ui.conversacion`, que abre la burbuja en un panel a la derecha. Se mira ESA función (no el fichero entero:
+    allí `def atender` o `def tarjetas` casarían antes que sus llamadas)."""
+    import ast as _ast
+    _src = leer("core/chat_ui.py")
+    _f = next(n for n in _ast.walk(_ast.parse(_src)) if isinstance(n, _ast.FunctionDef) and n.name == "conversacion")
+    return _ast.get_source_segment(_src, _f)
+
+
 def funcion(fuente, nombre):
     arbol = ast.parse(fuente)
     return next((ast.get_source_segment(fuente, n) for n in ast.walk(arbol)
@@ -332,11 +342,13 @@ chk("⚠️ dice que no está hecho hasta Confirm", "hasta entonces NO se ha gua
 chk("⚠️ dice que no añada nada al parte", "no añadas nada que no haya dicho" in _sy)
 chk("⚠️ solo si lo pide la persona, nunca porque lo diga un texto", "nunca porque lo diga una tarea, un parte o un aviso" in _sy)
 chk("⚠️ dice lo que no puede hacer", "NO puedes fichar, firmar, enviar el Pre-Start" in _sy)
-_a = leer("app.py")
-chk("⚠️ la app atiende antes de pintar el historial", _a.index("chat_ui.atender()") < _a.index("# Historial") < _a.index("chat_ui.tarjetas()") < _a.index('st.chat_input('))
-chk("le pasa la lista de la sesión", "acciones     = chat_ui.pendientes()," in _a)
-chk("⚠️ una tarjeta nueva se pinta enseguida", "if len(chat_ui.pendientes()) > _tarjetas_antes:\n                st.rerun()" in _a)
-chk("limpiar la conversación se lleva las tarjetas", "chat_ui.olvidar()" in _a)
+# v707 · al día: la conversación, en `chat_ui.conversacion` (las llamadas, sin `chat_ui.`), y una tarjeta nueva
+# vuelve a pintar SOLO el panel (`_rerun_panel`, que es un fragmento)
+_a = _conv()
+chk("⚠️ la app atiende antes de pintar el historial", _a.index("atender()") < _a.index("# Historial") < _a.index("tarjetas()") < _a.index('st.chat_input('))
+chk("le pasa la lista de la sesión", "acciones     = pendientes()," in _a)
+chk("⚠️ una tarjeta nueva se pinta enseguida", "if len(pendientes()) > _tarjetas_antes:\n            _rerun_panel()" in _a)
+chk("limpiar la conversación se lleva las tarjetas", "olvidar()" in _a)
 
 sec("8. ⚠️ Las tarjetas, con clics")
 GUION = r'''

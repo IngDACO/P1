@@ -196,18 +196,19 @@ ROTURAS = [
 """, """("✅ " if ok else "⚠️ ") + str(msg), "app": "confirm", "card": a["titulo"]})
 """)]),
     # ── app.py ──
-    ("⚠️ se pinta antes de recordar", "app.py",
-     [("""        chat_ui.recordar()                       # v641 · la conversación guardada, una vez por sesión\n""", ""),
-      ("""        chat_ui.tarjetas()\n""", """        chat_ui.recordar()
-        chat_ui.tarjetas()\n""")]),
-    ("⚠️ la imagen va al historial", "app.py",
-     [("""            _dicho = f"📷 {prompt}" if _fotos else prompt\n""", """            _dicho = f"📷 {_fotos} {prompt}" if _fotos else prompt\n""")]),
-    ("⚠️ la foto no llega a la llamada", "app.py",
-     [("""                        fotos        = _fotos,\n""", "")]),
-    ("no guarda la conversación", "app.py",
-     [("""            chat_ui.memorizar()                  # después de responder: lo que tarde no se hace esperar\n""", "")]),
-    ("no avisa de que se guarda", "app.py",
-     [("""            st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))\n""", """            pass\n""")]),
+    # ⚠️ v707 · re-anclada: la conversación se mudó de app.py a `chat_ui.conversacion` (la burbuja)
+    ("⚠️ se pinta antes de recordar", "core/chat_ui.py",
+     [("""    recordar()                       # v641 · la conversación guardada, una vez por sesión\n""", ""),
+      ("""        tarjetas()\n\n    # Input""", """        recordar()
+        tarjetas()\n\n    # Input""")]),
+    ("⚠️ la imagen va al historial", "core/chat_ui.py",
+     [("""        _dicho = f"📷 {prompt}" if _fotos else prompt\n""", """        _dicho = f"📷 {_fotos} {prompt}" if _fotos else prompt\n""")]),
+    ("⚠️ la foto no llega a la llamada", "core/chat_ui.py",
+     [("""                    fotos        = _fotos,\n""", "")]),
+    ("no guarda la conversación", "core/chat_ui.py",
+     [("""        memorizar()                  # después de responder: lo que tarde no se hace esperar\n""", "")]),
+    ("no avisa de que se guarda", "core/chat_ui.py",
+     [("""        st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))\n""", """        pass\n""")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", M,

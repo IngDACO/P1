@@ -57,6 +57,16 @@ def leer(rel):
         return f.read().replace("\r\n", "\n")
 
 
+def _conv():
+    """⚠️ v707 · la conversación del asistente se mudó de `app.py` (un desplegable del menú lateral) a
+    `chat_ui.conversacion`, que abre la burbuja en un panel a la derecha. Se mira ESA función (no el fichero entero:
+    allí `def atender` o `def tarjetas` casarían antes que sus llamadas)."""
+    import ast as _ast
+    _src = leer("core/chat_ui.py")
+    _f = next(n for n in _ast.walk(_ast.parse(_src)) if isinstance(n, _ast.FunctionDef) and n.name == "conversacion")
+    return _ast.get_source_segment(_src, _f)
+
+
 HOY = dt.date(2026, 11, 3)
 clock.today = lambda *a: HOY
 clock.now = lambda *a: dt.datetime(2026, 11, 3, 7, 30)
@@ -329,18 +339,18 @@ _u = leer("core/chat_ui.py")
 _at = _u[_u.index("def atender"):_u.index("def tarjetas")]
 chk("⚠️ confirmar y cancelar quedan en la memoria", len(re.findall(r"(?m)^ +memorizar\(\)$", _at)) == 2, _at[-400:])
 
-sec("7. `app.py`")
-_a = leer("app.py")
-chk("⚠️ primero se recuerda, después se pinta", _a.index("chat_ui.recordar()") < _a.index("chat_ui.atender()") < _a.index("# Historial"))
-chk("el campo acepta foto, y solo él (lo decide `opciones_foto`)", '**chat_ui.opciones_foto(_ROL))' in _a)
+sec("7. `chat_ui.conversacion` (hasta v706, en `app.py`)")
+_a = _conv()       # v707 · al día: la conversación se mudó a la burbuja
+chk("⚠️ primero se recuerda, después se pinta", _a.index("recordar()") < _a.index("atender()") < _a.index("# Historial"))
+chk("el campo acepta foto, y solo él (lo decide `opciones_foto`)", '**opciones_foto(rol))' in _a)
 chk("⚠️ en el historial queda la marca, nunca la imagen", '_dicho = f"📷 {prompt}" if _fotos else prompt' in _a and '{"role": "user", "content": _dicho}' in _a)
 # Tres apariciones: se lee, decide la marca del historial y va a la llamada. Una más sería guardarla.
 chk("⚠️ la foto solo llega a la llamada", "fotos        = _fotos," in _a and _a.count("_fotos") == 3, _a.count("_fotos"))
-chk("guarda después de responder", _a.index('{"role": "assistant", "content": _response}') < _a.index("chat_ui.memorizar()"))
+chk("guarda después de responder", _a.index('{"role": "assistant", "content": _response}') < _a.index("memorizar()"))
 # v644 · La oficina también lo dice (sin la foto): se mira la línea del campo entera
 chk("le dice al campo que se guarda y que puede mandar una foto",
     'st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))' in _a and CM.MAX_DIAS == 14)
-chk("⚠️ limpiar pasa por `olvidar`", "chat_ui.olvidar()" in _a)
+chk("⚠️ limpiar pasa por `olvidar`", "olvidar()" in _a)
 _mem = leer("core/chat_memoria.py")
 chk("⚠️ en la memoria no hay imágenes", "base64" not in _mem and "image" not in _mem.lower().replace("imágenes", ""))
 

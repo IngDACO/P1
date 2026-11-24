@@ -568,7 +568,24 @@ def render_login() -> bool:
 
 
 def render_user_bar():
-    """Usuario logueado + grupo + botón salir (sidebar)."""
+    """Usuario logueado + grupo + botón salir (sidebar). v707 · las dos partes por separado: el menú lateral pone el
+    usuario ARRIBA y «Sign out» AL PIE (`render_user_info` + `render_sign_out`)."""
+    render_user_info()
+    render_sign_out()
+
+
+def _empresa(grupo) -> str:
+    """El nombre de la empresa para enseñar (v707): su razón social si la tiene, si no, el grupo («cliente1»).
+    `contable.identidad` ya cae al nombre del grupo cuando falta (la descripción, «pruebas», no es un nombre)."""
+    try:
+        from core import contable
+        return str((contable.identidad(grupo) or {}).get("legal") or grupo)
+    except Exception:
+        return str(grupo)
+
+
+def render_user_info():
+    """Quién eres y de qué empresa (arriba del menú lateral, v707). Escribe la cookie de «Keep me signed in»."""
     a = st.session_state.get("auth", {})
     # v622 · Aquí y no al restaurar: el `st.rerun()` de allí descartaría el script (es un render
     # que TERMINA, como la cookie de abajo).
@@ -591,9 +608,15 @@ def render_user_bar():
     _ico_rol = {"owner": ":material/shield_person:",
                 "administrator": ":material/manage_accounts:",
                 "field": ":material/engineering:"}.get(_rol, "")
-    rol_lbl = f"{_ico_rol} {_etq(_rol)}".strip() if _rol else ""
-    grupo = a.get("grupo") or (t("all") if _rol == "owner" else "—")
+    # v707 · con mayúscula («administrator» salía tal cual) y la razón social de la empresa si la tiene
+    rol_lbl = f"{_ico_rol} {str(_etq(_rol))[:1].upper()}{str(_etq(_rol))[1:]}".strip() if _rol else ""
+    grupo = (_empresa(a.get("grupo")) if a.get("grupo") else (t("all") if _rol == "owner" else "—"))
     st.markdown(f"**{a.get('nombre','')}**  \n{rol_lbl}  \n:material/business: {grupo}")
+
+
+def render_sign_out():
+    """«Sign out», al pie del menú lateral (v707)."""
+    a = st.session_state.get("auth", {})
     if st.button(t(":material/logout: Sign out"), width="stretch", key="logout_btn"):
         try:
             auth.end_session(a.get("usuario", ""), a.get("token"))   # libera la cuenta

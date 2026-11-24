@@ -33,8 +33,10 @@ for n in ("_L_SURVEY", "_L_OWNER", "_L_GRUPO", "_NAV_DISPLAY", "_HERR",
 # La marca COPEX SIGUE VIVA a proposito (titulo, favicon, PWA y la cabecera del
 # SIDEBAR). Lo que murio es el BANNER principal: antes habia 2 bloques con la
 # marca, ahora debe quedar 1 (el del sidebar).
+# v707 · al día: el subtítulo es «Lift installation management» (decisión del usuario, 24/11); contar el viejo
+# pasaba solo porque lo nombra el comentario del cambio. Se cuenta en el CÓDIGO (sin comentarios)
 check("solo queda 1 banner de marca (el del sidebar)",
-      src_app.count("Elevator Survey Analyzer"), 1)
+      _cod.count("Lift installation management"), 1)
 check("...y el sidebar lo conserva", "Cabecera COPEX" in src_app)
 au = (BASE / "core" / "auth_ui.py").read_text(encoding="utf-8")
 check("render_owner_panel borrada", "def render_owner_panel" not in au)

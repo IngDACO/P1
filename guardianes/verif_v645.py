@@ -50,6 +50,16 @@ def leer(rel):
         return f.read().replace("\r\n", "\n")
 
 
+def _conv():
+    """⚠️ v707 · la conversación del asistente se mudó de `app.py` (un desplegable del menú lateral) a
+    `chat_ui.conversacion`, que abre la burbuja en un panel a la derecha. Se mira ESA función (no el fichero entero:
+    allí `def atender` o `def tarjetas` casarían antes que sus llamadas)."""
+    import ast as _ast
+    _src = leer("core/chat_ui.py")
+    _f = next(n for n in _ast.walk(_ast.parse(_src)) if isinstance(n, _ast.FunctionDef) and n.name == "conversacion")
+    return _ast.get_source_segment(_src, _f)
+
+
 HOY = dt.date(2026, 11, 3)
 CM.guardar = lambda *a, **k: True                 # ⚠️ ni una escritura real (v643)
 CM.borrar = lambda *a, **k: True
@@ -160,7 +170,8 @@ for _k in ("field_tools", "office_tools"):
     _p = CA._PERSONA[_k].replace('"\n        "', "")
     chk("⚠️ %s: esas notas son de la app y pasaron de verdad; no negarlas ni reintentar" % _k,
         _l in _p and "lo que dicen pasó de verdad" in _p and "No las niegues" in _p and "no lo reintentes por tu cuenta" in _p)
-chk("en pantalla, igual que antes: el historial se pinta con su rol", 'with st.chat_message(msg["role"]' in leer("app.py"))
+# v707 · al día: la conversación, en `chat_ui.conversacion`
+chk("en pantalla, igual que antes: el historial se pinta con su rol", 'with st.chat_message(msg["role"]' in _conv())
 
 print("\n=== verif_v645: %d OK, %d FALLOS ===" % (n_ok, len(fallos)))
 for f in fallos:

@@ -60,6 +60,16 @@ def leer(rel):
         return f.read().replace("\r\n", "\n")
 
 
+def _conv():
+    """⚠️ v707 · la conversación del asistente se mudó de `app.py` (un desplegable del menú lateral) a
+    `chat_ui.conversacion`, que abre la burbuja en un panel a la derecha. Se mira ESA función (no el fichero entero:
+    allí `def atender` o `def tarjetas` casarían antes que sus llamadas)."""
+    import ast as _ast
+    _src = leer("core/chat_ui.py")
+    _f = next(n for n in _ast.walk(_ast.parse(_src)) if isinstance(n, _ast.FunctionDef) and n.name == "conversacion")
+    return _ast.get_source_segment(_src, _f)
+
+
 def funcion(fuente, nombre):
     arbol = ast.parse(fuente)
     return next((ast.get_source_segment(fuente, n) for n in ast.walk(arbol)
@@ -644,8 +654,8 @@ CU.memorizar()
 CU.olvidar()
 chk("⚠️ el propietario: ni recuerda ni guarda", _ses["chat_history"] == [] and ESC == [], ESC)
 chk("⚠️ la foto, todavía solo el campo", CU.opciones_foto("administrator") == {} and CU.opciones_foto("owner") == {} and CU.opciones_foto("field"))
-_a = leer("app.py")
-chk("la oficina sabe que se guarda, sin prometer fotos", 'elif _ROL == "administrator":\n            st.caption(t("Your conversation is kept for 14 days."))' in _a)
+_a = _conv()       # v707 · al día: la conversación, en `chat_ui.conversacion` (recibe `rol`)
+chk("la oficina sabe que se guarda, sin prometer fotos", 'elif rol == "administrator":\n        st.caption(t("Your conversation is kept for 14 days."))' in _a)
 
 sec("13. ⚠️ Confirm, con clics: la tarjeta de la oficina hace lo de la pantalla")
 GUION = r'''

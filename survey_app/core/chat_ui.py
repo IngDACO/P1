@@ -158,3 +158,113 @@ def tarjetas() -> None:
                       on_click=_pedir, args=(a["id"], True))
             c2.button(t("Cancel"), key=f"chat_no_{a['id']}", width="stretch",
                       on_click=_pedir, args=(a["id"], False))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# v707 · La burbuja: el asistente en su propio panel, fuera del menú lateral
+# ─────────────────────────────────────────────────────────────────────────────
+# Decisión del usuario (24/11, al repasar el marco de la app): «cuando se tiene un chat largo con el agente se sube
+# demasiado el menú» — con DOS mensajes el desplegable del menú lateral medía 2014 px y el menú lateral pasaba de 1184
+# a 3159. Ahora una burbuja flotante abre la conversación en un panel a la derecha, a toda la altura (`st.dialog` con
+# `position="right"`). Es un fragmento: escribir solo vuelve a pintar el panel, no la página.
+_ABIERTO = "_chat_abierto"          # ⚠️ no `_chat_open`: las claves `_…_open…` cuentan como cambio de vista (v603)
+
+
+def _abrir_chat() -> None:
+    st.session_state[_ABIERTO] = True
+
+
+def _cerrar_chat() -> None:
+    st.session_state[_ABIERTO] = False
+
+
+def titulo_asistente(rol) -> str:
+    return "Field assistant" if rol == "field" else "Management assistant"
+
+
+def burbuja(rol, grupo) -> None:
+    """La burbuja (abajo a la derecha, encima de la insignia de Streamlit Cloud; el estilo, en `theme`) y, si está
+    abierto, el panel. ⚠️ Se vuelve a abrir en CADA pasada mientras `_chat_abierto`: así una pasada entera (la de otro
+    botón de la página) no lo cierra; lo cierra la X, Esc o un clic fuera (`on_dismiss`)."""
+    st.button(":material/smart_toy:", key="cpx_chat_burbuja", type="primary", on_click=_abrir_chat,
+              help=t(titulo_asistente(rol)))
+    if st.session_state.get(_ABIERTO):
+        st.dialog(f"{titulo_asistente(rol)} COPEX", width="small", position="right", icon=":material/smart_toy:",
+                  on_dismiss=_cerrar_chat)(conversacion)(rol, grupo)
+
+
+def _rerun_panel() -> None:
+    """Vuelve a pintar SOLO el panel (es un fragmento); si se está pintando dentro de una pasada entera, la página."""
+    try:
+        st.rerun(scope="fragment")
+    except st.errors.StreamlitAPIException:
+        st.rerun()
+
+
+def conversacion(rol, grupo) -> None:
+    """La conversación con el asistente (hasta v706, en el desplegable del menú lateral de `app.py`, igual)."""
+    from core.chat_agent import get_chat_response
+    ctx_label = ":material/link: With the current calculation as context." if st.session_state.get("calc_results") else "No active calculation."
+    _foco = ("Focused on installing on site and using the app in the field."
+             if rol == "field"
+             else "Focused on project management and interpreting results.")
+    st.caption(f"{_foco} {ctx_label}")
+    if rol == "field":
+        st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))
+    elif rol == "administrator":
+        st.caption(t("Your conversation is kept for 14 days."))   # v644 · la foto, todavía solo el campo
+
+    # v640 · Lo confirmado o cancelado, ANTES de pintar el historial (trampa 37)
+    recordar()                       # v641 · la conversación guardada, una vez por sesión
+    atender()
+
+    # Historial — v707 · en su caja, con su scroll, que baja sola (`autoscroll`): lo de esta pasada se pinta DENTRO
+    # (antes salía debajo del cuadro de escribir) y el cuadro queda siempre abajo, a la vista. El alto, en `theme`.
+    _caja = st.container(height=440, autoscroll=True, border=False, key="cpx_chat_hist")
+    with _caja:
+        for msg in st.session_state.setdefault("chat_history", []):
+            with st.chat_message(msg["role"],
+                                 avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
+                st.markdown(msg["content"])
+        tarjetas()
+
+    # Input
+    # v526 · Estaba en español y sin `t()` (visto en producción): el idioma base es el
+    # inglés, y ningún barrido de i18n miraba `st.chat_input` (trampa nº30).
+    _entrada = st.chat_input(t("Ask your question…"), key="sidebar_chat_input", **opciones_foto(rol))
+    prompt, _fotos = leer_entrada(_entrada) if _entrada else ("", [])
+    if prompt:
+        _tarjetas_antes = len(pendientes())
+        # v641 · En el historial, la marca de la foto: la imagen va solo en esta pregunta
+        _dicho = f"📷 {prompt}" if _fotos else prompt
+        st.session_state.chat_history.append({"role": "user", "content": _dicho})
+        with _caja, st.chat_message("user", avatar="🧑‍🔧"):
+            st.markdown(_dicho)
+        with _caja, st.chat_message("assistant", avatar="🤖"):
+            with st.spinner(t("Searching…")):
+                _r = st.session_state.get("calc_results")
+                _response = get_chat_response(
+                    user_message = prompt,
+                    history      = st.session_state.chat_history[:-1],
+                    calc_results = _r,
+                    all_params   = _r["all_params"] if _r else None,
+                    rol          = rol,
+                    grupo        = grupo,
+                    # v639 · De la sesión: es quien decide de quién son los datos que mira
+                    usuario      = st.session_state.get("auth", {}).get("usuario", ""),
+                    nombre       = st.session_state.get("auth", {}).get("nombre", ""),
+                    acciones     = pendientes(),
+                    fotos        = _fotos,
+                )
+            st.markdown(_response)
+        st.session_state.chat_history.append({"role": "assistant", "content": _response})
+        memorizar()                  # después de responder: lo que tarde no se hace esperar
+        if len(pendientes()) > _tarjetas_antes:
+            _rerun_panel()               # la tarjeta nueva va debajo de lo que acaba de decir (v707: solo el panel)
+
+    # Limpiar
+    if st.session_state.chat_history:
+        if st.button(t(":material/delete: Clear the conversation"), width="stretch", key="clear_chat_sb"):
+            st.session_state.chat_history = []
+            olvidar()
+            _rerun_panel()

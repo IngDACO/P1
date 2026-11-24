@@ -18,7 +18,7 @@ ENV = dict(os.environ, PYTHONIOENCODING="utf-8")
 G = "verif_v526"
 PUI = "core/projects_ui.py"
 DUI = "core/daily_log_ui.py"
-APPF = "app.py"
+APPF = "core/chat_ui.py"     # ⚠️ v707 · re-anclada: la caja del asistente se mudó a la burbuja
 TOPE_S = 420
 
 

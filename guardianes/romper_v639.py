@@ -183,8 +183,9 @@ ROTURAS = [
      [("""        if _resto:
             system.append({"type": "text", "text": _resto})
 """, "")]),
-    ("⚠️ la app no le pasa quién es", "app.py",
-     [("""                        usuario      = st.session_state.get("auth", {}).get("usuario", ""),\n""", "")]),
+    # ⚠️ v707 · re-anclada: la conversación se mudó de app.py a `chat_ui.conversacion` (la burbuja)
+    ("⚠️ la app no le pasa quién es", "core/chat_ui.py",
+     [("""                    usuario      = st.session_state.get("auth", {}).get("usuario", ""),\n""", "")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", T,

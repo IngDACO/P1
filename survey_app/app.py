@@ -37,7 +37,6 @@ _botones.instalar()
 
 from core.i18n import t                                   # noqa: E402
 
-from core.chat_agent      import get_chat_response
 from core                 import notify
 from core.survey_ui import init_state
 
@@ -55,7 +54,8 @@ try:
 except Exception:
     _PAGE_ICON = "📐"
 
-st.set_page_config(page_title=f"COPEX Survey Analyzer {APP_VERSION}",
+# v707 · era «COPEX Survey Analyzer vNNN»: la app ya es mucho más que el Survey (decisión del usuario, 24/11)
+st.set_page_config(page_title=f"COPEX {APP_VERSION}",
                    layout="wide", page_icon=_PAGE_ICON)
 
 # ══════════════════════════════════════════════════════
@@ -141,7 +141,7 @@ init_state()
 # ══════════════════════════════════════════════════════
 # LOGIN — barrera de acceso
 # ══════════════════════════════════════════════════════
-from core.auth_ui import render_login, render_user_bar
+from core.auth_ui import render_login, render_user_info, render_sign_out
 from core.auth import heartbeat_en_fondo, heartbeat_olvidar, heartbeat_resultado, get_user
 
 if not render_login():
@@ -302,100 +302,45 @@ if _ROL == "field" and not st.session_state.get("_contact_ok"):
 # ══════════════════════════════════════════════════════
 with st.sidebar:
     # ── Cabecera COPEX ─────────────────────────────────
-    st.markdown(f"""
+    # v707 · «Lift installation management» (era «Elevator Survey Analyzer · vNNN») y sin la versión: la dice la barra
+    # de arriba (`home_ui._VERSION`, que delata módulos viejos, v536). Decisión del usuario al repasar el marco.
+    st.markdown("""
     <div style="background:linear-gradient(135deg,#1a3a5c,#2e6da4);
                 padding:14px 16px;border-radius:8px;margin-bottom:12px;">
         <div style="color:white;font-size:26px;font-weight:900;
                     letter-spacing:0.18em;font-family:'Segoe UI',sans-serif;
                     line-height:1.1;">COPEX</div>
         <div style="color:#b0c8e8;font-size:12px;margin-top:2px;">
-            Elevator Survey Analyzer &nbsp;·&nbsp; {APP_VERSION}
+            Lift installation management
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Usuario logueado ────────────────────────────────
-    render_user_bar()
-    st.markdown("---")
-
-    # ── Cronómetro de fichaje EN VIVO (v202): admin y campo, solo si estás fichado ──
-    if _ROL in ("administrator", "field"):
-        from core.timeclock_ui import render_sidebar_chrono
-        render_sidebar_chrono()
+    # ── Usuario logueado: arriba (v707, decisión del usuario); «Sign out», al pie ──
+    render_user_info()
 
     # ── Menú de secciones (v299: para TODOS los roles) ──
-    # `sidebar_menu` resuelve las secciones POR ROL internamente (home_ui._secciones).
+    # ⚠️ v707 · JUSTO debajo del usuario: iba después del fichaje y en una ventana de 622 px de alto empezaba en el
+    # píxel 583 (en el móvil, en el 580 de 777). `sidebar_menu` resuelve las secciones POR ROL (home_ui._secciones).
     from core import home_ui as _home
     st.session_state["_admin_sec"] = _home.sidebar_menu()
     st.markdown("---")
 
-    # ══════════════════════════════════════════════════
-    # ASISTENTE IA — desplegable en sidebar
-    # ══════════════════════════════════════════════════
-    _agente_lbl = "Field assistant" if _ROL == "field" else "Management assistant"
-    with st.expander(f":material/smart_toy: {_agente_lbl} COPEX", expanded=False, key="exp_chat_lateral"):
-        ctx_label = ":material/link: With the current calculation as context." if st.session_state.get("calc_results") else "No active calculation."
-        _foco = ("Focused on installing on site and using the app in the field."
-                 if _ROL == "field"
-                 else "Focused on project management and interpreting results.")
-        st.caption(f"{_foco} {ctx_label}")
-        if _ROL == "field":
-            st.caption(t("Your conversation is kept for 14 days. You can attach a photo."))
-        elif _ROL == "administrator":
-            st.caption(t("Your conversation is kept for 14 days."))   # v644 · la foto, todavía solo el campo
+    # ── Fichaje (v202/v374): admin y campo, debajo del menú ──
+    if _ROL in ("administrator", "field"):
+        from core.timeclock_ui import render_sidebar_chrono
+        render_sidebar_chrono()
 
-        # v640 · Lo confirmado o cancelado, ANTES de pintar el historial (trampa 37)
-        from core import chat_ui
-        chat_ui.recordar()                       # v641 · la conversación guardada, una vez por sesión
-        chat_ui.atender()
+    # ── Salir, al pie ──
+    render_sign_out()
 
-        # Historial
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"],
-                                 avatar="🧑‍🔧" if msg["role"] == "user" else "🤖"):
-                st.markdown(msg["content"])
-        chat_ui.tarjetas()
-
-        # Input
-        # v526 · Estaba en español y sin `t()` (visto en producción): el idioma base es el
-        # inglés, y ningún barrido de i18n miraba `st.chat_input` (trampa nº30).
-        _entrada = st.chat_input(t("Ask your question…"), key="sidebar_chat_input", **chat_ui.opciones_foto(_ROL))
-        prompt, _fotos = chat_ui.leer_entrada(_entrada) if _entrada else ("", [])
-        if prompt:
-            _tarjetas_antes = len(chat_ui.pendientes())
-            # v641 · En el historial, la marca de la foto: la imagen va solo en esta pregunta
-            _dicho = f"📷 {prompt}" if _fotos else prompt
-            st.session_state.chat_history.append({"role": "user", "content": _dicho})
-            with st.chat_message("user", avatar="🧑‍🔧"):
-                st.markdown(_dicho)
-            with st.chat_message("assistant", avatar="🤖"):
-                with st.spinner(t("Searching…")):
-                    _r = st.session_state.get("calc_results")
-                    _response = get_chat_response(
-                        user_message = prompt,
-                        history      = st.session_state.chat_history[:-1],
-                        calc_results = _r,
-                        all_params   = _r["all_params"] if _r else None,
-                        rol          = _ROL,
-                        grupo        = _GRUPO,
-                        # v639 · De la sesión: es quien decide de quién son los datos que mira
-                        usuario      = st.session_state.get("auth", {}).get("usuario", ""),
-                        nombre       = st.session_state.get("auth", {}).get("nombre", ""),
-                        acciones     = chat_ui.pendientes(),
-                        fotos        = _fotos,
-                    )
-                st.markdown(_response)
-            st.session_state.chat_history.append({"role": "assistant", "content": _response})
-            chat_ui.memorizar()                  # después de responder: lo que tarde no se hace esperar
-            if len(chat_ui.pendientes()) > _tarjetas_antes:
-                st.rerun()                       # la tarjeta nueva va debajo de lo que acaba de decir
-
-        # Limpiar
-        if st.session_state.chat_history:
-            if st.button(t(":material/delete: Clear the conversation"), width="stretch", key="clear_chat_sb"):
-                st.session_state.chat_history = []
-                chat_ui.olvidar()
-                st.rerun()
+# ══════════════════════════════════════════════════════
+# ASISTENTE IA — v707: una burbuja flotante que lo abre en un panel a la derecha (`chat_ui.burbuja`). Hasta v706
+# era un desplegable al final del menú lateral, y con un chat largo el menú se iba arriba del todo (2 mensajes:
+# el menú lateral pasaba de 1184 a 3159 px). Antes del contenido: es fija, no ocupa sitio en la página.
+# ══════════════════════════════════════════════════════
+from core import chat_ui as _chat_ui
+_chat_ui.burbuja(_ROL, _GRUPO)
 
 # ══════════════════════════════════════════════════════
 # CONTENIDO — shell única: top bar + la sección activa

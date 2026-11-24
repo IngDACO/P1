@@ -483,10 +483,15 @@ def _sidebar_sin_fichar(nombre, usuario, grupo, rol):
             _fichar(nombre, nom_de.get(_p1, ""), grupo, usuario, _p1)
         return
 
-    _pid = ui.elegir(t("Project"), idmap, key="sb_tc_prj_sel", vacio=t("— pick the site —"))
-    if st.button(t(":material/check_circle: Clock in"), width="stretch",
-                 type=("secondary" if _hechos else "primary"),
-                 key="sb_tc_prj_in", disabled=(_pid is None)):
+    # v707 · en UNA fila, el selector (sin etiqueta: el título «TIME CLOCK» ya lo dice) y el botón: eran tres alturas
+    # (etiqueta, selector y botón) y el fichaje empujaba el menú hacia abajo (decisión del usuario al repasar el marco)
+    _c_sel, _c_bot = st.columns([3, 2], vertical_alignment="bottom", gap="small")
+    with _c_sel:
+        _pid = ui.elegir(t("Project"), idmap, key="sb_tc_prj_sel", vacio=t("— pick the site —"),
+                         label_visibility="collapsed")
+    if _c_bot.button(t(":material/check_circle: Clock in"), width="stretch",
+                     type=("secondary" if _hechos else "primary"),
+                     key="sb_tc_prj_in", disabled=(_pid is None)):
         _fichar(nombre, nom_de.get(_pid, ""), grupo, usuario, _pid)
 
 

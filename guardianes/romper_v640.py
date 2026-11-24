@@ -193,27 +193,26 @@ def _una_directa(ctx) -> None:\n""")]),
     ("⚠️ Cancel confirma", U,
      [("""                      on_click=_pedir, args=(a["id"], False))\n""", """                      on_click=_pedir, args=(a["id"], True))\n""")]),
     # ── app.py ──
-    ("⚠️ la app atiende después de pintar", "app.py",
-     [("""        chat_ui.atender()
+    # ⚠️ v707 · re-anclada: la conversación se mudó de app.py a `chat_ui.conversacion` (la burbuja)
+    ("⚠️ la app atiende después de pintar", "core/chat_ui.py",
+     [("""    atender()
 
-        # Historial
-""", """        # Historial
-"""), ("""        chat_ui.tarjetas()
+    # Historial""", """    # Historial"""), ("""        tarjetas()
 
-        # Input
-""", """        chat_ui.atender()
-        chat_ui.tarjetas()
+    # Input
+""", """        atender()
+        tarjetas()
 
-        # Input
+    # Input
 """)]),
-    ("⚠️ la app no le pasa la lista", "app.py",
-     [("""                        acciones     = chat_ui.pendientes(),\n""", "")]),
-    ("⚠️ la tarjeta nueva tarda un toque en salir", "app.py",
-     [("""            if len(chat_ui.pendientes()) > _tarjetas_antes:
-                st.rerun()                       # la tarjeta nueva va debajo de lo que acaba de decir
+    ("⚠️ la app no le pasa la lista", "core/chat_ui.py",
+     [("""                    acciones     = pendientes(),\n""", "")]),
+    ("⚠️ la tarjeta nueva tarda un toque en salir", "core/chat_ui.py",
+     [("""        if len(pendientes()) > _tarjetas_antes:
+            _rerun_panel()               # la tarjeta nueva va debajo de lo que acaba de decir (v707: solo el panel)
 """, "")]),
-    ("limpiar deja las tarjetas", "app.py",
-     [("""                chat_ui.olvidar()\n""", "")]),
+    ("limpiar deja las tarjetas", "core/chat_ui.py",
+     [("""            olvidar()\n            _rerun_panel()\n""", """            _rerun_panel()\n""")]),
     # ── El agente ──
     ("⚠️ las acciones no llegan a las herramientas", A,
      [("""                           "acciones": acciones, "pregunta": user_message})\n""", """                           "acciones": [], "pregunta": user_message})\n""")]),

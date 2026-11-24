@@ -719,8 +719,10 @@ def render_topbar(grupo):
             # siguiente. Escribirla después daría StreamlitAPIException.
             if st.session_state.pop("_search_clear", False):
                 st.session_state["topbar_search"] = ""
+            # v707 · corto: a 375 px la caja mide 175 y se leía «Search projects, people, as» (busca lo mismo que antes:
+            # obras, personas, equipos, facturas…)
             st.text_input(t("Search"), key="topbar_search", label_visibility="collapsed",
-                          placeholder=t("Search projects, people, assets, invoices…"))   # v667
+                          placeholder=t("Search jobs, people…"))   # v667
     with cver:
         # v297: la versión vivía en la banda azul COPEX de la nav vieja. Esa banda no
         # vuelve (el admin lleva sin ella desde v190 y no se echó en falta), pero la

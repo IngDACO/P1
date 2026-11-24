@@ -203,8 +203,9 @@ ROTURAS = [
      [("""_CON_MEMORIA = ("field", "administrator")""", """_CON_MEMORIA = ("field", "administrator", "owner")""")]),
     ("⚠️ la oficina puede adjuntar fotos", U,
      [("""    if rol != "field":\n        return {}\n""", """    if rol not in ("field", "administrator"):\n        return {}\n""")]),
-    ("la oficina no sabe que se guarda", APP,
-     [("""        elif _ROL == "administrator":\n            st.caption(t("Your conversation is kept for 14 days."))""", """        elif False:\n            st.caption(t("Your conversation is kept for 14 days."))""")]),
+    # ⚠️ v707 · re-anclada: la conversación se mudó de app.py a `chat_ui.conversacion` (la burbuja)
+    ("la oficina no sabe que se guarda", U,
+     [("""    elif rol == "administrator":\n        st.caption(t("Your conversation is kept for 14 days."))""", """    elif False:\n        st.caption(t("Your conversation is kept for 14 days."))""")]),
 ]
 
 CONTROL = ("CONTROL: un comentario inocuo no puede poner nada rojo", T,

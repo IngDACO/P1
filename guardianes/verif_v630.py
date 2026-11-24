@@ -47,6 +47,16 @@ def leer(rel):
         return f.read().replace("\r\n", "\n")
 
 
+def _conv():
+    """⚠️ v707 · la conversación del asistente se mudó de `app.py` (un desplegable del menú lateral) a
+    `chat_ui.conversacion`, que abre la burbuja en un panel a la derecha. Se mira ESA función (no el fichero entero:
+    allí `def atender` o `def tarjetas` casarían antes que sus llamadas)."""
+    import ast as _ast
+    _src = leer("core/chat_ui.py")
+    _f = next(n for n in _ast.walk(_ast.parse(_src)) if isinstance(n, _ast.FunctionDef) and n.name == "conversacion")
+    return _ast.get_source_segment(_src, _f)
+
+
 def lbl(d):
     return re.sub(r":material/[a-z0-9_]+:\s*", "", d).strip()
 
@@ -200,8 +210,8 @@ chk("a la oficina, su persona y su grupo", "TU INTERLOCUTOR: ADMINISTRADOR" in _
 from core import resumen_dia as _RD                                # noqa: E402
 chk("el resumen del día, con instrucciones propias y sin la guía", "GEOMETRÍA DEL HUECO" not in _RD._INSTRUCCIONES
     and "FUNCIONES DE LA APP COPEX" not in _RD._INSTRUCCIONES)
-_app = leer("app.py")
-chk("la app le pasa el rol", "rol          = _ROL," in _app and 'if _ROL == "field"' in _app)
+_app = _conv()     # v707 · al día: la conversación, en `chat_ui.conversacion` (recibe `rol`)
+chk("la app le pasa el rol", "rol          = rol," in _app and 'if rol == "field"' in _app)
 
 print("")
 print("=== %d comprobaciones · %d fallos ===" % (n_ok + len(fallos), len(fallos)))

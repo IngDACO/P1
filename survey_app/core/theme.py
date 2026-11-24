@@ -90,9 +90,35 @@ _CSS = f"""
    ancho útil. Se notaba en HOME, donde las 3 columnas caían a 345/248/248 px sobre
    una pantalla de 1440. A 2rem se recuperan 96 px para TODAS las pantallas. */
 div.block-container {{
-  padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1400px;
+  padding-top: 2.2rem; padding-bottom: 6rem; max-width: 1400px;
   padding-left: 2rem; padding-right: 2rem;
 }}
+/* ⚠️ v707 · El marco (decisión del usuario al repasar el diseño, 24/11):
+   · fuera «Fork», el icono de GitHub y el ⋮ de Streamlit Cloud (el repositorio es PÚBLICO: invitaban a copiar el
+     código); el aviso de «Running…» de la cabecera sigue;
+   · sin ellos, con el menú lateral abierto la barra de la app sube 40 px. Con él cerrado NO: en la cabecera va «>>»
+     (lo que lo abre, también en el móvil) y la barra quedaría debajo;
+   · la cabecera transparente ya no tapa los clics de lo que sube (solo sus botones los reciben);
+   · abajo 6rem (eran 3): la insignia de Streamlit Cloud (fuera de la app, no se puede quitar) no tapa lo último. */
+[data-testid="stToolbarActions"], [data-testid="stMainMenu"] {{ display: none !important; }}
+[data-testid="stApp"]:not(:has([data-testid="stExpandSidebarButton"])) div.block-container {{ margin-top: -40px; }}
+/* ⚠️ también sus DIV: la barra de herramientas (`stToolbar`, z-index 999990) pone su propio `pointer-events: auto` y
+   tapaba el buscador subido (medido con `elementsFromPoint` en una mini-app) */
+[data-testid="stHeader"], [data-testid="stHeader"] div {{ pointer-events: none !important; }}
+[data-testid="stHeader"] button, [data-testid="stHeader"] a {{ pointer-events: auto !important; }}
+/* v707 · La burbuja del asistente (`chat_ui.burbuja`): fija, redonda, encima de la insignia de Streamlit Cloud */
+.st-key-cpx_chat_burbuja {{ position: fixed !important; right: 20px; bottom: 76px; z-index: 999990;
+  width: auto !important; }}
+.st-key-cpx_chat_burbuja button {{ width: 56px; height: 56px; min-height: 56px; border-radius: 50% !important;
+  padding: 0; box-shadow: 0 4px 14px rgba(0,0,0,.22); }}
+/* la conversación, en el panel: toda la altura que deja la cabecera del panel y el cuadro de escribir */
+/* ⚠️ el alto lo manda su ENVOLTORIO con `flex: 0 0 440px` (la base gana a `height` en una columna flexible, y la
+   caja crece hasta él): se fija su base (medido en una mini-app con la burbuja real) */
+[data-testid="stLayoutWrapper"]:has(> .st-key-cpx_chat_hist) {{
+  flex: 0 0 max(220px, calc(100vh - 290px)) !important; height: max(220px, calc(100vh - 290px)) !important; }}
+/* el icono va en la etiqueta (markdown): un <span> con la fuente de Material Symbols, a 14 px de fábrica */
+.st-key-cpx_chat_burbuja button p, .st-key-cpx_chat_burbuja button p span {{ font-size: 26px !important;
+  line-height: 1; }}
 @media (max-width: 640px) {{
   div.block-container {{ padding-left: 1rem; padding-right: 1rem; }}
 }}

@@ -195,7 +195,8 @@ chk("del mismo día: solo la hora", "29/09/2026 · Field Test · 17:02" in _md
 
 # ═════════════════════════════════════════════════════════════════
 sec("5. La caja del asistente, en el idioma base y por `t()`")
-_a = ast.parse(io.open("app.py", encoding="utf-8").read())
+# v707 · al día: la caja del asistente está en `chat_ui.conversacion` (la burbuja), ya no en el menú de app.py
+_a = ast.parse(io.open("core/chat_ui.py", encoding="utf-8").read())
 _ci = [n for n in ast.walk(_a) if isinstance(n, ast.Call)
        and getattr(n.func, "attr", "") == "chat_input"]
 chk("hay una caja del asistente (la sonda ve lo que busca)", len(_ci) >= 1, len(_ci))
